@@ -31,7 +31,7 @@ class WalletRepository {
             Wallets.insert {
                 it[id] = UUID.randomUUID()
                 it[Wallets.participantId] = EntityID(participantId, Participants)
-                it[balance] = BigDecimal("100000000.00")
+                it[balance] = BigDecimal("1000000000.00")
                 it[createdAt] = now
                 it[updatedAt] = now
             }
