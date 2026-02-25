@@ -1,0 +1,133 @@
+package com.example.ipl_backend.repository
+
+import com.example.ipl_backend.model.*
+import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.transactions.transaction
+import org.springframework.stereotype.Repository
+import java.math.BigDecimal
+import java.util.UUID
+
+@Repository
+class SquadRepository(
+    private val playerRepository: PlayerRepository
+) {
+
+    private fun ResultRow.toSquad(): Squad =
+        Squad(
+            id = this[Squads.id],
+            participantId = this[Squads.participantId],
+            auctionId = this[Squads.auctionId],
+            name = this[Squads.name],
+            createdAt = this[Squads.createdAt]
+        )
+
+    fun save(squad: Squad) {
+        transaction {
+            Squads.insert {
+                it[id] = squad.id
+                it[participantId] = squad.participantId
+                it[auctionId] = squad.auctionId
+                it[name] = squad.name          // ✅ CRITICAL
+                it[createdAt] = squad.createdAt
+            }
+        }
+    }
+
+    fun findByParticipantAndAuction(
+        participantId: UUID,
+        auctionId: String
+    ): Squad? =
+        transaction {
+            Squads.selectAll()
+                .where {
+                    (Squads.participantId eq participantId) and
+                            (Squads.auctionId eq auctionId)
+                }
+                .limit(1)
+                .map { it.toSquad() }
+                .singleOrNull()
+        }
+
+    fun findById(id: String): Squad? =
+        transaction {
+            Squads.selectAll()
+                .where { Squads.id eq id }
+                .limit(1)
+                .map { it.toSquad() }
+                .singleOrNull()
+        }
+
+    fun addPlayer(
+        squadId: String,
+        playerId: String,
+        price: BigDecimal
+    ) {
+        transaction {
+            SquadPlayers.insert {
+                it[id] = UUID.randomUUID().toString()
+                it[SquadPlayers.squadId] = squadId
+                it[SquadPlayers.playerId] = playerId
+                it[purchasePrice] = price
+            }
+        }
+    }
+
+    fun getPlayers(squadId: String): List<Player> =
+        transaction {
+
+            val playerIds = SquadPlayers
+                .selectAll()
+                .where { SquadPlayers.squadId eq squadId }
+                .map { it[SquadPlayers.playerId] }
+
+            playerRepository.findByIds(playerIds)
+        }
+
+    fun getSquadPlayers(
+        participantId: UUID,
+        auctionId: String
+    ): List<Player> =
+        transaction {
+
+            val squad = Squads.selectAll()
+                .where {
+                    (Squads.participantId eq participantId) and
+                            (Squads.auctionId eq auctionId)
+                }
+                .firstOrNull()
+                ?: return@transaction emptyList()
+
+            val squadId = squad[Squads.id]   // ✅ Already String
+
+            val playerIds = SquadPlayers.selectAll()
+                .where { SquadPlayers.squadId eq squadId }
+                .map { it[SquadPlayers.playerId] }
+
+            playerRepository.findByIds(playerIds)
+        }
+
+    fun findForUpdate(
+        participantId: UUID,
+        auctionId: String
+    ): Squad? =
+        transaction {
+
+            Squads.selectAll()
+                .where {
+                    (Squads.participantId eq participantId) and
+                            (Squads.auctionId eq auctionId)
+                }
+                .forUpdate()
+                .limit(1)
+                .map { it.toSquad() }
+                .singleOrNull()
+        }
+
+    fun countParticipantsInAuction(auctionId: String): Long = transaction {
+
+        Squads
+            .selectAll()
+            .where { Squads.auctionId eq auctionId }
+            .count()
+    }
+}
