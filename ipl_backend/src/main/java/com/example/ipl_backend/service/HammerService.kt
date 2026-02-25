@@ -30,17 +30,17 @@ class HammerService(
             println("⚠️ hammerPlayer called twice for $playerId — skipping duplicate")
             return "Already hammering"
         }
+        println("🔨 hammerPlayer started for $playerId (hammering set size: ${hammering.size})")
 
         try {
             transaction {
 
                 // ✅ Re-read the player inside the transaction to get its REAL
-                //    current state from DB — not stale in-memory state
+                //    current state from DB — not stale in-memory state.
+                //    This is the definitive idempotency check — if isAuctioned
+                //    is true, another hammer already completed successfully.
                 val player = playerRepository.findForUpdate(playerId)
 
-                // If already auctioned (sold or processed), skip entirely.
-                // This handles the race condition where both the timer and
-                // checkIfEveryonePassed trigger hammer at the same time.
                 if (player?.isAuctioned == true) {
                     println("⚠️ Player $playerId already auctioned — skipping hammer")
                     return@transaction
@@ -57,15 +57,24 @@ class HammerService(
                 }
 
                 val wallet = walletRepository.findForUpdate(highestBid.participantId)
-                    ?: throw RuntimeException("Wallet not found")
+                val squad = if (wallet != null) {
+                    squadRepository.findForUpdate(highestBid.participantId, auctionId)
+                } else null
 
-                if (wallet.balance < highestBid.amount)
-                    throw InsufficientBalanceException()
+                val canAfford = wallet != null &&
+                        squad != null &&
+                        wallet.balance >= highestBid.amount
 
-                val squad = squadRepository.findForUpdate(
-                    highestBid.participantId,
-                    auctionId
-                ) ?: throw SquadNotFoundException()
+                if (!canAfford) {
+                    // ✅ Highest bidder can't pay (insufficient balance or no wallet/squad)
+                    // Treat as unsold — mark auctioned so they don't requeue, advance to next
+                    println("⚠️ Highest bidder ${highestBid.participantId} cannot pay " +
+                            "(balance: ${wallet?.balance}, bid: ${highestBid.amount}) → UNSOLD")
+                    playerRepository.markAsUnsold(playerId)
+                    auctionEngineService.loadNextPlayer(auctionId)
+                    liveAuctionService.broadcastMessage(playerId, "PLAYER_UNSOLD")
+                    return@transaction
+                }
 
                 walletRepository.decrementBalance(
                     highestBid.participantId,
@@ -73,12 +82,12 @@ class HammerService(
                 )
 
                 squadRepository.addPlayer(
-                    squad.id,
+                    squad!!.id,
                     playerId,
                     highestBid.amount
                 )
 
-                playerRepository.markAsSold(playerId)   // sets isAuctioned = true
+                playerRepository.markAsSold(playerId)
                 auctionEngineService.loadNextPlayer(auctionId)
 
                 liveAuctionService.broadcastPlayerSold(
@@ -97,9 +106,8 @@ class HammerService(
                 }
             }
         } finally {
-            // Always release the lock so the player can be processed again
-            // if something failed and needs a retry
-            hammering.remove(playerId)
+            val removed = hammering.remove(playerId)
+            println("🔓 hammerPlayer finished for $playerId — lock released: $removed")
         }
 
         return "Player hammered"

@@ -1,5 +1,6 @@
 package com.example.ipl_backend.repository
 
+import com.example.ipl_backend.dto.SquadPlayerDetail
 import com.example.ipl_backend.model.*
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -101,7 +102,7 @@ class SquadRepository(
     fun getSquadPlayers(
         participantId: UUID,
         auctionId: String
-    ): List<Player> =
+    ): List<SquadPlayerDetail> =
         transaction {
             val squad = Squads.selectAll()
                 .where {
@@ -113,11 +114,25 @@ class SquadRepository(
 
             val squadId = squad[Squads.id]
 
-            val playerIds = SquadPlayers.selectAll()
+            (SquadPlayers innerJoin Players)
+                .selectAll()
                 .where { SquadPlayers.squadId eq squadId }
-                .map { it[SquadPlayers.playerId] }
-
-            playerRepository.findByIds(playerIds)
+                .map { row ->
+                    SquadPlayerDetail(
+                        id = row[Players.id],
+                        name = row[Players.name],
+                        country = row[Players.country],
+                        age = row[Players.age],
+                        specialism = row[Players.specialism],
+                        battingStyle = row[Players.battingStyle],
+                        bowlingStyle = row[Players.bowlingStyle],
+                        testCaps = row[Players.testCaps],
+                        odiCaps = row[Players.odiCaps],
+                        t20Caps = row[Players.t20Caps],
+                        basePrice = row[Players.basePrice],
+                        soldPrice = row[SquadPlayers.purchasePrice]
+                    )
+                }
         }
 
     fun findForUpdate(

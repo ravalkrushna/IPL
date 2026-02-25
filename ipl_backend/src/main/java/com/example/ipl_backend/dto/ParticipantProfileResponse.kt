@@ -7,5 +7,5 @@ import java.util.UUID
 data class ParticipantProfileResponse(
     val participantId: UUID,
     val walletBalance: BigDecimal,
-    val squad: List<Player>
+    val squad: List<SquadPlayerDetail>
 )

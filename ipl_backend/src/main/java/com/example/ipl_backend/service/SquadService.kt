@@ -56,4 +56,21 @@ class SquadService(
             players = players
         )
     }
+
+    fun findMySquadWithPlayers(
+        participantId: UUID,
+        auctionId: String
+    ): MySquadResponse? {
+        val squad = squadRepository.findByParticipantAndAuction(participantId, auctionId)
+            ?: return null
+
+        val players = squadRepository.getSquadPlayers(participantId, auctionId)
+
+        return MySquadResponse(
+            squadId = squad.id,
+            name = squad.name,
+            participantId = squad.participantId,
+            players = players
+        )
+    }
 }

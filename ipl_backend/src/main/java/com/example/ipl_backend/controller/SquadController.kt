@@ -32,11 +32,11 @@ class SquadController(
     fun mySquad(
         @PathVariable auctionId: String,
         @RequestParam participantId: UUID
-    ): ResponseEntity<Squad> {
+    ): ResponseEntity<MySquadResponse> {
 
-        val squad = squadService.findMySquad(participantId, auctionId)
+        val response = squadService.findMySquadWithPlayers(participantId, auctionId)
             ?: return ResponseEntity.notFound().build()
 
-        return ResponseEntity.ok(squad)
+        return ResponseEntity.ok(response)
     }
 }

@@ -19,23 +19,29 @@ class SecurityConfig {
     @Bean
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
 
+        val securityContextRepository = HttpSessionSecurityContextRepository()
+
         http
             .cors { }
             .csrf { it.disable() }
 
-            // 🚀 THIS FIXES COOKIE CREATION
             .sessionManagement {
-                it.sessionCreationPolicy(SessionCreationPolicy.ALWAYS)
+                it.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED) // ← changed from ALWAYS
             }
 
             .securityContext {
-                it.securityContextRepository(HttpSessionSecurityContextRepository())
+                it.securityContextRepository(securityContextRepository)
+                it.requireExplicitSave(true) // ← explicitly save context to session
             }
 
             .authorizeHttpRequests {
                 it
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                    .requestMatchers("/api/v1/auth/**").permitAll()
+                    .requestMatchers("/api/v1/auth/signup").permitAll()
+                    .requestMatchers("/api/v1/auth/verify-otp").permitAll()
+                    .requestMatchers("/api/v1/auth/login").permitAll()
+                    .requestMatchers("/api/v1/auth/logout").permitAll()
+                    // ← /api/v1/auth/me is NO LONGER permitted — requires auth
                     .anyRequest().authenticated()
             }
 
@@ -47,22 +53,18 @@ class SecurityConfig {
 
     @Bean
     fun corsConfigurationSource(): CorsConfigurationSource {
-
         val config = CorsConfiguration()
-
         config.allowedOrigins = listOf("http://localhost:5173")
         config.allowedMethods = listOf("GET", "POST", "PUT", "DELETE", "OPTIONS")
         config.allowedHeaders = listOf("*")
         config.allowCredentials = true
+        config.exposedHeaders = listOf("Set-Cookie") // ← expose Set-Cookie to browser
 
         val source = UrlBasedCorsConfigurationSource()
         source.registerCorsConfiguration("/**", config)
-
         return source
     }
 
     @Bean
-    fun passwordEncoder(): PasswordEncoder {
-        return BCryptPasswordEncoder()
-    }
+    fun passwordEncoder(): PasswordEncoder = BCryptPasswordEncoder()
 }

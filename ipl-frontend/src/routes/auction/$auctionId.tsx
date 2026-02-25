@@ -49,12 +49,37 @@ type WalletResponse = {
 type SquadPlayer = {
   id: string
   name: string
+  country?: string
+  age?: number
+  specialism?: string
+  battingStyle?: string
+  bowlingStyle?: string
+  testCaps?: number
+  odiCaps?: number
+  t20Caps?: number
+  basePrice?: number
   soldPrice?: number
 }
 
 type Squad = {
   name: string
   players?: SquadPlayer[]
+}
+
+type Player = {
+  id: string
+  name: string
+  country?: string
+  age?: number
+  specialism?: string
+  battingStyle?: string
+  bowlingStyle?: string
+  testCaps?: number
+  odiCaps?: number
+  t20Caps?: number
+  basePrice?: number
+  isSold?: boolean
+  isAuctioned?: boolean
 }
 
 /* ───────────────── HELPERS ───────────────── */
@@ -87,8 +112,6 @@ function AuctionRoomPage() {
   const setWallet          = useAuctionRoomStore((s) => s.setWallet)
   const resetForNextPlayer = useAuctionRoomStore((s) => s.resetForNextPlayer)
   const setShowSquadDialog = useAuctionRoomStore((s) => s.setShowSquadDialog)
-  // timerKey increments every resetForNextPlayer so countdown restarts
-  // even when the same player id comes back (e.g. after unsold)
   const timerKey              = useAuctionRoomStore((s) => s.timerKey)
   const pendingNextPlayer     = useAuctionRoomStore((s) => s.pendingNextPlayer)
   const setPendingNextPlayer  = useAuctionRoomStore((s) => s.setPendingNextPlayer)
@@ -105,13 +128,9 @@ function AuctionRoomPage() {
     queryFn: () => auctionApi.getById(auctionId),
   })
 
-  const { data: player, refetch: refetchPlayer } = useQuery({
-    // ✅ auctionId in key — unique cache per auction
+  const { data: player, refetch: refetchPlayer } = useQuery<Player>({
     queryKey: ["currentPlayer", auctionId],
-    // ✅ auctionId passed as argument — fixes literal "{auctionId}" URL bug
     queryFn: () => auctionEngineApi.currentPlayer(auctionId),
-    // ✅ no refetchInterval — socket + manual refetchPlayer() drives updates
-    //    removing polling stops the backend loop you saw in logs
     refetchInterval: false,
   })
 
@@ -161,8 +180,6 @@ function AuctionRoomPage() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
     }
-  // timerKey changes on every resetForNextPlayer, forcing a fresh 10s countdown
-  // even when the same player id is re-used after an unsold result
   }, [player?.id, timerKey, startCountdown])
 
   /* ───────────────── WALLET SYNC ───────────────── */
@@ -207,7 +224,6 @@ function AuctionRoomPage() {
   useEffect(() => {
     if (!player?.id || !me?.participantId) return
 
-    // Cancel any in-flight poll when effect re-runs
     if (pollRef.current) {
       clearTimeout(pollRef.current)
       pollRef.current = null
@@ -215,28 +231,20 @@ function AuctionRoomPage() {
 
     const currentPlayerId = player.id
 
-    /* After sold/unsold:
-       1. Wait for the banner to be visible (bannerDelayMs)
-       2. Clear the sold/unsold overlay
-       3. Mark pendingNextPlayer = currentPlayerId so the UI shows a loading state
-       4. Poll refetchPlayer() every 1.5 s until a DIFFERENT player id arrives
-          then clear pendingNextPlayer so the card re-enables */
     const advanceToNextPlayer = (bannerDelayMs: number) => {
       if (pollRef.current) clearTimeout(pollRef.current)
 
       pollRef.current = setTimeout(() => {
-        resetForNextPlayer()                      // clear overlay, reset timer
-        setPendingNextPlayer(currentPlayerId)     // show loading until new player
+        resetForNextPlayer()
+        setPendingNextPlayer(currentPlayerId)
 
         const poll = async () => {
           const result = await refetchPlayer()
           const next = result.data
           if (next?.id && next.id !== currentPlayerId) {
-            // Genuine new player — clear the loading state
             setPendingNextPlayer(null)
             pollRef.current = null
           } else {
-            // Backend still on same player — retry in 1.5 s
             pollRef.current = setTimeout(poll, 1500)
           }
         }
@@ -347,7 +355,8 @@ function AuctionRoomPage() {
     squadError instanceof AxiosError &&
     squadError.response?.status === 404
 
-  const squadPlayerCount = squad?.players?.length ?? 0
+  const squadPlayers = squad?.players ?? []
+  const squadPlayerCount = squadPlayers.length
 
   const timerColor =
     seconds <= 3 ? "text-red-500" :
@@ -389,7 +398,7 @@ function AuctionRoomPage() {
 
       {/* ── My Squad dialog ── */}
       <Dialog open={showSquadDialog} onOpenChange={setShowSquadDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>
               🏏 {squad?.name ?? "My Squad"}&nbsp;
@@ -400,13 +409,51 @@ function AuctionRoomPage() {
           </DialogHeader>
 
           {squadPlayerCount > 0 ? (
-            <ul className="divide-y max-h-80 overflow-y-auto">
-              {squad!.players!.map((p) => (
-                <li key={p.id} className="flex justify-between py-2 text-sm">
-                  <span>{p.name}</span>
-                  <span className="text-muted-foreground font-medium">
-                    {p.soldPrice ? formatLakhs(p.soldPrice) : "—"}
-                  </span>
+            <ul className="divide-y max-h-125 overflow-y-auto">
+              {squadPlayers.map((p) => (
+                <li key={p.id} className="py-3 space-y-2">
+                  {/* Name + Sold Price */}
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-sm">{p.name}</span>
+                    <span className="text-sm font-bold text-green-600">
+                      {p.soldPrice ? formatLakhs(p.soldPrice) : "—"}
+                    </span>
+                  </div>
+
+                  {/* Player details grid */}
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+                    {p.country && (
+                      <span>🌍 {p.country}</span>
+                    )}
+                    {p.age && (
+                      <span>🎂 Age {p.age}</span>
+                    )}
+                    {p.specialism && (
+                      <span>⭐ {p.specialism}</span>
+                    )}
+                    {p.battingStyle && (
+                      <span>🦇 {p.battingStyle}</span>
+                    )}
+                    {p.bowlingStyle && (
+                      <span>⚡ {p.bowlingStyle}</span>
+                    )}
+                    {p.basePrice && (
+                      <span>💰 Base: {formatLakhs(Number(p.basePrice))}</span>
+                    )}
+                  </div>
+
+                  {/* Caps row */}
+                  <div className="flex gap-3 text-xs">
+                    <span className="bg-muted rounded px-2 py-0.5">
+                      Test <strong>{p.testCaps ?? 0}</strong>
+                    </span>
+                    <span className="bg-muted rounded px-2 py-0.5">
+                      ODI <strong>{p.odiCaps ?? 0}</strong>
+                    </span>
+                    <span className="bg-muted rounded px-2 py-0.5">
+                      T20 <strong>{p.t20Caps ?? 0}</strong>
+                    </span>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -454,18 +501,34 @@ function AuctionRoomPage() {
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">{auction.name}</h1>
+        <div>
+          <h1 className="text-3xl font-bold">{auction.name}</h1>
+          {/* Squad name shown below auction name for the participant */}
+          {me.role === "PARTICIPANT" && squad && (
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Your squad: <span className="font-semibold text-foreground">{squad.name}</span>
+            </p>
+          )}
+        </div>
 
         <div className="flex items-center gap-3">
           {me.role === "PARTICIPANT" && squad && (
-            <Button
-              variant="outline"
-              onClick={() => setShowSquadDialog(true)}
-              className="flex items-center gap-2"
-            >
-              🏏 My Squad
-              <Badge variant="secondary">{squadPlayerCount}</Badge>
-            </Button>
+            <div className="flex flex-col items-end gap-1">
+              <Button
+                variant="outline"
+                onClick={() => setShowSquadDialog(true)}
+                className="flex items-center gap-2"
+              >
+                🏏 {squad.name}
+                <Badge variant="secondary">{squadPlayerCount}</Badge>
+              </Button>
+              {/* Player name pills below the button */}
+              {squadPlayerCount > 0 && (
+                <p className="text-xs text-muted-foreground max-w-xs text-right leading-snug">
+                  {squadPlayers.map((p) => p.name).join(" · ")}
+                </p>
+              )}
+            </div>
           )}
           <Badge className="text-sm px-3 py-1">{auction.status}</Badge>
         </div>
@@ -474,10 +537,17 @@ function AuctionRoomPage() {
       {/* ── Player Card ── */}
       <Card>
         <CardHeader className="flex flex-row items-start justify-between">
-          <CardTitle className="text-2xl">{player.name}</CardTitle>
+          <div className="space-y-1">
+            <CardTitle className="text-2xl">{player.name}</CardTitle>
+            {player.country && (
+              <p className="text-sm text-muted-foreground">
+                🌍 {player.country}{player.age ? ` · Age ${player.age}` : ""}
+              </p>
+            )}
+          </div>
 
           {/* ── Timer ── */}
-          <div className="flex flex-col items-center min-w-[64px]">
+          <div className="flex flex-col items-center min-w-16">
             <span className={`text-4xl font-bold tabular-nums leading-none ${timerColor}`}>
               {seconds}
             </span>
@@ -499,8 +569,55 @@ function AuctionRoomPage() {
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
+        <CardContent className="space-y-5">
+
+          {/* ── Player Details Grid ── */}
+          <div className="grid grid-cols-2 gap-x-8 gap-y-1.5 text-sm">
+            {player.specialism && (
+              <>
+                <span className="text-muted-foreground">Specialism</span>
+                <span className="font-medium">{player.specialism}</span>
+              </>
+            )}
+            {player.battingStyle && (
+              <>
+                <span className="text-muted-foreground">Batting Style</span>
+                <span className="font-medium">{player.battingStyle}</span>
+              </>
+            )}
+            {player.bowlingStyle && (
+              <>
+                <span className="text-muted-foreground">Bowling Style</span>
+                <span className="font-medium">{player.bowlingStyle}</span>
+              </>
+            )}
+            <span className="text-muted-foreground">Base Price</span>
+            <span className="font-medium">{formatLakhs(Number(player.basePrice ?? 0))}</span>
+          </div>
+
+          {/* ── International Caps ── */}
+          <div>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
+              International Caps
+            </p>
+            <div className="flex gap-3">
+              <div className="flex flex-col items-center bg-muted rounded-lg px-5 py-2">
+                <span className="text-xl font-bold">{player.testCaps ?? 0}</span>
+                <span className="text-xs text-muted-foreground">Test</span>
+              </div>
+              <div className="flex flex-col items-center bg-muted rounded-lg px-5 py-2">
+                <span className="text-xl font-bold">{player.odiCaps ?? 0}</span>
+                <span className="text-xs text-muted-foreground">ODI</span>
+              </div>
+              <div className="flex flex-col items-center bg-muted rounded-lg px-5 py-2">
+                <span className="text-xl font-bold">{player.t20Caps ?? 0}</span>
+                <span className="text-xs text-muted-foreground">T20</span>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Current Bid ── */}
+          <div className="flex items-center justify-between border-t pt-4">
             <p className="text-lg">
               Current Bid:{" "}
               <span className="font-semibold">{formatLakhs(currentBid)}</span>
@@ -512,6 +629,7 @@ function AuctionRoomPage() {
             )}
           </div>
 
+          {/* ── Bid Buttons ── */}
           <div className="flex gap-2">
             <Button
               disabled={!canBid || placeBid.isPending}

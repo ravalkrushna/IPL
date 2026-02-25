@@ -52,10 +52,11 @@ class AuthController(
     }
 
     @GetMapping("/me")
-    fun me(authentication: Authentication): ResponseEntity<UserResponse> {
-
-        val email = authentication.name   // ✅ Comes from session
-
+    fun me(authentication: Authentication?): ResponseEntity<UserResponse> {
+        if (authentication == null || !authentication.isAuthenticated) {
+            return ResponseEntity.status(401).build()
+        }
+        val email = authentication.name
         return ResponseEntity.ok(authService.me(email))
     }
 }
