@@ -11,9 +11,6 @@ import java.util.concurrent.*
 class AuctionTimerService(
     private val hammerService: HammerService,
     private val squadRepository: SquadRepository,
-    private val playerRepository: PlayerRepository,
-    private val auctionEngineService: AuctionEngineService,
-    private val liveAuctionService: LiveAuctionService
 ) {
 
     private val passedParticipants =
@@ -32,15 +29,13 @@ class AuctionTimerService(
         cancelTimer(playerId)
 
         val task = scheduler.schedule({
-
             try {
                 hammerService.hammerPlayer(playerId, auctionId)
             } catch (ex: Exception) {
                 println("⛔ Hammer failed: ${ex.message}")
             } finally {
-                clearPasses(playerId)   // ✅ CRITICAL FIX
+                clearPasses(playerId)
             }
-
         }, AUCTION_TIMER_SECONDS, TimeUnit.SECONDS)
 
         activeTimers[playerId] = task
@@ -70,23 +65,29 @@ class AuctionTimerService(
         val totalParticipants =
             squadRepository.countParticipantsInAuction(auctionId)
 
-        if (totalParticipants == 0L) return   // ✅ EDGE GUARD
+        if (totalParticipants == 0L) return
 
-        val passedCount =
-            passedParticipants[playerId]?.size ?: 0
+        val passedCount = passedParticipants[playerId]?.size ?: 0
 
         if (passedCount >= totalParticipants) {
 
-            println("⚠ Everyone passed → PLAYER UNSOLD")
+            println("⚠ Everyone passed → cancelling timer and hammering immediately")
 
+            // ✅ Cancel the scheduled 10s timer FIRST so it doesn't also
+            //    fire hammerPlayer — then call hammer exactly once ourselves.
+            //    Previously both paths called hammerPlayer independently
+            //    causing the duplicate key crash on squad_players.
             cancelTimer(playerId)
-
-            playerRepository.markAsUnsold(playerId)
-            auctionEngineService.loadNextPlayer(auctionId)
-
-            liveAuctionService.broadcastMessage(playerId, "PLAYER_UNSOLD")
-
             clearPasses(playerId)
+
+            // Run hammer on a separate thread so we don't block the caller
+            scheduler.submit {
+                try {
+                    hammerService.hammerPlayer(playerId, auctionId)
+                } catch (ex: Exception) {
+                    println("⛔ Everyone-passed hammer failed: ${ex.message}")
+                }
+            }
         }
     }
 }

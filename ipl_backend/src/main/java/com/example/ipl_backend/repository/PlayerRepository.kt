@@ -24,6 +24,7 @@ class PlayerRepository {
             t20Caps = this[Players.t20Caps],
             basePrice = this[Players.basePrice],
             isSold = this[Players.isSold],
+            isAuctioned = this[Players.isAuctioned],   // ← new field
             createdAt = this[Players.createdAt],
             updatedAt = this[Players.updatedAt]
         )
@@ -44,6 +45,7 @@ class PlayerRepository {
                 it[t20Caps] = player.t20Caps
                 it[basePrice] = player.basePrice
                 it[isSold] = player.isSold
+                it[isAuctioned] = false
                 it[createdAt] = player.createdAt
                 it[updatedAt] = player.updatedAt
             }
@@ -76,40 +78,28 @@ class PlayerRepository {
         page: Int,
         size: Int
     ): List<Player> {
-
         return transaction {
-
             var query = Players.selectAll()
-
             query = query.where {
-
                 var condition: Op<Boolean> = Op.TRUE
-
                 if (!search.isNullOrBlank()) {
                     condition = condition and (Players.name.lowerCase() like "%${search.lowercase()}%")
                 }
-
                 if (!specialisms.isNullOrEmpty()) {
                     condition = condition and (Players.specialism inList specialisms)
                 }
-
                 if (!countries.isNullOrEmpty()) {
                     condition = condition and (Players.country inList countries)
                 }
-
                 if (isSold != null) {
                     condition = condition and (Players.isSold eq isSold)
                 }
-
                 condition
             }
-
             query = query.orderBy(Players.createdAt to SortOrder.DESC)
-
             if (!getAll) {
                 query = query.limit(size, ((page - 1) * size).toLong())
             }
-
             query.map { it.toPlayer() }
         }
     }
@@ -133,9 +123,7 @@ class PlayerRepository {
     }
 
     fun findByIds(ids: List<String>): List<Player> {
-
         if (ids.isEmpty()) return emptyList()
-
         return transaction {
             Players.selectAll()
                 .where { Players.id inList ids }
@@ -147,6 +135,7 @@ class PlayerRepository {
         transaction {
             Players.update({ Players.id eq playerId }) {
                 it[isSold] = true
+                it[isAuctioned] = true   // ← mark as processed
                 it[updatedAt] = System.currentTimeMillis()
             }
         }
@@ -156,6 +145,7 @@ class PlayerRepository {
         transaction {
             Players.update({ Players.id eq playerId }) {
                 it[isSold] = false
+                it[isAuctioned] = true   // ← CRITICAL: exclude from future rounds
                 it[updatedAt] = System.currentTimeMillis()
             }
         }
@@ -169,16 +159,15 @@ class PlayerRepository {
             .map { it.toPlayer() }
             .singleOrNull()
 
-    // ✅ FIXED: skip players already sold OR passed (isSold = true covers both cases)
+    // ✅ FIXED: exclude players that have already been through the auction
+    //    (both sold AND unsold) using isAuctioned flag.
+    //    Previously only PlayerPurchases was checked — unsold players were
+    //    never added there so they kept appearing as "available".
     fun findNextAvailablePlayer(auctionId: String): Player? =
         transaction {
             Players.selectAll()
                 .where {
-                    (Players.isSold eq false) and          // ✅ ADDED
-                            (Players.id notInSubQuery
-                                    PlayerPurchases
-                                        .slice(PlayerPurchases.playerId)
-                                        .select { PlayerPurchases.auctionId eq auctionId })
+                    Players.isAuctioned eq false   // ← single clean condition
                 }
                 .orderBy(Players.createdAt to SortOrder.ASC)
                 .limit(1)

@@ -21,6 +21,8 @@ object Players : Table("players") {
 
     val isSold = bool("is_sold").default(false)
 
+    val isAuctioned = bool("is_auctioned").default(false)
+
     val createdAt = long("created_at")
     val updatedAt = long("updated_at")
 
@@ -41,6 +43,7 @@ data class Player(
     val t20Caps: Int,
     val basePrice: BigDecimal,
     val isSold: Boolean,
+    val isAuctioned: Boolean = false,   // default so existing call sites don't break
     val createdAt: Long,
     val updatedAt: Long
 )

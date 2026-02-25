@@ -27,7 +27,7 @@ class SquadRepository(
                 it[id] = squad.id
                 it[participantId] = squad.participantId
                 it[auctionId] = squad.auctionId
-                it[name] = squad.name          // ✅ CRITICAL
+                it[name] = squad.name
                 it[createdAt] = squad.createdAt
             }
         }
@@ -63,6 +63,22 @@ class SquadRepository(
         price: BigDecimal
     ) {
         transaction {
+            // ✅ Guard: skip insert if this (squad, player) pair already exists.
+            // This prevents the duplicate key crash when hammerPlayer is called
+            // more than once for the same player (timer race + checkIfEveryonePassed).
+            val alreadyExists = SquadPlayers
+                .selectAll()
+                .where {
+                    (SquadPlayers.squadId eq squadId) and
+                            (SquadPlayers.playerId eq playerId)
+                }
+                .count() > 0
+
+            if (alreadyExists) {
+                println("⚠️ addPlayer: ($squadId, $playerId) already in squad — skipping insert")
+                return@transaction
+            }
+
             SquadPlayers.insert {
                 it[id] = UUID.randomUUID().toString()
                 it[SquadPlayers.squadId] = squadId
@@ -74,7 +90,6 @@ class SquadRepository(
 
     fun getPlayers(squadId: String): List<Player> =
         transaction {
-
             val playerIds = SquadPlayers
                 .selectAll()
                 .where { SquadPlayers.squadId eq squadId }
@@ -88,7 +103,6 @@ class SquadRepository(
         auctionId: String
     ): List<Player> =
         transaction {
-
             val squad = Squads.selectAll()
                 .where {
                     (Squads.participantId eq participantId) and
@@ -97,7 +111,7 @@ class SquadRepository(
                 .firstOrNull()
                 ?: return@transaction emptyList()
 
-            val squadId = squad[Squads.id]   // ✅ Already String
+            val squadId = squad[Squads.id]
 
             val playerIds = SquadPlayers.selectAll()
                 .where { SquadPlayers.squadId eq squadId }
@@ -111,7 +125,6 @@ class SquadRepository(
         auctionId: String
     ): Squad? =
         transaction {
-
             Squads.selectAll()
                 .where {
                     (Squads.participantId eq participantId) and
@@ -124,7 +137,6 @@ class SquadRepository(
         }
 
     fun countParticipantsInAuction(auctionId: String): Long = transaction {
-
         Squads
             .selectAll()
             .where { Squads.auctionId eq auctionId }
