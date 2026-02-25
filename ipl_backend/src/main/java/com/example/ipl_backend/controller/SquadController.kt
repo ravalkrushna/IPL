@@ -13,7 +13,6 @@ class SquadController(
     private val squadService: SquadService
 ) {
 
-
     @PostMapping("/create")
     fun create(
         @RequestBody request: CreateSquadRequest
@@ -33,10 +32,16 @@ class SquadController(
         @PathVariable auctionId: String,
         @RequestParam participantId: UUID
     ): ResponseEntity<MySquadResponse> {
-
         val response = squadService.findMySquadWithPlayers(participantId, auctionId)
             ?: return ResponseEntity.notFound().build()
 
         return ResponseEntity.ok(response)
+    }
+
+    @GetMapping("/all/{auctionId}")
+    fun allSquads(
+        @PathVariable auctionId: String
+    ): ResponseEntity<List<MySquadResponse>> {
+        return ResponseEntity.ok(squadService.findAllSquadsWithPlayers(auctionId))
     }
 }

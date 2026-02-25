@@ -18,33 +18,44 @@ class AuctionController(
     @PostMapping("/create")
     fun create(
         @RequestBody request: CreateAuctionRequest
-    ): ResponseEntity<Auction> {
-        return ResponseEntity.ok(auctionService.create(request))
-    }
+    ): ResponseEntity<Auction> =
+        ResponseEntity.ok(auctionService.create(request))
 
     @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/status/{id}")
     fun updateStatus(
         @PathVariable id: String,
         @RequestBody request: UpdateAuctionStatusRequest
-    ): ResponseEntity<Auction> {
-        return ResponseEntity.ok(auctionService.updateStatus(id, request))
-    }
+    ): ResponseEntity<Auction> =
+        ResponseEntity.ok(auctionService.updateStatus(id, request))
+
+    /** Pause a live auction — freezes the countdown timer. */
+    @PreAuthorize("hasRole('ADMIN')")
+    @PutMapping("/{id}/pause")
+    fun pause(@PathVariable id: String): ResponseEntity<Auction> =
+        ResponseEntity.ok(auctionService.pause(id))
+
+    /** Resume a paused auction — restarts the countdown. */
+    @PreAuthorize("hasRole('ADMIN')")
+    @PutMapping("/{id}/resume")
+    fun resume(@PathVariable id: String): ResponseEntity<Auction> =
+        ResponseEntity.ok(auctionService.resume(id))
+
+    /** End the auction immediately — marks as COMPLETED. */
+    @PreAuthorize("hasRole('ADMIN')")
+    @PutMapping("/{id}/end")
+    fun end(@PathVariable id: String): ResponseEntity<Auction> =
+        ResponseEntity.ok(auctionService.end(id))
 
     @GetMapping("/get/{id}")
-    fun getById(@PathVariable id: String): ResponseEntity<Auction> {
-        return ResponseEntity.ok(auctionService.getById(id))
-    }
+    fun getById(@PathVariable id: String): ResponseEntity<Auction> =
+        ResponseEntity.ok(auctionService.getById(id))
 
     @GetMapping("/list")
-    fun list(): ResponseEntity<List<Auction>> {
-        return ResponseEntity.ok(auctionService.list())
-    }
+    fun list(): ResponseEntity<List<Auction>> =
+        ResponseEntity.ok(auctionService.list())
 
     @GetMapping("/active")
-    fun active(): ResponseEntity<Auction> {
-        return ResponseEntity.of(
-            Optional.ofNullable(auctionService.getActiveAuction())
-        )
-    }
+    fun active(): ResponseEntity<Auction> =
+        ResponseEntity.of(Optional.ofNullable(auctionService.getActiveAuction()))
 }

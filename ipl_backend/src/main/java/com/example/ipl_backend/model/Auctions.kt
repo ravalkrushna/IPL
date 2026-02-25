@@ -7,13 +7,13 @@ object Auctions : Table("auctions") {
     val id = varchar("id", 255)
 
     val name = varchar("name", 255)
-        .uniqueIndex()   // ✅ Prevent duplicates
+        .uniqueIndex()
 
     val status = enumerationByName(
         "status",
         50,
         AuctionStatus::class
-    )   // ✅ Type-safe enum storage
+    )
 
     val createdAt = long("created_at")
     val updatedAt = long("updated_at")
@@ -29,9 +29,9 @@ data class Auction(
     val updatedAt: Long
 )
 
-enum class
-AuctionStatus {
+enum class AuctionStatus {
     PRE_AUCTION,
     LIVE,
+    PAUSED,
     COMPLETED
 }

@@ -17,5 +17,9 @@ export const squadApi = {
     const res = await api.post("/squads/create", data)
     return res.data
   },
-  
+
+  allSquads: async (auctionId: string) => {
+    const res = await api.get(`/squads/all/${auctionId}`)
+    return res.data
+  },
 }

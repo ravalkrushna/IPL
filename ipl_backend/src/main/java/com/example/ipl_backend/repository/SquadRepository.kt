@@ -58,15 +58,20 @@ class SquadRepository(
                 .singleOrNull()
         }
 
+    fun findAllByAuction(auctionId: String): List<Squad> =
+        transaction {
+            Squads.selectAll()
+                .where { Squads.auctionId eq auctionId }
+                .orderBy(Squads.createdAt, SortOrder.ASC)
+                .map { it.toSquad() }
+        }
+
     fun addPlayer(
         squadId: String,
         playerId: String,
         price: BigDecimal
     ) {
         transaction {
-            // ✅ Guard: skip insert if this (squad, player) pair already exists.
-            // This prevents the duplicate key crash when hammerPlayer is called
-            // more than once for the same player (timer race + checkIfEveryonePassed).
             val alreadyExists = SquadPlayers
                 .selectAll()
                 .where {
@@ -112,8 +117,11 @@ class SquadRepository(
                 .firstOrNull()
                 ?: return@transaction emptyList()
 
-            val squadId = squad[Squads.id]
+            getSquadPlayersBySquadId(squad[Squads.id])
+        }
 
+    fun getSquadPlayersBySquadId(squadId: String): List<SquadPlayerDetail> =
+        transaction {
             (SquadPlayers innerJoin Players)
                 .selectAll()
                 .where { SquadPlayers.squadId eq squadId }
