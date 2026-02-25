@@ -90,6 +90,66 @@ function formatLakhs(amount: number) {
   return `₹${amount.toLocaleString()}`
 }
 
+function formatTimeAgo(timestamp: number) {
+  const secs = Math.floor((Date.now() - timestamp) / 1000)
+  if (secs < 5) return "just now"
+  if (secs < 60) return `${secs}s ago`
+  return `${Math.floor(secs / 60)}m ago`
+}
+
+/* ───────────────── BID FEED COMPONENT ───────────────── */
+
+function BidFeed() {
+  const bidFeed = useAuctionRoomStore((s) => s.bidFeed)
+
+  if (!bidFeed || bidFeed.length === 0) return null
+
+  const reversed = [...bidFeed].reverse()
+
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs text-muted-foreground uppercase tracking-wide">
+        Recent Bids
+      </p>
+      <div className="max-h-36 overflow-y-auto space-y-1">
+        {reversed.map((bid, i) => (
+          <div
+            key={i}
+            className={`flex items-center justify-between text-sm px-3 py-1.5 rounded-md transition-colors ${
+              i === 0
+                ? "bg-green-50 border border-green-200 dark:bg-green-950 dark:border-green-800"
+                : "bg-muted/50"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {i === 0 && <span>🏆</span>}
+              <span
+                className={`font-medium ${
+                  i === 0 ? "text-green-700 dark:text-green-400" : "text-foreground"
+                }`}
+              >
+                {bid.squadName}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span
+                className={`font-bold tabular-nums ${
+                  i === 0 ? "text-green-700 dark:text-green-400" : ""
+                }`}
+              >
+                {formatLakhs(bid.amount)}
+              </span>
+              <span className="text-xs text-muted-foreground w-14 text-right shrink-0">
+                {formatTimeAgo(bid.timestamp)}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /* ───────────────── PAGE ───────────────── */
 
 function AuctionRoomPage() {
@@ -282,6 +342,7 @@ function AuctionRoomPage() {
               playerName: player.name,
               amount: Number(event.amount ?? 0),
             })
+            queryClient.invalidateQueries({ queryKey: ["mySquad"] })
             refetchSquad()
             advanceToNextPlayer(2500)
             break
@@ -412,37 +473,20 @@ function AuctionRoomPage() {
             <ul className="divide-y max-h-125 overflow-y-auto">
               {squadPlayers.map((p) => (
                 <li key={p.id} className="py-3 space-y-2">
-                  {/* Name + Sold Price */}
                   <div className="flex justify-between items-center">
                     <span className="font-semibold text-sm">{p.name}</span>
                     <span className="text-sm font-bold text-green-600">
                       {p.soldPrice ? formatLakhs(p.soldPrice) : "—"}
                     </span>
                   </div>
-
-                  {/* Player details grid */}
                   <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-                    {p.country && (
-                      <span>🌍 {p.country}</span>
-                    )}
-                    {p.age && (
-                      <span>🎂 Age {p.age}</span>
-                    )}
-                    {p.specialism && (
-                      <span>⭐ {p.specialism}</span>
-                    )}
-                    {p.battingStyle && (
-                      <span>🦇 {p.battingStyle}</span>
-                    )}
-                    {p.bowlingStyle && (
-                      <span>⚡ {p.bowlingStyle}</span>
-                    )}
-                    {p.basePrice && (
-                      <span>💰 Base: {formatLakhs(Number(p.basePrice))}</span>
-                    )}
+                    {p.country && <span>🌍 {p.country}</span>}
+                    {p.age && <span>🎂 Age {p.age}</span>}
+                    {p.specialism && <span>⭐ {p.specialism}</span>}
+                    {p.battingStyle && <span>🦇 {p.battingStyle}</span>}
+                    {p.bowlingStyle && <span>⚡ {p.bowlingStyle}</span>}
+                    {p.basePrice && <span>💰 Base: {formatLakhs(Number(p.basePrice))}</span>}
                   </div>
-
-                  {/* Caps row */}
                   <div className="flex gap-3 text-xs">
                     <span className="bg-muted rounded px-2 py-0.5">
                       Test <strong>{p.testCaps ?? 0}</strong>
@@ -503,7 +547,6 @@ function AuctionRoomPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">{auction.name}</h1>
-          {/* Squad name shown below auction name for the participant */}
           {me.role === "PARTICIPANT" && squad && (
             <p className="text-sm text-muted-foreground mt-0.5">
               Your squad: <span className="font-semibold text-foreground">{squad.name}</span>
@@ -522,7 +565,6 @@ function AuctionRoomPage() {
                 🏏 {squad.name}
                 <Badge variant="secondary">{squadPlayerCount}</Badge>
               </Button>
-              {/* Player name pills below the button */}
               {squadPlayerCount > 0 && (
                 <p className="text-xs text-muted-foreground max-w-xs text-right leading-snug">
                   {squadPlayers.map((p) => p.name).join(" · ")}
@@ -552,7 +594,6 @@ function AuctionRoomPage() {
               {seconds}
             </span>
             <span className="text-xs text-muted-foreground mt-1">seconds</span>
-
             <svg width="56" height="56" className="mt-1 -rotate-90">
               <circle cx="28" cy="28" r="24" fill="none" stroke="#e5e7eb" strokeWidth="4" />
               <circle
@@ -616,17 +657,39 @@ function AuctionRoomPage() {
             </div>
           </div>
 
-          {/* ── Current Bid ── */}
-          <div className="flex items-center justify-between border-t pt-4">
-            <p className="text-lg">
-              Current Bid:{" "}
-              <span className="font-semibold">{formatLakhs(currentBid)}</span>
-            </p>
-            {highestBid?.bidderName && (
-              <p className="text-sm text-muted-foreground">
-                by {highestBid.bidderName}
-              </p>
-            )}
+          {/* ── Current Bid + Highest Bidder ── */}
+          <div className="border-t pt-4 space-y-4">
+
+            {/* Big bid + bidder hero row */}
+            <div className="flex items-end justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+                  Current Bid
+                </p>
+                <p className="text-3xl font-bold tabular-nums">
+                  {formatLakhs(currentBid)}
+                </p>
+              </div>
+
+              <div className="text-right">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+                  Highest Bidder
+                </p>
+                {highestBid?.bidderName ? (
+                  <div className="flex items-center gap-2 justify-end">
+                    <span className="text-lg">🏆</span>
+                    <span className="font-semibold text-base">
+                      {highestBid.bidderName}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">No bids yet</p>
+                )}
+              </div>
+            </div>
+
+            {/* Live bid feed — populated by socket NEW_BID events */}
+            <BidFeed />
           </div>
 
           {/* ── Bid Buttons ── */}
