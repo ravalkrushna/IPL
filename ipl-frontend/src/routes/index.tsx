@@ -1214,7 +1214,7 @@ function RouteComponent() {
           {/* Stat band */}
           <div className="hero-stats-band">
             {[
-              { num: "600+", label: "Players" },
+              { num: "500+", label: "Players" },
               { num: "16",   label: "Nations" },
               { num: "∞",   label: "Auctions" },
               { num: "100%", label: "Free to Play" },
