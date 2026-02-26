@@ -15,13 +15,13 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
 
 import { authApi } from "@/lib/auth"
 import { useWallet } from "@/hooks/useWallet"
 import { useWalletLeaderboard } from "@/hooks/useWalletLeaderboard"
+import { api } from "@/lib/api"
 
-/* ─── Route: lives at src/routes/auction/profile.tsx ─── */
+/* ─── Route ─── */
 export const Route = createFileRoute("/auction/profile")({
   validateSearch: z.object({
     q: z.string().catch(""),
@@ -315,8 +315,7 @@ const styles = `
     font-size: 11px; font-weight: 800; color: white;
     font-family: 'Plus Jakarta Sans', sans-serif;
   }
-  .ptd-name  { font-weight: 700 !important; color: var(--ink) !important; }
-  .ptd-email { color: var(--ink-faint) !important; font-size: 12px !important; }
+  .ptd-name { font-weight: 700 !important; color: var(--ink) !important; }
   .ptd-balance {
     font-family: 'Plus Jakarta Sans', sans-serif !important;
     font-weight: 800 !important; font-variant-numeric: tabular-nums;
@@ -358,10 +357,10 @@ function ProfilePage() {
     queryFn: authApi.me,
   })
 
+  const isAdmin = me?.role === "ADMIN"
+
   const { data: wallet }      = useWallet(me?.participantId)
   const { data: leaderboard } = useWalletLeaderboard()
-
-  const isAdmin = me?.role === "ADMIN"
 
   const myRankIdx = (leaderboard ?? []).findIndex(
     (p: any) => p.participantId === me?.participantId
@@ -375,7 +374,7 @@ function ProfilePage() {
 
   const updateProfile = useMutation({
     mutationFn: (data: ProfileForm) =>
-      fetch("/api/auth/me", {
+      fetch("/api/v1/auth/me", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -389,18 +388,18 @@ function ProfilePage() {
 
   /* ─ admin: participants ─ */
   const { data: allParticipants, isLoading: participantsLoading } = useQuery({
-    queryKey: ["participants"],
-    queryFn: () =>
-      fetch("/api/participants", { credentials: "include" }).then((r) => r.json()),
-    enabled: isAdmin,
-  })
+  queryKey: ["participants"],
+  queryFn: () => api.get("/participants/list").then((r) => r.data),
+  enabled: isAdmin,
+  retry: 1,
+})
 
   const participants: any[] = Array.isArray(allParticipants) ? allParticipants : []
 
   const filteredParticipants = participants.filter((p: any) => {
     if (!q) return true
     const lower = q.toLowerCase()
-    return p.name?.toLowerCase().includes(lower) || p.email?.toLowerCase().includes(lower)
+    return p.name?.toLowerCase().includes(lower)
   })
 
   return (
@@ -553,7 +552,7 @@ function ProfilePage() {
 
             <div className="participants-toolbar">
               <Input
-                placeholder="Search by name or email…"
+                placeholder="Search by name…"
                 value={q}
                 onChange={(e) =>
                   navigate({ to: "/auction/profile", search: { q: e.target.value } })
@@ -571,14 +570,13 @@ function ProfilePage() {
                   <TableRow>
                     <TableHead style={{ width: 48, textAlign: "center" }}>#</TableHead>
                     <TableHead>Participant</TableHead>
-                    <TableHead>Email</TableHead>
                     <TableHead style={{ textAlign: "right" }}>Balance</TableHead>
                     <TableHead style={{ textAlign: "center" }}>Rank</TableHead>
-                    <TableHead>Role</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
 
+                  {/* skeleton rows while loading */}
                   {participantsLoading && Array.from({ length: 6 }).map((_, i) => (
                     <TableRow key={i}>
                       <TableCell className="ptd-rank">
@@ -590,17 +588,16 @@ function ProfilePage() {
                           <div className="ptd-skel" style={{ height: 13, width: 140 }} />
                         </div>
                       </TableCell>
-                      <TableCell><div className="ptd-skel" style={{ height: 12, width: 170 }} /></TableCell>
                       <TableCell style={{ textAlign: "right" }}>
                         <div className="ptd-skel" style={{ height: 13, width: 64, marginLeft: "auto" }} />
                       </TableCell>
                       <TableCell style={{ textAlign: "center" }}>
                         <div className="ptd-skel" style={{ height: 12, width: 24, margin: "0 auto" }} />
                       </TableCell>
-                      <TableCell><div className="ptd-skel" style={{ height: 22, width: 80, borderRadius: 6 }} /></TableCell>
                     </TableRow>
                   ))}
 
+                  {/* participant rows */}
                   {!participantsLoading && filteredParticipants.map((p: any, i: number) => {
                     const lb    = (leaderboard ?? []) as any[]
                     const entry = lb.find((l) => l.participantId === p.id)
@@ -619,7 +616,6 @@ function ProfilePage() {
                             <span className="ptd-name">{p.name}</span>
                           </div>
                         </TableCell>
-                        <TableCell className="ptd-email">{p.email ?? "—"}</TableCell>
                         <TableCell>
                           <span className="ptd-balance">
                             {entry?.balance != null ? fmt(Number(entry.balance)) : "—"}
@@ -636,18 +632,14 @@ function ProfilePage() {
                             {rank === 0 ? "🥇" : rank >= 0 ? `#${rank + 1}` : "—"}
                           </span>
                         </TableCell>
-                        <TableCell>
-                          <Badge className={p.role === "ADMIN" ? "prof-role-admin" : "prof-role-participant"}>
-                            {p.role === "ADMIN" ? "Admin" : "Participant"}
-                          </Badge>
-                        </TableCell>
                       </TableRow>
                     )
                   })}
 
+                  {/* empty state */}
                   {!participantsLoading && filteredParticipants.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} style={{ padding: 0 }}>
+                      <TableCell colSpan={4} style={{ padding: 0 }}>
                         <div className="prof-empty">
                           <span className="prof-empty-icon">👥</span>
                           <span className="prof-empty-text">

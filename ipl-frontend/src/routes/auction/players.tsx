@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { z } from "zod"
 
 import {
@@ -58,10 +58,54 @@ const styles = `
       radial-gradient(ellipse at 90% 0%, #e8f4ef 0%, transparent 50%),
       radial-gradient(ellipse at 0% 100%, #f0ece3 0%, transparent 45%);
     min-height: 100vh;
-    padding: 32px 32px 64px;
     font-family: 'DM Sans', system-ui, sans-serif;
     color: var(--ink);
     box-sizing: border-box;
+  }
+
+  /* ── NAV ── */
+  .pp-nav {
+    position: sticky; top: 0; z-index: 50;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 32px; height: 60px;
+    background: rgba(250,248,244,0.88);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.8), 0 2px 12px rgba(0,0,0,0.04);
+  }
+
+  .pp-nav-brand { display: flex; align-items: center; gap: 10px; }
+
+  .pp-nav-icon {
+    width: 34px; height: 34px;
+    background: linear-gradient(135deg, #2d7a4f, #3da066);
+    border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    box-shadow: 0 2px 8px rgba(45,122,79,0.3);
+  }
+
+  .pp-nav-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 17px; font-weight: 900; color: var(--ink); letter-spacing: -0.3px;
+  }
+
+  .pp-nav-sub { font-size: 11px; color: var(--ink-faint); margin-top: 1px; }
+
+  .btn-back {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 14px; background: white;
+    border: 1px solid var(--border); border-radius: 9px;
+    font-size: 12px; font-weight: 700; color: var(--ink-muted);
+    cursor: pointer; transition: all 0.15s;
+    font-family: 'DM Sans', sans-serif;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .btn-back:hover { border-color: var(--border-dark); color: var(--ink); transform: translateY(-1px); }
+
+  /* ── Body ── */
+  .pp-body {
+    padding: 32px 32px 64px;
   }
 
   /* ── Page Header ── */
@@ -74,31 +118,14 @@ const styles = `
     gap: 12px;
   }
 
-  .pp-header-left {}
-
   .pp-eyebrow {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 6px;
+    font-size: 10px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
+    color: var(--green); display: flex; align-items: center; gap: 6px; margin-bottom: 8px;
   }
-
-  .pp-back-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--ink-faint);
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    padding: 0;
-    font-family: 'DM Sans', sans-serif;
-    transition: color 0.15s;
-    text-decoration: none;
+  .pp-eyebrow::before {
+    content: ''; display: block; width: 18px; height: 2px;
+    background: var(--green); border-radius: 2px;
   }
-  .pp-back-btn:hover { color: var(--ink-muted); }
 
   .pp-title {
     font-family: 'Playfair Display', serif;
@@ -175,7 +202,6 @@ const styles = `
     max-width: 280px;
   }
 
-  /* Override shadcn Input for our theme */
   .pp-toolbar-search input,
   .pp-search-input {
     height: 36px;
@@ -199,7 +225,6 @@ const styles = `
     color: var(--ink-faint);
   }
 
-  /* Filter buttons */
   .pp-filter-group {
     display: flex;
     gap: 6px;
@@ -251,7 +276,6 @@ const styles = `
     box-shadow: 0 2px 10px rgba(0,0,0,0.05);
   }
 
-  /* ── Table Header ── */
   .pp-table-shell thead {
     background: var(--parchment);
   }
@@ -272,7 +296,6 @@ const styles = `
     border: none !important;
   }
 
-  /* ── Table Body ── */
   .pp-table-shell tbody tr {
     border-bottom: 1px solid #f0ebe0 !important;
     transition: background 0.12s;
@@ -294,7 +317,6 @@ const styles = `
     vertical-align: middle;
   }
 
-  /* ── Cell variants ── */
   .pp-cell-name {
     font-weight: 700 !important;
     color: var(--ink) !important;
@@ -317,7 +339,6 @@ const styles = `
     font-variant-numeric: tabular-nums;
   }
 
-  /* ── Badges ── */
   .pp-badge-role {
     background: var(--parchment-mid) !important;
     border: 1px solid var(--border) !important;
@@ -357,7 +378,6 @@ const styles = `
     font-family: 'DM Sans', sans-serif;
   }
 
-  /* ── Skeleton ── */
   .pp-skel {
     border-radius: 5px;
     background: linear-gradient(90deg, var(--parchment) 25%, var(--border) 50%, var(--parchment) 75%);
@@ -370,7 +390,6 @@ const styles = `
     100% { background-position: -100% 0; }
   }
 
-  /* ── Empty state ── */
   .pp-empty-inner {
     display: flex;
     flex-direction: column;
@@ -381,22 +400,9 @@ const styles = `
     gap: 10px;
   }
 
-  .pp-empty-icon {
-    font-size: 36px;
-    opacity: 0.35;
-  }
-
-  .pp-empty-text {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--ink-faint);
-  }
-
-  .pp-empty-hint {
-    font-size: 12px;
-    color: var(--ink-faint);
-    opacity: 0.7;
-  }
+  .pp-empty-icon { font-size: 36px; opacity: 0.35; }
+  .pp-empty-text { font-size: 14px; font-weight: 600; color: var(--ink-faint); }
+  .pp-empty-hint { font-size: 12px; color: var(--ink-faint); opacity: 0.7; }
 
   /* ── Pagination ── */
   .pp-pager {
@@ -449,7 +455,6 @@ const styles = `
     font-weight: 900;
   }
 
-  /* ── Row number ── */
   .pp-cell-num {
     color: var(--ink-faint) !important;
     font-family: 'Plus Jakarta Sans', sans-serif !important;
@@ -475,6 +480,7 @@ const filterOptions: { label: string; val: boolean | undefined }[] = [
 function PlayersPoolPage() {
   const { page, search, sold } = Route.useSearch()
   const navigate = Route.useNavigate()
+  const globalNavigate = useNavigate()
   const size = 15
 
   const { data: players, isLoading } = usePlayers({ search, isSold: sold, page, size })
@@ -486,190 +492,199 @@ function PlayersPoolPage() {
     <div className="pp-root">
       <style>{styles}</style>
 
-      {/* ── Page Header ── */}
-      <div className="pp-header">
-        <div className="pp-header-left">
-          <div className="pp-eyebrow">
-            <span style={{ fontSize: 20 }}>🏏</span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-faint)", letterSpacing: "0.5px", textTransform: "uppercase" }}>
-              Auction
-            </span>
-          </div>
-          <h1 className="pp-title">Players Pool</h1>
-          <p className="pp-sub">Browse, filter and track all auction players</p>
-        </div>
-
-        {/* Quick stats */}
-        <div className="pp-stats">
-          <div className="pp-stat-pill">
-            <span className="pp-stat-dot" style={{ background: "var(--amber)" }} />
-            <span className="pp-stat-label">Showing</span>
-            <span className="pp-stat-value" style={{ color: "var(--ink)" }}>{totalShown}</span>
-          </div>
-          <div className="pp-stat-pill">
-            <span className="pp-stat-dot" style={{ background: "var(--green)" }} />
-            <span className="pp-stat-label">Page</span>
-            <span className="pp-stat-value" style={{ color: "var(--green)" }}>{page}</span>
+      {/* ── NAV ── */}
+      <nav className="pp-nav">
+        <div className="pp-nav-brand">
+          <div className="pp-nav-icon">🏏</div>
+          <div>
+            <div className="pp-nav-title">BidXI</div>
+            <div className="pp-nav-sub">Fantasy Cricket Auction</div>
           </div>
         </div>
-      </div>
+        <button className="btn-back" onClick={() => globalNavigate({ to: "/auction" })}>
+          ← Back to Lobby
+        </button>
+      </nav>
 
-      {/* ── Toolbar ── */}
-      <div className="pp-toolbar">
-        {/* Search */}
-        <div className="pp-toolbar-search">
-          <Input
-            placeholder="Search players…"
-            value={search}
-            onChange={(e) =>
-              navigate({ search: (prev) => ({ ...prev, search: e.target.value, page: 1 }) })
-            }
-            className="pp-search-input"
-          />
+      {/* ── Body ── */}
+      <div className="pp-body">
+
+        {/* ── Page Header ── */}
+        <div className="pp-header">
+          <div>
+            <div className="pp-eyebrow">Players Pool</div>
+            <h1 className="pp-title">Players Pool</h1>
+            <p className="pp-sub">Browse, filter and track all auction players</p>
+          </div>
+
+          <div className="pp-stats">
+            <div className="pp-stat-pill">
+              <span className="pp-stat-dot" style={{ background: "var(--amber)" }} />
+              <span className="pp-stat-label">Showing</span>
+              <span className="pp-stat-value" style={{ color: "var(--ink)" }}>{totalShown}</span>
+            </div>
+            <div className="pp-stat-pill">
+              <span className="pp-stat-dot" style={{ background: "var(--green)" }} />
+              <span className="pp-stat-label">Page</span>
+              <span className="pp-stat-value" style={{ color: "var(--green)" }}>{page}</span>
+            </div>
+          </div>
         </div>
 
-        <div className="pp-toolbar-sep" />
-
-        {/* Filter pills */}
-        <div className="pp-filter-group">
-          {filterOptions.map(({ label, val }) => (
-            <button
-              key={label}
-              className={`pp-filter-btn ${sold === val ? "active" : ""}`}
-              onClick={() =>
-                navigate({ search: (prev) => ({ ...prev, sold: val, page: 1 }) })
+        {/* ── Toolbar ── */}
+        <div className="pp-toolbar">
+          <div className="pp-toolbar-search">
+            <Input
+              placeholder="Search players…"
+              value={search}
+              onChange={(e) =>
+                navigate({ search: (prev) => ({ ...prev, search: e.target.value, page: 1 }) })
               }
-            >
-              {label}
-            </button>
-          ))}
+              className="pp-search-input"
+            />
+          </div>
+
+          <div className="pp-toolbar-sep" />
+
+          <div className="pp-filter-group">
+            {filterOptions.map(({ label, val }) => (
+              <button
+                key={label}
+                className={`pp-filter-btn ${sold === val ? "active" : ""}`}
+                onClick={() =>
+                  navigate({ search: (prev) => ({ ...prev, sold: val, page: 1 }) })
+                }
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ flex: 1 }} />
+
+          <span style={{ fontSize: 11, color: "var(--ink-faint)", fontWeight: 600 }}>
+            {size} per page
+          </span>
         </div>
 
-        {/* Spacer */}
-        <div style={{ flex: 1 }} />
-
-        {/* Page size note */}
-        <span style={{ fontSize: 11, color: "var(--ink-faint)", fontWeight: 600 }}>
-          {size} per page
-        </span>
-      </div>
-
-      {/* ── Table ── */}
-      <div className="pp-table-shell">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead style={{ width: 48, textAlign: "center" }}>#</TableHead>
-              <TableHead>Player</TableHead>
-              <TableHead>Country</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead style={{ textAlign: "right" }}>Base Price</TableHead>
-              <TableHead>Status</TableHead>
-            </TableRow>
-          </TableHeader>
-
-          <TableBody>
-
-            {/* Skeleton rows */}
-            {isLoading &&
-              Array.from({ length: size }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell className="pp-cell-num">
-                    <div className="pp-skel" style={{ height: 12, width: 20, margin: "0 auto" }} />
-                  </TableCell>
-                  <TableCell>
-                    <div className="pp-skel" style={{ height: 13, width: 160 }} />
-                  </TableCell>
-                  <TableCell>
-                    <div className="pp-skel" style={{ height: 13, width: 90 }} />
-                  </TableCell>
-                  <TableCell>
-                    <div className="pp-skel" style={{ height: 22, width: 90, borderRadius: 6 }} />
-                  </TableCell>
-                  <TableCell style={{ textAlign: "right" }}>
-                    <div className="pp-skel" style={{ height: 13, width: 70, marginLeft: "auto" }} />
-                  </TableCell>
-                  <TableCell>
-                    <div className="pp-skel" style={{ height: 22, width: 80, borderRadius: 6 }} />
-                  </TableCell>
-                </TableRow>
-              ))}
-
-            {/* Data rows */}
-            {!isLoading && players?.length
-              ? players.map((player: any, i: number) => (
-                <TableRow key={player.id}>
-                  <TableCell className="pp-cell-num">
-                    {startRow + i}
-                  </TableCell>
-                  <TableCell className="pp-cell-name">
-                    {player.name}
-                  </TableCell>
-                  <TableCell className="pp-cell-country">
-                    {player.country}
-                  </TableCell>
-                  <TableCell>
-                    <Badge className="pp-badge-role">
-                      {player.specialism}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="pp-cell-price">
-                    {fmt(Number(player.basePrice))}
-                  </TableCell>
-                  <TableCell>
-                    {player.isSold
-                      ? <Badge className="pp-badge-sold">Sold</Badge>
-                      : <Badge className="pp-badge-available">Available</Badge>
-                    }
-                  </TableCell>
-                </TableRow>
-              ))
-              : null}
-
-            {/* Empty state */}
-            {!isLoading && !players?.length && (
+        {/* ── Table ── */}
+        <div className="pp-table-shell">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={6} style={{ padding: 0 }}>
-                  <div className="pp-empty-inner">
-                    <span className="pp-empty-icon">🏏</span>
-                    <span className="pp-empty-text">No players found</span>
-                    <span className="pp-empty-hint">
-                      {search ? `No results for "${search}" — try a different name` : "No players match the current filter"}
-                    </span>
-                  </div>
-                </TableCell>
+                <TableHead style={{ width: 48, textAlign: "center" }}>#</TableHead>
+                <TableHead>Player</TableHead>
+                <TableHead>Country</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead style={{ textAlign: "right" }}>Base Price</TableHead>
+                <TableHead>Status</TableHead>
               </TableRow>
-            )}
+            </TableHeader>
 
-          </TableBody>
-        </Table>
-      </div>
+            <TableBody>
 
-      {/* ── Pagination ── */}
-      <div className="pp-pager">
-        <button
-          className="pp-pager-btn"
-          disabled={page === 1}
-          onClick={() =>
-            navigate({ search: (prev) => ({ ...prev, page: prev.page - 1 }) })
-          }
-        >
-          ← Previous
-        </button>
+              {/* Skeleton rows */}
+              {isLoading &&
+                Array.from({ length: size }).map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="pp-cell-num">
+                      <div className="pp-skel" style={{ height: 12, width: 20, margin: "0 auto" }} />
+                    </TableCell>
+                    <TableCell>
+                      <div className="pp-skel" style={{ height: 13, width: 160 }} />
+                    </TableCell>
+                    <TableCell>
+                      <div className="pp-skel" style={{ height: 13, width: 90 }} />
+                    </TableCell>
+                    <TableCell>
+                      <div className="pp-skel" style={{ height: 22, width: 90, borderRadius: 6 }} />
+                    </TableCell>
+                    <TableCell style={{ textAlign: "right" }}>
+                      <div className="pp-skel" style={{ height: 13, width: 70, marginLeft: "auto" }} />
+                    </TableCell>
+                    <TableCell>
+                      <div className="pp-skel" style={{ height: 22, width: 80, borderRadius: 6 }} />
+                    </TableCell>
+                  </TableRow>
+                ))}
 
-        <span className="pp-pager-label">
-          Page <strong>{page}</strong>
-        </span>
+              {/* Data rows */}
+              {!isLoading && players?.length
+                ? players.map((player: any, i: number) => (
+                  <TableRow key={player.id}>
+                    <TableCell className="pp-cell-num">
+                      {startRow + i}
+                    </TableCell>
+                    <TableCell className="pp-cell-name">
+                      {player.name}
+                    </TableCell>
+                    <TableCell className="pp-cell-country">
+                      {player.country}
+                    </TableCell>
+                    <TableCell>
+                      <Badge className="pp-badge-role">
+                        {player.specialism}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="pp-cell-price">
+                      {fmt(Number(player.basePrice))}
+                    </TableCell>
+                    <TableCell>
+                      {player.isSold
+                        ? <Badge className="pp-badge-sold">Sold</Badge>
+                        : <Badge className="pp-badge-available">Available</Badge>
+                      }
+                    </TableCell>
+                  </TableRow>
+                ))
+                : null}
 
-        <button
-          className="pp-pager-btn"
-          disabled={!players || players.length < size}
-          onClick={() =>
-            navigate({ search: (prev) => ({ ...prev, page: prev.page + 1 }) })
-          }
-        >
-          Next →
-        </button>
+              {/* Empty state */}
+              {!isLoading && !players?.length && (
+                <TableRow>
+                  <TableCell colSpan={6} style={{ padding: 0 }}>
+                    <div className="pp-empty-inner">
+                      <span className="pp-empty-icon">🏏</span>
+                      <span className="pp-empty-text">No players found</span>
+                      <span className="pp-empty-hint">
+                        {search ? `No results for "${search}" — try a different name` : "No players match the current filter"}
+                      </span>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
+
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* ── Pagination ── */}
+        <div className="pp-pager">
+          <button
+            className="pp-pager-btn"
+            disabled={page === 1}
+            onClick={() =>
+              navigate({ search: (prev) => ({ ...prev, page: prev.page - 1 }) })
+            }
+          >
+            ← Previous
+          </button>
+
+          <span className="pp-pager-label">
+            Page <strong>{page}</strong>
+          </span>
+
+          <button
+            className="pp-pager-btn"
+            disabled={!players || players.length < size}
+            onClick={() =>
+              navigate({ search: (prev) => ({ ...prev, page: prev.page + 1 }) })
+            }
+          >
+            Next →
+          </button>
+        </div>
+
       </div>
     </div>
   )

@@ -2,7 +2,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createFileRoute, useParams } from "@tanstack/react-router"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { useEffect, useRef, useCallback, useState } from "react"
+import { useEffect, useRef, useCallback } from "react"
 import { AxiosError } from "axios"
 
 import { auctionApi } from "@/lib/auctionApi"
@@ -167,14 +167,18 @@ function AdminControlPanel({ auctionId, auction, player, highestBid, bidFeed, al
   allSquads?: Squad[]
 }) {
   const queryClient = useQueryClient()
-  const [confirmEnd, setConfirmEnd] = useState(false)
+
+  // ── store (replaces useState) ──
+  const confirmEnd   = useAuctionRoomStore(s => s.confirmEnd)
+  const setConfirmEnd = useAuctionRoomStore(s => s.setConfirmEnd)
+
   const isPaused = auction.status === "PAUSED"
 
-  const pause = useMutation({ mutationFn: () => auctionApi.pause(auctionId), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["auction", auctionId] }) })
+  const pause  = useMutation({ mutationFn: () => auctionApi.pause(auctionId),  onSuccess: () => queryClient.invalidateQueries({ queryKey: ["auction", auctionId] }) })
   const resume = useMutation({ mutationFn: () => auctionApi.resume(auctionId), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["auction", auctionId] }) })
-  const end = useMutation({ mutationFn: () => auctionApi.end(auctionId), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["auction", auctionId] }) })
+  const end    = useMutation({ mutationFn: () => auctionApi.end(auctionId),    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["auction", auctionId] }) })
 
-  const currentBid = highestBid?.amount ?? Number(player.basePrice ?? 0)
+  const currentBid   = highestBid?.amount ?? Number(player.basePrice ?? 0)
   const totalPlayers = allSquads?.flatMap(s => s.players ?? []).length ?? 0
 
   return (
@@ -213,9 +217,9 @@ function AdminControlPanel({ auctionId, auction, player, highestBid, bidFeed, al
           </div>
           <div className="border-t border-white/10 grid grid-cols-3 divide-x divide-white/10">
             {[
-              { label: "TEST", value: player.testCaps ?? 0, color: "text-sky-300", played: (player.testCaps ?? 0) > 0 },
-              { label: "ODI", value: player.odiCaps ?? 0, color: "text-violet-300", played: (player.odiCaps ?? 0) > 0 },
-              { label: "T20", value: player.t20Caps ?? 0, color: "text-amber-300", played: (player.t20Caps ?? 0) > 0 },
+              { label: "TEST", value: player.testCaps ?? 0, color: "text-sky-300",    played: (player.testCaps ?? 0) > 0 },
+              { label: "ODI",  value: player.odiCaps  ?? 0, color: "text-violet-300", played: (player.odiCaps  ?? 0) > 0 },
+              { label: "T20",  value: player.t20Caps  ?? 0, color: "text-amber-300",  played: (player.t20Caps  ?? 0) > 0 },
             ].map(({ label, value, color, played }) => (
               <div key={label} className={`flex flex-col items-center py-3.5 ${played ? "opacity-100" : "opacity-35"}`}>
                 <span className={`text-xl font-black tabular-nums ${played ? color : "text-slate-500"}`}>{played ? value : "—"}</span>
@@ -282,9 +286,9 @@ function AdminControlPanel({ auctionId, auction, player, highestBid, bidFeed, al
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shrink-0">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Auction Stats</p>
           {[
-            { label: "Squads", value: String(allSquads?.length ?? 0) },
-            { label: "Players Bought", value: String(totalPlayers) },
-            { label: "Status", value: auction.status },
+            { label: "Squads",          value: String(allSquads?.length ?? 0) },
+            { label: "Players Bought",  value: String(totalPlayers) },
+            { label: "Status",          value: auction.status },
           ].map(({ label, value }) => (
             <div key={label} className="flex items-center justify-between py-1.5 border-b border-slate-50 last:border-0">
               <span className="text-xs text-slate-400">{label}</span>
@@ -299,26 +303,26 @@ function AdminControlPanel({ auctionId, auction, player, highestBid, bidFeed, al
           <div className="space-y-2">
             {isPaused
               ? <button onClick={() => resume.mutate()} disabled={resume.isPending}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-black text-sm transition-all shadow-[0_2px_12px_rgba(16,185,129,0.3)]">
-                ▶ Resume Auction
-              </button>
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-black text-sm transition-all shadow-[0_2px_12px_rgba(16,185,129,0.3)]">
+                  ▶ Resume Auction
+                </button>
               : <button onClick={() => pause.mutate()} disabled={pause.isPending}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-amber-400 hover:bg-amber-500 disabled:opacity-50 text-white font-black text-sm transition-all">
-                ⏸ Pause Auction
-              </button>
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-amber-400 hover:bg-amber-500 disabled:opacity-50 text-white font-black text-sm transition-all">
+                  ⏸ Pause Auction
+                </button>
             }
             {!confirmEnd
               ? <button onClick={() => setConfirmEnd(true)}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-50 hover:bg-red-50 border border-slate-200 hover:border-red-200 text-slate-400 hover:text-red-500 font-bold text-sm transition-all">
-                🏁 End Auction
-              </button>
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-50 hover:bg-red-50 border border-slate-200 hover:border-red-200 text-slate-400 hover:text-red-500 font-bold text-sm transition-all">
+                  🏁 End Auction
+                </button>
               : <div className="space-y-2">
-                <p className="text-xs text-red-500 text-center font-semibold">This cannot be undone.</p>
-                <div className="flex gap-2">
-                  <button onClick={() => setConfirmEnd(false)} className="flex-1 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-500 text-xs font-bold hover:bg-slate-100 transition-all">Cancel</button>
-                  <button onClick={() => { end.mutate(); setConfirmEnd(false) }} disabled={end.isPending} className="flex-1 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-black transition-all">End Now</button>
+                  <p className="text-xs text-red-500 text-center font-semibold">This cannot be undone.</p>
+                  <div className="flex gap-2">
+                    <button onClick={() => setConfirmEnd(false)} className="flex-1 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-500 text-xs font-bold hover:bg-slate-100 transition-all">Cancel</button>
+                    <button onClick={() => { end.mutate(); setConfirmEnd(false) }} disabled={end.isPending} className="flex-1 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-black transition-all">End Now</button>
+                  </div>
                 </div>
-              </div>
             }
           </div>
         </div>
@@ -338,15 +342,23 @@ function AdminControlPanel({ auctionId, auction, player, highestBid, bidFeed, al
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
         </div>
         <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2 min-h-0">
-          {(allSquads ?? []).map(s => <SquadCard key={s.id ?? s.name} squad={s} isMe={false} expanded={false} onToggle={() => { }} />)}
+          {(allSquads ?? []).map(s => (
+            <SquadCard key={s.id ?? s.name} squad={s} isMe={false} expanded={false} onToggle={() => {}} />
+          ))}
           {(!allSquads || allSquads.length === 0) && (
-            <div className="flex items-center justify-center h-full"><p className="text-xs text-slate-300 italic">No squads yet</p></div>
+            <div className="flex items-center justify-center h-full">
+              <p className="text-xs text-slate-300 italic">No squads yet</p>
+            </div>
           )}
         </div>
         <div className="px-4 py-3 border-t border-slate-200/60 shrink-0">
           <div className="flex flex-wrap gap-x-3 gap-y-1">
-            {[{ label: "Batsman", color: "bg-sky-400" }, { label: "Bowler", color: "bg-rose-400" },
-            { label: "All-Rounder", color: "bg-violet-400" }, { label: "Keeper", color: "bg-amber-400" }].map(({ label, color }) => (
+            {[
+              { label: "Batsman",     color: "bg-sky-400" },
+              { label: "Bowler",      color: "bg-rose-400" },
+              { label: "All-Rounder", color: "bg-violet-400" },
+              { label: "Keeper",      color: "bg-amber-400" },
+            ].map(({ label, color }) => (
               <div key={label} className="flex items-center gap-1.5">
                 <div className={`w-1.5 h-1.5 rounded-full ${color}`} />
                 <span className="text-[10px] text-slate-400">{label}</span>
@@ -362,38 +374,62 @@ function AdminControlPanel({ auctionId, auction, player, highestBid, bidFeed, al
 /* ─── PAGE ─── */
 function AuctionRoomPage() {
   const { auctionId } = useParams({ from: "/auction/$auctionId" })
-  const queryClient = useQueryClient()
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [expandedSquad, setExpandedSquad] = useState<string | null>(null)
+  const queryClient   = useQueryClient()
+  const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pollRef       = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const squadName = useAuctionRoomStore(s => s.squadName)
-  const seconds = useAuctionRoomStore(s => s.seconds)
-  const soldInfo = useAuctionRoomStore(s => s.soldInfo)
-  const showSquadDialog = useAuctionRoomStore(s => s.showSquadDialog)
-  const wallet = useAuctionRoomStore(s => s.wallet)
-  const bidFeed = useAuctionRoomStore(s => s.bidFeed)
-  const setSquadName = useAuctionRoomStore(s => s.setSquadName)
-  const setSeconds = useAuctionRoomStore(s => s.setSeconds)
-  const decrementSeconds = useAuctionRoomStore(s => s.decrementSeconds)
-  const setSoldInfo = useAuctionRoomStore(s => s.setSoldInfo)
-  const addBidToFeed = useAuctionRoomStore(s => s.addBidToFeed)
-  const setWallet = useAuctionRoomStore(s => s.setWallet)
-  const resetForNextPlayer = useAuctionRoomStore(s => s.resetForNextPlayer)
-  const setShowSquadDialog = useAuctionRoomStore(s => s.setShowSquadDialog)
-  const timerKey = useAuctionRoomStore(s => s.timerKey)
-  const pendingNextPlayer = useAuctionRoomStore(s => s.pendingNextPlayer)
+  // ── store ──
+  const squadName           = useAuctionRoomStore(s => s.squadName)
+  const seconds             = useAuctionRoomStore(s => s.seconds)
+  const soldInfo            = useAuctionRoomStore(s => s.soldInfo)
+  const showSquadDialog     = useAuctionRoomStore(s => s.showSquadDialog)
+  const wallet              = useAuctionRoomStore(s => s.wallet)
+  const bidFeed             = useAuctionRoomStore(s => s.bidFeed)
+  const expandedSquad       = useAuctionRoomStore(s => s.expandedSquad)   // ← replaces useState
+  const setSquadName        = useAuctionRoomStore(s => s.setSquadName)
+  const setSeconds          = useAuctionRoomStore(s => s.setSeconds)
+  const decrementSeconds    = useAuctionRoomStore(s => s.decrementSeconds)
+  const setSoldInfo         = useAuctionRoomStore(s => s.setSoldInfo)
+  const addBidToFeed        = useAuctionRoomStore(s => s.addBidToFeed)
+  const setWallet           = useAuctionRoomStore(s => s.setWallet)
+  const resetForNextPlayer  = useAuctionRoomStore(s => s.resetForNextPlayer)
+  const setShowSquadDialog  = useAuctionRoomStore(s => s.setShowSquadDialog)
+  const timerKey            = useAuctionRoomStore(s => s.timerKey)
+  const pendingNextPlayer   = useAuctionRoomStore(s => s.pendingNextPlayer)
   const setPendingNextPlayer = useAuctionRoomStore(s => s.setPendingNextPlayer)
+  const setExpandedSquad    = useAuctionRoomStore(s => s.setExpandedSquad) // ← replaces useState setter
 
-  const { data: me } = useQuery({ queryKey: ["me"], queryFn: authApi.me })
-  const { data: auction } = useQuery({ queryKey: ["auction", auctionId], queryFn: () => auctionApi.getById(auctionId), refetchInterval: 3000 })
-  const { data: player, refetch: refetchPlayer } = useQuery<Player>({ queryKey: ["currentPlayer", auctionId], queryFn: () => auctionEngineApi.currentPlayer(auctionId), refetchInterval: false })
-  const { data: highestBid } = useQuery<HighestBid>({ queryKey: ["highestBid", player?.id], queryFn: () => biddingApi.highestBid(auctionId, player!.id), enabled: !!player?.id, refetchInterval: 2000 })
-  const { data: walletData } = useQuery<WalletResponse>({ queryKey: ["wallet", me?.participantId], queryFn: () => biddingApi.getWallet(me!.participantId), enabled: !!me?.participantId && me?.role === "PARTICIPANT" })
-  const { data: squad, error: squadError, refetch: refetchSquad } = useQuery<Squad>({ queryKey: ["mySquad", auctionId, me?.participantId], queryFn: () => squadApi.mySquad(auctionId, me!.participantId), enabled: !!me?.participantId && me?.role === "PARTICIPANT", retry: false })
-  const { data: allSquads, refetch: refetchAllSquads } = useQuery<Squad[]>({ queryKey: ["allSquads", auctionId], queryFn: () => squadApi.allSquads(auctionId), refetchInterval: 5000 })
+  const { data: me }         = useQuery({ queryKey: ["me"],                    queryFn: authApi.me })
+  const { data: auction }    = useQuery({ queryKey: ["auction", auctionId],    queryFn: () => auctionApi.getById(auctionId), refetchInterval: 3000 })
+  const { data: player, refetch: refetchPlayer } = useQuery<Player>({
+    queryKey: ["currentPlayer", auctionId],
+    queryFn:  () => auctionEngineApi.currentPlayer(auctionId),
+    refetchInterval: false,
+  })
+  const { data: highestBid } = useQuery<HighestBid>({
+    queryKey: ["highestBid", player?.id],
+    queryFn:  () => biddingApi.highestBid(auctionId, player!.id),
+    enabled:  !!player?.id,
+    refetchInterval: 2000,
+  })
+  const { data: walletData } = useQuery<WalletResponse>({
+    queryKey: ["wallet", me?.participantId],
+    queryFn:  () => biddingApi.getWallet(me!.participantId),
+    enabled:  !!me?.participantId && me?.role === "PARTICIPANT",
+  })
+  const { data: squad, error: squadError, refetch: refetchSquad } = useQuery<Squad>({
+    queryKey: ["mySquad", auctionId, me?.participantId],
+    queryFn:  () => squadApi.mySquad(auctionId, me!.participantId),
+    enabled:  !!me?.participantId && me?.role === "PARTICIPANT",
+    retry: false,
+  })
+  const { data: allSquads, refetch: refetchAllSquads } = useQuery<Squad[]>({
+    queryKey: ["allSquads", auctionId],
+    queryFn:  () => squadApi.allSquads(auctionId),
+    refetchInterval: 5000,
+  })
 
-  const isAdmin = me?.role === "ADMIN"
+  const isAdmin  = me?.role === "ADMIN"
   const isPaused = auction?.status === "PAUSED"
 
   const startCountdown = useCallback((from: number) => {
@@ -402,13 +438,19 @@ function AuctionRoomPage() {
     timerRef.current = setInterval(() => decrementSeconds(), 1000)
   }, [setSeconds, decrementSeconds])
 
-  useEffect(() => { if (seconds === 0 && timerRef.current) { clearInterval(timerRef.current); timerRef.current = null } }, [seconds])
+  useEffect(() => {
+    if (seconds === 0 && timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
+  }, [seconds])
+
   useEffect(() => {
     if (player?.id && !isPaused) startCountdown(10)
     if (isPaused && timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [player?.id, timerKey, isPaused, startCountdown])
-  useEffect(() => { if (walletData?.balance !== undefined) setWallet(Number(walletData.balance)) }, [walletData?.balance, setWallet])
+
+  useEffect(() => {
+    if (walletData?.balance !== undefined) setWallet(Number(walletData.balance))
+  }, [walletData?.balance, setWallet])
 
   function getSafeNextBid(increment: number) {
     const latest = queryClient.getQueryData<HighestBid>(["highestBid", player?.id])
@@ -416,10 +458,10 @@ function AuctionRoomPage() {
   }
 
   const createSquad = useMutation({ mutationFn: squadApi.create, onSuccess: () => refetchSquad() })
-  const placeBid = useMutation({
+  const placeBid    = useMutation({
     mutationFn: biddingApi.placeBid,
-    onError: (err) => alert(err instanceof AxiosError ? err.response?.data?.message ?? "Bid failed" : "Bid failed"),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["highestBid", player?.id] }),
+    onError:    (err) => alert(err instanceof AxiosError ? err.response?.data?.message ?? "Bid failed" : "Bid failed"),
+    onSuccess:  () => queryClient.invalidateQueries({ queryKey: ["highestBid", player?.id] }),
   })
 
   useEffect(() => {
@@ -434,7 +476,7 @@ function AuctionRoomPage() {
         setPendingNextPlayer(currentPlayerId)
         const poll = async () => {
           const result = await refetchPlayer()
-          const next = result.data
+          const next   = result.data
           if (next?.id && next.id !== currentPlayerId) { setPendingNextPlayer(null); pollRef.current = null }
           else pollRef.current = setTimeout(poll, 1500)
         }
@@ -472,7 +514,10 @@ function AuctionRoomPage() {
       }
     })
 
-    return () => { if (pollRef.current) { clearTimeout(pollRef.current); pollRef.current = null }; void socket.deactivate() }
+    return () => {
+      if (pollRef.current) { clearTimeout(pollRef.current); pollRef.current = null }
+      void socket.deactivate()
+    }
   }, [player?.id, me?.participantId, startCountdown, queryClient, addBidToFeed, setSeconds, setSoldInfo, setWallet, resetForNextPlayer, refetchPlayer, refetchSquad, refetchAllSquads])
 
   if (!auction || !me || !player) {
@@ -486,11 +531,11 @@ function AuctionRoomPage() {
     )
   }
 
-  const currentBid = highestBid?.amount ?? Number(player.basePrice ?? 0)
-  const canBid = auction.status === "LIVE" && !!squad && !soldInfo && !pendingNextPlayer && !!me.participantId
-  const squadMissing = !isAdmin && me.role === "PARTICIPANT" && squadError instanceof AxiosError && squadError.response?.status === 404
-  const squadPlayers = squad?.players ?? []
-  const sortedSquads = [...(allSquads ?? [])].sort((a, b) => {
+  const currentBid    = highestBid?.amount ?? Number(player.basePrice ?? 0)
+  const canBid        = auction.status === "LIVE" && !!squad && !soldInfo && !pendingNextPlayer && !!me.participantId
+  const squadMissing  = !isAdmin && me.role === "PARTICIPANT" && squadError instanceof AxiosError && squadError.response?.status === 404
+  const squadPlayers  = squad?.players ?? []
+  const sortedSquads  = [...(allSquads ?? [])].sort((a, b) => {
     if (a.name === squad?.name) return -1
     if (b.name === squad?.name) return 1
     return (b.players?.length ?? 0) - (a.players?.length ?? 0)
@@ -509,10 +554,14 @@ function AuctionRoomPage() {
           <DialogContent className="bg-white border-slate-200 text-slate-800 shadow-2xl">
             <DialogHeader><DialogTitle className="text-xl text-slate-800">🏏 Name Your Squad</DialogTitle></DialogHeader>
             <p className="text-sm text-slate-500">Choose a squad name to enter the auction.</p>
-            <Input placeholder="e.g. Mumbai Indians" value={squadName}
+            <Input
+              placeholder="e.g. Mumbai Indians"
+              value={squadName}
               onChange={e => setSquadName(e.target.value)}
-              className="bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-300 mt-1" />
-            <Button disabled={!squadName.trim()}
+              className="bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-300 mt-1"
+            />
+            <Button
+              disabled={!squadName.trim()}
               className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold"
               onClick={() => createSquad.mutate({ auctionId, participantId: me.participantId, name: squadName })}>
               Enter Auction →
@@ -538,7 +587,9 @@ function AuctionRoomPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="border-slate-100">
-                    {["Player", "Role", "Caps (T/O/T)", "Sold For"].map(h => <TableHead key={h} className="text-slate-400">{h}</TableHead>)}
+                    {["Player", "Role", "Caps (T/O/T)", "Sold For"].map(h => (
+                      <TableHead key={h} className="text-slate-400">{h}</TableHead>
+                    ))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -548,7 +599,9 @@ function AuctionRoomPage() {
                         <p className="font-semibold text-sm text-slate-700">{p.name}</p>
                         <p className="text-xs text-slate-400">{[p.country, p.age ? `Age ${p.age}` : null].filter(Boolean).join(" · ")}</p>
                       </TableCell>
-                      <TableCell>{p.specialism && <Badge variant="secondary" className="text-xs bg-slate-100 text-slate-600">{p.specialism}</Badge>}</TableCell>
+                      <TableCell>
+                        {p.specialism && <Badge variant="secondary" className="text-xs bg-slate-100 text-slate-600">{p.specialism}</Badge>}
+                      </TableCell>
                       <TableCell className="text-sm tabular-nums">
                         <span className={(p.testCaps ?? 0) > 0 ? "text-sky-600 font-semibold" : "text-slate-300"}>{p.testCaps ?? 0}</span>
                         <span className="text-slate-200 mx-1">/</span>
@@ -556,7 +609,9 @@ function AuctionRoomPage() {
                         <span className="text-slate-200 mx-1">/</span>
                         <span className={(p.t20Caps ?? 0) > 0 ? "text-amber-600 font-semibold" : "text-slate-300"}>{p.t20Caps ?? 0}</span>
                       </TableCell>
-                      <TableCell className="text-right"><span className="font-bold text-emerald-600">{p.soldPrice ? fmt(p.soldPrice) : "—"}</span></TableCell>
+                      <TableCell className="text-right">
+                        <span className="font-bold text-emerald-600">{p.soldPrice ? fmt(p.soldPrice) : "—"}</span>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -585,9 +640,7 @@ function AuctionRoomPage() {
       {soldInfo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
           <div className={`text-center p-10 rounded-3xl border-2 max-w-sm w-full mx-4 shadow-2xl
-            ${soldInfo.squadName === "UNSOLD"
-              ? "bg-red-50 border-red-200"
-              : "bg-emerald-50 border-emerald-200"}`}>
+            ${soldInfo.squadName === "UNSOLD" ? "bg-red-50 border-red-200" : "bg-emerald-50 border-emerald-200"}`}>
             <div className="text-7xl mb-4">{soldInfo.squadName === "UNSOLD" ? "🚫" : "🎉"}</div>
             <p className={`text-3xl font-black ${soldInfo.squadName === "UNSOLD" ? "text-red-600" : "text-emerald-700"}`}>
               {soldInfo.squadName === "UNSOLD" ? "Unsold" : "Sold!"}
@@ -631,7 +684,8 @@ function AuctionRoomPage() {
             </div>
           )}
           {!isAdmin && squad && (
-            <button onClick={() => setShowSquadDialog(true)}
+            <button
+              onClick={() => setShowSquadDialog(true)}
               className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg px-3 py-1.5 transition-colors">
               <span className="text-sm">🏏</span>
               <span className="text-sm font-bold text-slate-700">{squad.name}</span>
@@ -652,8 +706,14 @@ function AuctionRoomPage() {
 
       {/* ══ BODY ══ */}
       {isAdmin ? (
-        <AdminControlPanel auctionId={auctionId} auction={auction} player={player}
-          highestBid={highestBid} bidFeed={bidFeed} allSquads={allSquads} />
+        <AdminControlPanel
+          auctionId={auctionId}
+          auction={auction}
+          player={player}
+          highestBid={highestBid}
+          bidFeed={bidFeed}
+          allSquads={allSquads}
+        />
       ) : (
         <div className="flex-1 flex gap-0 overflow-hidden min-h-0">
 
@@ -680,9 +740,9 @@ function AuctionRoomPage() {
               </div>
               <div className="border-t border-white/10 grid grid-cols-3 divide-x divide-white/10">
                 {[
-                  { label: "TEST", value: player.testCaps ?? 0, color: "text-sky-300", played: (player.testCaps ?? 0) > 0 },
-                  { label: "ODI", value: player.odiCaps ?? 0, color: "text-violet-300", played: (player.odiCaps ?? 0) > 0 },
-                  { label: "T20", value: player.t20Caps ?? 0, color: "text-amber-300", played: (player.t20Caps ?? 0) > 0 },
+                  { label: "TEST", value: player.testCaps ?? 0, color: "text-sky-300",    played: (player.testCaps ?? 0) > 0 },
+                  { label: "ODI",  value: player.odiCaps  ?? 0, color: "text-violet-300", played: (player.odiCaps  ?? 0) > 0 },
+                  { label: "T20",  value: player.t20Caps  ?? 0, color: "text-amber-300",  played: (player.t20Caps  ?? 0) > 0 },
                 ].map(({ label, value, color, played }) => (
                   <div key={label} className={`flex flex-col items-center py-3.5 ${played ? "opacity-100" : "opacity-35"}`}>
                     <span className={`text-xl font-black tabular-nums ${played ? color : "text-slate-500"}`}>{played ? value : "—"}</span>
@@ -757,10 +817,10 @@ function AuctionRoomPage() {
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Place Bid</p>
               <div className="space-y-2">
                 {[
-                  { label: "+10L", sub: "₹10 Lakhs", increment: 1_000_000 },
-                  { label: "+25L", sub: "₹25 Lakhs", increment: 2_500_000 },
-                  { label: "+50L", sub: "₹50 Lakhs", increment: 5_000_000 },
-                  { label: "+1Cr", sub: "₹1 Crore", increment: 10_000_000 },
+                  { label: "+10L", sub: "₹10 Lakhs",  increment: 1_000_000  },
+                  { label: "+25L", sub: "₹25 Lakhs",  increment: 2_500_000  },
+                  { label: "+50L", sub: "₹50 Lakhs",  increment: 5_000_000  },
+                  { label: "+1Cr", sub: "₹1 Crore",   increment: 10_000_000 },
                 ].map(({ label, sub, increment }) => (
                   <button key={label}
                     disabled={!canBid || placeBid.isPending}
@@ -803,15 +863,26 @@ function AuctionRoomPage() {
                 ? <div className="flex items-center justify-center h-full"><p className="text-xs text-slate-300 italic">No squads yet</p></div>
                 : sortedSquads.map(s => {
                   const key = s.id ?? s.name
-                  return <SquadCard key={key} squad={s} isMe={s.name === squad?.name}
-                    expanded={expandedSquad === key} onToggle={() => setExpandedSquad(expandedSquad === key ? null : key)} />
+                  return (
+                    <SquadCard
+                      key={key}
+                      squad={s}
+                      isMe={s.name === squad?.name}
+                      expanded={expandedSquad === key}
+                      onToggle={() => setExpandedSquad(expandedSquad === key ? null : key)}
+                    />
+                  )
                 })
               }
             </div>
             <div className="px-4 py-3 border-t border-slate-200/60 shrink-0">
               <div className="flex flex-wrap gap-x-3 gap-y-1">
-                {[{ label: "Batsman", color: "bg-sky-400" }, { label: "Bowler", color: "bg-rose-400" },
-                { label: "All-Rounder", color: "bg-violet-400" }, { label: "Keeper", color: "bg-amber-400" }].map(({ label, color }) => (
+                {[
+                  { label: "Batsman",     color: "bg-sky-400" },
+                  { label: "Bowler",      color: "bg-rose-400" },
+                  { label: "All-Rounder", color: "bg-violet-400" },
+                  { label: "Keeper",      color: "bg-amber-400" },
+                ].map(({ label, color }) => (
                   <div key={label} className="flex items-center gap-1.5">
                     <div className={`w-1.5 h-1.5 rounded-full ${color}`} />
                     <span className="text-[10px] text-slate-400">{label}</span>

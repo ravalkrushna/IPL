@@ -1,75 +1,72 @@
 import { create } from "zustand"
 
-type BidEntry = {
-  squadName: string
-  amount: number
-  timestamp: number
-}
-
-type SoldInfo = {
-  squadName: string
-  playerName: string
-  amount: number
-}
+type SoldInfo = { squadName: string; playerName: string; amount: number }
+type BidEntry = { squadName: string; amount: number; timestamp: number }
 
 type AuctionRoomState = {
+  // ── server-derived ──
   squadName: string
-  seconds: number
-  soldInfo: SoldInfo | null
-  liveBid: number
-  bidFeed: BidEntry[]
   wallet: number | null
-  showSquadDialog: boolean
+  seconds: number
   timerKey: number
-  // Non-null while we're waiting for the backend to advance to a NEW player id.
-  // Holds the id of the player that was just sold/unsold so the UI can show
-  // a loading state and disable bidding until a different player arrives.
+
+  // ── overlays / feeds ──
+  soldInfo: SoldInfo | null
+  bidFeed: BidEntry[]
   pendingNextPlayer: string | null
 
+  // ── dialogs ──
+  showSquadDialog: boolean
+
+  // ── UI state (replaces useState) ──
+  confirmEnd: boolean
+  expandedSquad: string | null
+
+  // ── actions ──
   setSquadName: (name: string) => void
+  setWallet: (balance: number) => void
   setSeconds: (s: number) => void
   decrementSeconds: () => void
   setSoldInfo: (info: SoldInfo | null) => void
-  setLiveBid: (amount: number) => void
-  addBidToFeed: (entry: BidEntry) => void
-  clearBidFeed: () => void
-  setWallet: (amount: number) => void
+  addBidToFeed: (bid: BidEntry) => void
   resetForNextPlayer: () => void
   setShowSquadDialog: (open: boolean) => void
-  setPendingNextPlayer: (playerId: string | null) => void
+  setPendingNextPlayer: (id: string | null) => void
+  setConfirmEnd: (v: boolean) => void
+  setExpandedSquad: (key: string | null) => void
 }
 
 export const useAuctionRoomStore = create<AuctionRoomState>((set) => ({
+  // ── initial state ──
   squadName: "",
-  seconds: 10,
-  soldInfo: null,
-  liveBid: 0,
-  bidFeed: [],
   wallet: null,
-  showSquadDialog: false,
+  seconds: 10,
   timerKey: 0,
+  soldInfo: null,
+  bidFeed: [],
   pendingNextPlayer: null,
+  showSquadDialog: false,
+  confirmEnd: false,
+  expandedSquad: null,
 
+  // ── actions ──
   setSquadName: (name) => set({ squadName: name }),
+  setWallet: (balance) => set({ wallet: balance }),
   setSeconds: (s) => set({ seconds: s }),
   decrementSeconds: () =>
     set((state) => ({ seconds: Math.max(0, state.seconds - 1) })),
   setSoldInfo: (info) => set({ soldInfo: info }),
-  setLiveBid: (amount) => set({ liveBid: amount }),
-  addBidToFeed: (entry) =>
-    set((state) => ({
-      bidFeed: [entry, ...state.bidFeed.slice(0, 19)],
-    })),
-  clearBidFeed: () => set({ bidFeed: [] }),
-  setWallet: (amount) => set({ wallet: amount }),
+  addBidToFeed: (bid) =>
+    set((state) => ({ bidFeed: [...state.bidFeed, bid] })),
   resetForNextPlayer: () =>
     set((state) => ({
-      liveBid: 0,
-      bidFeed: [],
       soldInfo: null,
+      bidFeed: [],
       seconds: 10,
       timerKey: state.timerKey + 1,
     })),
   setShowSquadDialog: (open) => set({ showSquadDialog: open }),
-  setPendingNextPlayer: (playerId) => set({ pendingNextPlayer: playerId }),
+  setPendingNextPlayer: (id) => set({ pendingNextPlayer: id }),
+  setConfirmEnd: (v) => set({ confirmEnd: v }),
+  setExpandedSquad: (key) => set({ expandedSquad: key }),
 }))
