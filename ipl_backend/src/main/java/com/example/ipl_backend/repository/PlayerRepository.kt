@@ -174,4 +174,44 @@ class PlayerRepository {
                 .map { it.toPlayer() }
                 .singleOrNull()
         }
+
+    // ─── ADD THESE TWO METHODS to your existing PlayerRepository ───────────────
+
+    fun findByName(name: String): Player? {
+        return transaction {
+            Players.selectAll()
+                .where { Players.name.lowerCase() eq name.lowercase() }
+                .firstOrNull()
+                ?.toPlayer()
+        }
+    }
+
+    fun updateStats(
+        id: String,
+        country: String?,
+        age: Int?,
+        specialism: String?,
+        battingStyle: String?,
+        bowlingStyle: String?,
+        testCaps: Int,
+        odiCaps: Int,
+        t20Caps: Int,
+        basePrice: java.math.BigDecimal,
+        updatedAt: Long
+    ) {
+        transaction {
+            Players.update({ Players.id eq id }) {
+                it[Players.country]      = country
+                it[Players.age]          = age
+                it[Players.specialism]   = specialism
+                it[Players.battingStyle] = battingStyle
+                it[Players.bowlingStyle] = bowlingStyle
+                it[Players.testCaps]     = testCaps
+                it[Players.odiCaps]      = odiCaps
+                it[Players.t20Caps]      = t20Caps
+                it[Players.basePrice]    = basePrice
+                it[Players.updatedAt]    = updatedAt
+            }
+        }
+    }
 }

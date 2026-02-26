@@ -5,9 +5,16 @@ import com.example.ipl_backend.service.ParticipantPresenceService
 import org.springframework.context.event.EventListener
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor
 import org.springframework.stereotype.Component
-import org.springframework.web.socket.messaging.SessionSubscribeEvent
 import org.springframework.web.socket.messaging.SessionDisconnectEvent
+import org.springframework.web.socket.messaging.SessionSubscribeEvent
 
+/**
+ * Listens for WebSocket SUBSCRIBE / DISCONNECT events.
+ *
+ * The frontend subscribes to /topic/auction/{playerId} — so the ID
+ * extracted from the destination is a PLAYER ID, not an auction ID.
+ * All presence and timer calls use playerId accordingly.
+ */
 @Component
 class WebSocketPresenceListener(
     private val presenceService: ParticipantPresenceService,
@@ -20,16 +27,18 @@ class WebSocketPresenceListener(
         val destination = accessor.destination ?: return
         val sessionId   = accessor.sessionId   ?: return
 
-        val auctionId = extractAuctionId(destination) ?: return
+        // Only care about /topic/auction/{playerId}
+        val playerId = extractPlayerId(destination) ?: return
 
-        auctionTimerService.registerSession(sessionId, auctionId)
+        val wasEmpty = !presenceService.hasParticipants(playerId)
+        presenceService.onConnect(playerId, sessionId)
 
-        val wasEmpty = !presenceService.hasParticipants(auctionId)
-        presenceService.onConnect(auctionId, sessionId)
+        // Register so disconnect can find the playerId for this session
+        auctionTimerService.registerSession(sessionId, playerId)
 
         if (wasEmpty) {
-            println("▶️ First participant subscribed to auction $auctionId")
-            auctionTimerService.onParticipantsAvailable(auctionId)
+            println("▶️ First participant subscribed to player topic $playerId — unparking timer")
+            auctionTimerService.onParticipantsAvailable(playerId)
         }
     }
 
@@ -40,10 +49,11 @@ class WebSocketPresenceListener(
         auctionTimerService.onSessionDisconnected(sessionId)
     }
 
-    private fun extractAuctionId(destination: String): String? {
+    /** Extracts the playerId from /topic/auction/{playerId}. Returns null for other topics. */
+    private fun extractPlayerId(destination: String): String? {
         val prefix = "/topic/auction/"
         if (!destination.startsWith(prefix)) return null
-        val rest = destination.removePrefix(prefix).trim()
-        return rest.ifBlank { null }
+        val id = destination.removePrefix(prefix).trim()
+        return id.ifBlank { null }
     }
 }
