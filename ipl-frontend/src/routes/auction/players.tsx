@@ -12,6 +12,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
 
 import { usePlayers } from "@/hooks/usePlayers"
 
@@ -25,246 +27,450 @@ export const Route = createFileRoute("/auction/players")({
 })
 
 const styles = `
-  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&family=DM+Sans:wght@400;500&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Plus+Jakarta+Sans:wght@600;700;800;900&family=DM+Sans:wght@400;500;600;700;800&display=swap');
 
-  .pp {
-    --bg:          #181f2e;
-    --surface:     #1e2640;
-    --surface-hi:  #252e4a;
-    --border:      #2c3858;
-    --border-soft: #222a44;
-    --text:        #dde4f5;
-    --muted:       #68738f;
-    --accent:      #f5a623;
-    --accent-glow: rgba(245,166,35,0.20);
-    --accent-dim:  rgba(245,166,35,0.09);
-    --green:       #4ade80;
-    --green-dim:   rgba(74,222,128,0.09);
-    font-family: 'DM Sans', sans-serif;
-    background: var(--bg);
-    color: var(--text);
+  :root {
+    --cream:         #faf8f4;
+    --parchment:     #f3efe6;
+    --parchment-mid: #ede8dc;
+    --border:        #e8e0d0;
+    --border-dark:   #d5c9b5;
+    --ink:           #1a1410;
+    --ink-muted:     #6b5e4e;
+    --ink-faint:     #a89880;
+    --green:         #2d7a4f;
+    --green-light:   #edf7f1;
+    --green-border:  #b8dfc9;
+    --amber:         #b06b00;
+    --amber-light:   #fef8ed;
+    --amber-border:  #f0d88a;
+    --rose:          #c0392b;
+    --rose-light:    #fdf2f0;
+    --rose-border:   #f5c4b8;
+    --sky:           #1a5fa8;
+    --sky-light:     #eff5fd;
+    --sky-border:    #b8d0ee;
+  }
+
+  .pp-root {
+    background-color: var(--cream);
+    background-image:
+      radial-gradient(ellipse at 90% 0%, #e8f4ef 0%, transparent 50%),
+      radial-gradient(ellipse at 0% 100%, #f0ece3 0%, transparent 45%);
     min-height: 100vh;
-    padding: 36px 28px 60px;
-    max-width: 1400px;
-    margin: 0 auto;
+    padding: 32px 32px 64px;
+    font-family: 'DM Sans', system-ui, sans-serif;
+    color: var(--ink);
     box-sizing: border-box;
   }
 
-  /* ─── Header ─── */
-  .pp-title {
-    font-family: 'Syne', sans-serif;
-    font-size: 1.75rem;
-    font-weight: 800;
-    letter-spacing: -0.025em;
-    color: var(--text);
-    margin: 0 0 4px;
-  }
-  .pp-sub {
-    font-size: 0.8rem;
-    color: var(--muted);
-    margin: 0 0 24px;
-    letter-spacing: 0.02em;
+  /* ── Page Header ── */
+  .pp-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 12px;
   }
 
-  /* ─── Toolbar ─── */
+  .pp-header-left {}
+
+  .pp-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .pp-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ink-faint);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    font-family: 'DM Sans', sans-serif;
+    transition: color 0.15s;
+    text-decoration: none;
+  }
+  .pp-back-btn:hover { color: var(--ink-muted); }
+
+  .pp-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 900;
+    color: var(--ink);
+    margin: 0 0 4px;
+    letter-spacing: -0.5px;
+    line-height: 1.1;
+  }
+
+  .pp-sub {
+    font-size: 13px;
+    color: var(--ink-faint);
+    margin: 0;
+    font-weight: 500;
+  }
+
+  /* ── Stat pills ── */
+  .pp-stats {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .pp-stat-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 14px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  }
+
+  .pp-stat-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .pp-stat-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-faint);
+  }
+
+  .pp-stat-value {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+  }
+
+  /* ── Toolbar ── */
   .pp-toolbar {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
     align-items: center;
-    background: var(--surface);
+    background: white;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: 12px;
     padding: 12px 16px;
-    margin-bottom: 18px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
   }
-  .pp-input {
+
+  .pp-toolbar-search {
+    flex: 1;
+    min-width: 200px;
+    max-width: 280px;
+  }
+
+  /* Override shadcn Input for our theme */
+  .pp-toolbar-search input,
+  .pp-search-input {
     height: 36px;
-    max-width: 230px;
-    background: var(--surface-hi);
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-size: 0.845rem;
+    background: var(--parchment) !important;
+    border-color: var(--border) !important;
+    color: var(--ink) !important;
+    font-size: 13px;
     font-family: 'DM Sans', sans-serif;
-    border-radius: 7px;
-    padding: 0 12px;
-    outline: none;
-    transition: border-color 0.18s, box-shadow 0.18s;
-    box-sizing: border-box;
+    border-radius: 8px !important;
   }
-  .pp-input::placeholder { color: var(--muted); }
-  .pp-input:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-glow);
+
+  .pp-toolbar-search input:focus,
+  .pp-search-input:focus {
+    border-color: var(--green) !important;
+    box-shadow: 0 0 0 3px rgba(45,122,79,0.1) !important;
+    background: white !important;
   }
-  .pp-sep { width: 1px; height: 22px; background: var(--border); }
-  .pp-filters { display: flex; gap: 7px; }
-  .pp-fbtn {
-    height: 30px;
-    padding: 0 13px;
-    border-radius: 6px;
-    font-size: 0.73rem;
-    font-family: 'DM Mono', monospace;
-    font-weight: 500;
-    letter-spacing: 0.06em;
+
+  .pp-toolbar-search input::placeholder,
+  .pp-search-input::placeholder {
+    color: var(--ink-faint);
+  }
+
+  /* Filter buttons */
+  .pp-filter-group {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .pp-filter-btn {
+    height: 32px;
+    padding: 0 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    font-family: 'DM Sans', sans-serif;
     border: 1px solid var(--border);
-    background: var(--surface-hi);
-    color: var(--muted);
+    background: var(--parchment);
+    color: var(--ink-muted);
     cursor: pointer;
     transition: all 0.15s;
-  }
-  .pp-fbtn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
-  .pp-fbtn.on {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #1a1200;
-    font-weight: 700;
-    box-shadow: 0 1px 10px var(--accent-glow);
+    letter-spacing: 0.1px;
   }
 
-  /* ─── Table shell ─── */
-  .pp-tshell {
-    background: var(--surface);
+  .pp-filter-btn:hover {
+    border-color: var(--green);
+    color: var(--green);
+    background: var(--green-light);
+  }
+
+  .pp-filter-btn.active {
+    background: var(--green);
+    border-color: var(--green);
+    color: white;
+    box-shadow: 0 2px 8px rgba(45,122,79,0.25);
+  }
+
+  .pp-toolbar-sep {
+    width: 1px;
+    height: 24px;
+    background: var(--border);
+    flex-shrink: 0;
+  }
+
+  /* ── Table Shell ── */
+  .pp-table-shell {
+    background: white;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: 14px;
     overflow: hidden;
-    margin-bottom: 22px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
   }
 
-  /* ─── Table Header ─── */
-  .pp-tshell thead tr {
-    background: var(--surface-hi) !important;
+  /* ── Table Header ── */
+  .pp-table-shell thead {
+    background: var(--parchment);
+  }
+
+  .pp-table-shell thead tr {
     border-bottom: 1px solid var(--border) !important;
   }
-  .pp-tshell thead th {
-    font-family: 'DM Mono', monospace !important;
-    font-size: 0.66rem !important;
-    font-weight: 500 !important;
-    letter-spacing: 0.13em !important;
+
+  .pp-table-shell thead th {
+    font-size: 10px !important;
+    font-weight: 800 !important;
     text-transform: uppercase !important;
-    color: var(--muted) !important;
-    padding: 11px 16px !important;
-    border: none !important;
+    letter-spacing: 0.8px !important;
+    color: var(--ink-faint) !important;
+    padding: 11px 20px !important;
+    background: var(--parchment) !important;
     white-space: nowrap;
+    border: none !important;
   }
 
-  /* ─── Table Body ─── */
-  .pp-tshell tbody tr {
-    border-bottom: 1px solid var(--border-soft) !important;
+  /* ── Table Body ── */
+  .pp-table-shell tbody tr {
+    border-bottom: 1px solid #f0ebe0 !important;
     transition: background 0.12s;
   }
-  .pp-tshell tbody tr:last-child { border-bottom: none !important; }
-  .pp-tshell tbody tr.pp-even { background: var(--surface); }
-  .pp-tshell tbody tr.pp-odd  { background: rgba(37,46,74,0.50); }
-  .pp-tshell tbody tr:hover   { background: var(--accent-dim) !important; }
 
-  .pp-tshell tbody td {
-    padding: 13px 16px !important;
+  .pp-table-shell tbody tr:last-child {
+    border-bottom: none !important;
+  }
+
+  .pp-table-shell tbody tr:hover {
+    background: var(--parchment) !important;
+  }
+
+  .pp-table-shell tbody td {
+    padding: 13px 20px !important;
     border: none !important;
-    font-size: 0.87rem;
-    color: var(--text);
+    font-size: 13px;
+    color: var(--ink-muted);
     vertical-align: middle;
   }
 
-  /* ─── Cell styles ─── */
-  .pp-cell-name   { font-weight: 600; letter-spacing: 0.01em; }
-  .pp-cell-cntry  { color: var(--muted); font-size: 0.84rem; }
-  .pp-cell-price  {
+  /* ── Cell variants ── */
+  .pp-cell-name {
+    font-weight: 700 !important;
+    color: var(--ink) !important;
+    font-size: 13px !important;
+  }
+
+  .pp-cell-country {
+    color: var(--ink-faint) !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+  }
+
+  .pp-cell-price {
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    color: var(--green) !important;
     text-align: right !important;
-    font-family: 'DM Mono', monospace;
-    font-size: 0.83rem;
-    color: var(--accent);
-    font-weight: 500;
-    letter-spacing: 0.02em;
+    letter-spacing: -0.2px !important;
+    font-variant-numeric: tabular-nums;
   }
 
-  /* ─── Badges ─── */
-  .pp-badge {
-    display: inline-block;
-    padding: 3px 9px;
-    border-radius: 5px;
-    font-family: 'DM Mono', monospace;
-    font-size: 0.67rem;
-    font-weight: 500;
-    letter-spacing: 0.07em;
-  }
-  .pp-role {
-    background: var(--surface-hi);
-    border: 1px solid var(--border);
-    color: var(--muted);
-  }
-  .pp-avail {
-    background: var(--accent-dim);
-    border: 1px solid rgba(245,166,35,0.28);
-    color: var(--accent);
-    font-weight: 700;
-  }
-  .pp-sold {
-    background: var(--green-dim);
-    border: 1px solid rgba(74,222,128,0.25);
-    color: var(--green);
-    font-weight: 700;
+  /* ── Badges ── */
+  .pp-badge-role {
+    background: var(--parchment-mid) !important;
+    border: 1px solid var(--border) !important;
+    color: var(--ink-muted) !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.4px !important;
+    padding: 2px 8px !important;
+    border-radius: 6px !important;
+    text-transform: uppercase;
+    font-family: 'DM Sans', sans-serif;
   }
 
-  /* ─── Skeleton ─── */
+  .pp-badge-sold {
+    background: var(--green-light) !important;
+    border: 1px solid var(--green-border) !important;
+    color: var(--green) !important;
+    font-size: 10px !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.5px !important;
+    padding: 2px 8px !important;
+    border-radius: 6px !important;
+    text-transform: uppercase;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .pp-badge-available {
+    background: var(--amber-light) !important;
+    border: 1px solid var(--amber-border) !important;
+    color: var(--amber) !important;
+    font-size: 10px !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.5px !important;
+    padding: 2px 8px !important;
+    border-radius: 6px !important;
+    text-transform: uppercase;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  /* ── Skeleton ── */
   .pp-skel {
-    border-radius: 4px;
-    background: linear-gradient(90deg, var(--surface-hi) 25%, var(--border) 50%, var(--surface-hi) 75%);
+    border-radius: 5px;
+    background: linear-gradient(90deg, var(--parchment) 25%, var(--border) 50%, var(--parchment) 75%);
     background-size: 400% 100%;
-    animation: pp-shimmer 1.5s ease infinite;
+    animation: pp-shimmer 1.6s ease infinite;
   }
+
   @keyframes pp-shimmer {
     0%   { background-position: 100% 0; }
     100% { background-position: -100% 0; }
   }
 
-  /* ─── Empty ─── */
-  .pp-empty-cell { padding: 0 !important; }
+  /* ── Empty state ── */
   .pp-empty-inner {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 60px 20px;
-    color: var(--muted);
-    font-size: 0.875rem;
-    gap: 8px;
+    padding: 64px 20px;
+    color: var(--ink-faint);
+    gap: 10px;
   }
-  .pp-empty-inner span:first-child { font-size: 2rem; opacity: 0.3; }
 
-  /* ─── Pagination ─── */
+  .pp-empty-icon {
+    font-size: 36px;
+    opacity: 0.35;
+  }
+
+  .pp-empty-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink-faint);
+  }
+
+  .pp-empty-hint {
+    font-size: 12px;
+    color: var(--ink-faint);
+    opacity: 0.7;
+  }
+
+  /* ── Pagination ── */
   .pp-pager {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
   }
-  .pp-pbtn {
-    height: 33px;
+
+  .pp-pager-btn {
+    height: 36px;
     padding: 0 18px;
-    border-radius: 7px;
-    font-size: 0.77rem;
-    font-family: 'DM Mono', monospace;
-    font-weight: 500;
-    letter-spacing: 0.04em;
+    border-radius: 9px;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: 'DM Sans', sans-serif;
     border: 1px solid var(--border);
-    background: var(--surface);
-    color: var(--muted);
+    background: white;
+    color: var(--ink-muted);
     cursor: pointer;
     transition: all 0.15s;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
   }
-  .pp-pbtn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-  .pp-pbtn:disabled { opacity: 0.28; cursor: not-allowed; }
-  .pp-plabel {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.77rem;
-    color: var(--muted);
-    letter-spacing: 0.04em;
-    min-width: 64px;
+
+  .pp-pager-btn:hover:not(:disabled) {
+    border-color: var(--green);
+    color: var(--green);
+    background: var(--green-light);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(45,122,79,0.15);
+  }
+
+  .pp-pager-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .pp-pager-label {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink-muted);
+    min-width: 72px;
     text-align: center;
   }
-  .pp-plabel b { color: var(--text); font-weight: 600; }
+
+  .pp-pager-label strong {
+    color: var(--ink);
+    font-weight: 900;
+  }
+
+  /* ── Row number ── */
+  .pp-cell-num {
+    color: var(--ink-faint) !important;
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    width: 40px;
+    text-align: center !important;
+  }
 `
+
+function fmt(amount: number) {
+  if (amount >= 10_000_000) return `₹${(amount / 10_000_000).toFixed(1)}Cr`
+  if (amount >= 100_000)    return `₹${(amount / 100_000).toFixed(0)}L`
+  return `₹${amount.toLocaleString()}`
+}
+
+const filterOptions: { label: string; val: boolean | undefined }[] = [
+  { label: "All",     val: undefined },
+  { label: "Unsold",  val: false },
+  { label: "Sold",    val: true },
+]
 
 function PlayersPoolPage() {
   const { page, search, sold } = Route.useSearch()
@@ -273,36 +479,63 @@ function PlayersPoolPage() {
 
   const { data: players, isLoading } = usePlayers({ search, isSold: sold, page, size })
 
-  const filterOptions = [
-    { label: "All",    val: undefined as boolean | undefined },
-    { label: "Unsold", val: false as boolean | undefined },
-    { label: "Sold",   val: true  as boolean | undefined },
-  ]
+  const totalShown = players?.length ?? 0
+  const startRow   = (page - 1) * size + 1
 
   return (
-    <div className="pp">
+    <div className="pp-root">
       <style>{styles}</style>
 
-      {/* ── Header ── */}
-      <h1 className="pp-title">Players Pool</h1>
-      <p className="pp-sub">Browse and filter auction players</p>
+      {/* ── Page Header ── */}
+      <div className="pp-header">
+        <div className="pp-header-left">
+          <div className="pp-eyebrow">
+            <span style={{ fontSize: 20 }}>🏏</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-faint)", letterSpacing: "0.5px", textTransform: "uppercase" }}>
+              Auction
+            </span>
+          </div>
+          <h1 className="pp-title">Players Pool</h1>
+          <p className="pp-sub">Browse, filter and track all auction players</p>
+        </div>
+
+        {/* Quick stats */}
+        <div className="pp-stats">
+          <div className="pp-stat-pill">
+            <span className="pp-stat-dot" style={{ background: "var(--amber)" }} />
+            <span className="pp-stat-label">Showing</span>
+            <span className="pp-stat-value" style={{ color: "var(--ink)" }}>{totalShown}</span>
+          </div>
+          <div className="pp-stat-pill">
+            <span className="pp-stat-dot" style={{ background: "var(--green)" }} />
+            <span className="pp-stat-label">Page</span>
+            <span className="pp-stat-value" style={{ color: "var(--green)" }}>{page}</span>
+          </div>
+        </div>
+      </div>
 
       {/* ── Toolbar ── */}
       <div className="pp-toolbar">
-        <input
-          className="pp-input"
-          placeholder="Search players..."
-          value={search}
-          onChange={(e) =>
-            navigate({ search: (prev) => ({ ...prev, search: e.target.value, page: 1 }) })
-          }
-        />
-        <div className="pp-sep" />
-        <div className="pp-filters">
+        {/* Search */}
+        <div className="pp-toolbar-search">
+          <Input
+            placeholder="Search players…"
+            value={search}
+            onChange={(e) =>
+              navigate({ search: (prev) => ({ ...prev, search: e.target.value, page: 1 }) })
+            }
+            className="pp-search-input"
+          />
+        </div>
+
+        <div className="pp-toolbar-sep" />
+
+        {/* Filter pills */}
+        <div className="pp-filter-group">
           {filterOptions.map(({ label, val }) => (
             <button
               key={label}
-              className={`pp-fbtn ${sold === val ? "on" : ""}`}
+              className={`pp-filter-btn ${sold === val ? "active" : ""}`}
               onClick={() =>
                 navigate({ search: (prev) => ({ ...prev, sold: val, page: 1 }) })
               }
@@ -311,13 +544,22 @@ function PlayersPoolPage() {
             </button>
           ))}
         </div>
+
+        {/* Spacer */}
+        <div style={{ flex: 1 }} />
+
+        {/* Page size note */}
+        <span style={{ fontSize: 11, color: "var(--ink-faint)", fontWeight: 600 }}>
+          {size} per page
+        </span>
       </div>
 
       {/* ── Table ── */}
-      <div className="pp-tshell">
+      <div className="pp-table-shell">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead style={{ width: 48, textAlign: "center" }}>#</TableHead>
               <TableHead>Player</TableHead>
               <TableHead>Country</TableHead>
               <TableHead>Role</TableHead>
@@ -331,33 +573,53 @@ function PlayersPoolPage() {
             {/* Skeleton rows */}
             {isLoading &&
               Array.from({ length: size }).map((_, i) => (
-                <TableRow key={i} className={i % 2 === 0 ? "pp-even" : "pp-odd"}>
-                  <TableCell><div className="pp-skel" style={{ height: 13, width: 150 }} /></TableCell>
-                  <TableCell><div className="pp-skel" style={{ height: 13, width: 90 }} /></TableCell>
-                  <TableCell><div className="pp-skel" style={{ height: 22, width: 100 }} /></TableCell>
-                  <TableCell style={{ textAlign: "right" }}>
-                    <div className="pp-skel" style={{ height: 13, width: 72, marginLeft: "auto" }} />
+                <TableRow key={i}>
+                  <TableCell className="pp-cell-num">
+                    <div className="pp-skel" style={{ height: 12, width: 20, margin: "0 auto" }} />
                   </TableCell>
-                  <TableCell><div className="pp-skel" style={{ height: 22, width: 82 }} /></TableCell>
+                  <TableCell>
+                    <div className="pp-skel" style={{ height: 13, width: 160 }} />
+                  </TableCell>
+                  <TableCell>
+                    <div className="pp-skel" style={{ height: 13, width: 90 }} />
+                  </TableCell>
+                  <TableCell>
+                    <div className="pp-skel" style={{ height: 22, width: 90, borderRadius: 6 }} />
+                  </TableCell>
+                  <TableCell style={{ textAlign: "right" }}>
+                    <div className="pp-skel" style={{ height: 13, width: 70, marginLeft: "auto" }} />
+                  </TableCell>
+                  <TableCell>
+                    <div className="pp-skel" style={{ height: 22, width: 80, borderRadius: 6 }} />
+                  </TableCell>
                 </TableRow>
               ))}
 
             {/* Data rows */}
             {!isLoading && players?.length
               ? players.map((player: any, i: number) => (
-                <TableRow key={player.id} className={i % 2 === 0 ? "pp-even" : "pp-odd"}>
-                  <TableCell className="pp-cell-name">{player.name}</TableCell>
-                  <TableCell className="pp-cell-cntry">{player.country}</TableCell>
+                <TableRow key={player.id}>
+                  <TableCell className="pp-cell-num">
+                    {startRow + i}
+                  </TableCell>
+                  <TableCell className="pp-cell-name">
+                    {player.name}
+                  </TableCell>
+                  <TableCell className="pp-cell-country">
+                    {player.country}
+                  </TableCell>
                   <TableCell>
-                    <span className="pp-badge pp-role">{player.specialism}</span>
+                    <Badge className="pp-badge-role">
+                      {player.specialism}
+                    </Badge>
                   </TableCell>
                   <TableCell className="pp-cell-price">
-                    ₹ {Number(player.basePrice).toLocaleString()}
+                    {fmt(Number(player.basePrice))}
                   </TableCell>
                   <TableCell>
                     {player.isSold
-                      ? <span className="pp-badge pp-sold">SOLD</span>
-                      : <span className="pp-badge pp-avail">AVAILABLE</span>
+                      ? <Badge className="pp-badge-sold">Sold</Badge>
+                      : <Badge className="pp-badge-available">Available</Badge>
                     }
                   </TableCell>
                 </TableRow>
@@ -367,10 +629,13 @@ function PlayersPoolPage() {
             {/* Empty state */}
             {!isLoading && !players?.length && (
               <TableRow>
-                <TableCell colSpan={5} className="pp-empty-cell">
+                <TableCell colSpan={6} style={{ padding: 0 }}>
                   <div className="pp-empty-inner">
-                    <span>🏏</span>
-                    <span>No players found</span>
+                    <span className="pp-empty-icon">🏏</span>
+                    <span className="pp-empty-text">No players found</span>
+                    <span className="pp-empty-hint">
+                      {search ? `No results for "${search}" — try a different name` : "No players match the current filter"}
+                    </span>
                   </div>
                 </TableCell>
               </TableRow>
@@ -383,17 +648,21 @@ function PlayersPoolPage() {
       {/* ── Pagination ── */}
       <div className="pp-pager">
         <button
-          className="pp-pbtn"
+          className="pp-pager-btn"
           disabled={page === 1}
           onClick={() =>
             navigate({ search: (prev) => ({ ...prev, page: prev.page - 1 }) })
           }
         >
-          ← Prev
+          ← Previous
         </button>
-        <span className="pp-plabel">Page <b>{page}</b></span>
+
+        <span className="pp-pager-label">
+          Page <strong>{page}</strong>
+        </span>
+
         <button
-          className="pp-pbtn"
+          className="pp-pager-btn"
           disabled={!players || players.length < size}
           onClick={() =>
             navigate({ search: (prev) => ({ ...prev, page: prev.page + 1 }) })

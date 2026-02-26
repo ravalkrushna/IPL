@@ -15,6 +15,7 @@ import { Route as AuthVerifyOtpRouteImport } from './routes/auth/verify-otp'
 import { Route as AuthSignupRouteImport } from './routes/auth/signup'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as Auth_layoutRouteImport } from './routes/auth/__layout'
+import { Route as AuctionProfileRouteImport } from './routes/auction/profile'
 import { Route as AuctionPlayersRouteImport } from './routes/auction/players'
 import { Route as AuctionAuctionIdRouteImport } from './routes/auction/$auctionId'
 
@@ -48,6 +49,11 @@ const Auth_layoutRoute = Auth_layoutRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuctionProfileRoute = AuctionProfileRouteImport.update({
+  id: '/auction/profile',
+  path: '/auction/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuctionPlayersRoute = AuctionPlayersRouteImport.update({
   id: '/auction/players',
   path: '/auction/players',
@@ -63,6 +69,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auction/$auctionId': typeof AuctionAuctionIdRoute
   '/auction/players': typeof AuctionPlayersRoute
+  '/auction/profile': typeof AuctionProfileRoute
   '/auth': typeof Auth_layoutRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
@@ -73,6 +80,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auction/$auctionId': typeof AuctionAuctionIdRoute
   '/auction/players': typeof AuctionPlayersRoute
+  '/auction/profile': typeof AuctionProfileRoute
   '/auth': typeof Auth_layoutRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
@@ -84,6 +92,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/auction/$auctionId': typeof AuctionAuctionIdRoute
   '/auction/players': typeof AuctionPlayersRoute
+  '/auction/profile': typeof AuctionProfileRoute
   '/auth/__layout': typeof Auth_layoutRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
@@ -96,6 +105,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auction/$auctionId'
     | '/auction/players'
+    | '/auction/profile'
     | '/auth'
     | '/auth/login'
     | '/auth/signup'
@@ -106,6 +116,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auction/$auctionId'
     | '/auction/players'
+    | '/auction/profile'
     | '/auth'
     | '/auth/login'
     | '/auth/signup'
@@ -116,6 +127,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auction/$auctionId'
     | '/auction/players'
+    | '/auction/profile'
     | '/auth/__layout'
     | '/auth/login'
     | '/auth/signup'
@@ -127,6 +139,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuctionAuctionIdRoute: typeof AuctionAuctionIdRoute
   AuctionPlayersRoute: typeof AuctionPlayersRoute
+  AuctionProfileRoute: typeof AuctionProfileRoute
   Auth_layoutRoute: typeof Auth_layoutRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthSignupRoute: typeof AuthSignupRoute
@@ -178,6 +191,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Auth_layoutRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auction/profile': {
+      id: '/auction/profile'
+      path: '/auction/profile'
+      fullPath: '/auction/profile'
+      preLoaderRoute: typeof AuctionProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auction/players': {
       id: '/auction/players'
       path: '/auction/players'
@@ -199,6 +219,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuctionAuctionIdRoute: AuctionAuctionIdRoute,
   AuctionPlayersRoute: AuctionPlayersRoute,
+  AuctionProfileRoute: AuctionProfileRoute,
   Auth_layoutRoute: Auth_layoutRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthSignupRoute: AuthSignupRoute,
