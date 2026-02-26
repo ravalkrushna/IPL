@@ -25,9 +25,9 @@ export const Route = createFileRoute("/auction/$auctionId")({
 })
 
 /* ─── TYPES ─── */
-type HighestBid     = { amount: number; bidderName: string }
+type HighestBid = { amount: number; bidderName: string }
 type WalletResponse = { balance: number }
-type SquadPlayer    = {
+type SquadPlayer = {
   id: string; name: string; country?: string; age?: number
   specialism?: string; battingStyle?: string; bowlingStyle?: string
   testCaps?: number; odiCaps?: number; t20Caps?: number
@@ -49,7 +49,7 @@ type Player = {
 /* ─── HELPERS ─── */
 function fmt(amount: number) {
   if (amount >= 10_000_000) return `₹${(amount / 10_000_000).toFixed(1)}Cr`
-  if (amount >= 100_000)    return `₹${(amount / 100_000).toFixed(0)}L`
+  if (amount >= 100_000) return `₹${(amount / 100_000).toFixed(0)}L`
   return `₹${amount.toLocaleString()}`
 }
 function timeAgo(ts: number) {
@@ -60,20 +60,20 @@ function timeAgo(ts: number) {
 }
 function specialismStyle(sp?: string) {
   switch (sp?.toLowerCase()) {
-    case "batsman":      return { bg: "bg-sky-100",     text: "text-sky-700",    border: "border-sky-200" }
-    case "bowler":       return { bg: "bg-rose-100",    text: "text-rose-700",   border: "border-rose-200" }
+    case "batsman": return { bg: "bg-sky-100", text: "text-sky-700", border: "border-sky-200" }
+    case "bowler": return { bg: "bg-rose-100", text: "text-rose-700", border: "border-rose-200" }
     case "all-rounder":
-    case "allrounder":   return { bg: "bg-violet-100",  text: "text-violet-700", border: "border-violet-200" }
+    case "allrounder": return { bg: "bg-violet-100", text: "text-violet-700", border: "border-violet-200" }
     case "wicket-keeper":
-    case "keeper":       return { bg: "bg-amber-100",   text: "text-amber-700",  border: "border-amber-200" }
-    default:             return { bg: "bg-slate-100",   text: "text-slate-600",  border: "border-slate-200" }
+    case "keeper": return { bg: "bg-amber-100", text: "text-amber-700", border: "border-amber-200" }
+    default: return { bg: "bg-slate-100", text: "text-slate-600", border: "border-slate-200" }
   }
 }
 
 /* ─── TIMER RING ─── */
 function TimerRing({ seconds, paused }: { seconds: number; paused?: boolean }) {
-  const color  = paused ? "#94a3b8" : seconds <= 3 ? "#ef4444" : seconds <= 6 ? "#f59e0b" : "#10b981"
-  const circ   = 2 * Math.PI * 22
+  const color = paused ? "#94a3b8" : seconds <= 3 ? "#ef4444" : seconds <= 6 ? "#f59e0b" : "#10b981"
+  const circ = 2 * Math.PI * 22
   const offset = circ * (1 - seconds / 10)
   return (
     <div className="relative w-14 h-14 shrink-0">
@@ -88,9 +88,9 @@ function TimerRing({ seconds, paused }: { seconds: number; paused?: boolean }) {
         {paused
           ? <span className="text-base text-slate-400">⏸</span>
           : <>
-              <span className="text-lg font-black tabular-nums leading-none" style={{ color }}>{seconds}</span>
-              <span className="text-[9px] text-slate-400 font-semibold tracking-widest">SEC</span>
-            </>
+            <span className="text-lg font-black tabular-nums leading-none" style={{ color }}>{seconds}</span>
+            <span className="text-[9px] text-slate-400 font-semibold tracking-widest">SEC</span>
+          </>
         }
       </div>
     </div>
@@ -102,7 +102,7 @@ function SquadCard({ squad, isMe, expanded, onToggle }: {
   squad: Squad; isMe: boolean; expanded: boolean; onToggle: () => void
 }) {
   const players = squad.players ?? []
-  const spent   = players.reduce((s, p) => s + (p.soldPrice ?? 0), 0)
+  const spent = players.reduce((s, p) => s + (p.soldPrice ?? 0), 0)
   return (
     <div onClick={onToggle}
       className={`rounded-2xl border transition-all duration-200 overflow-hidden cursor-pointer
@@ -134,22 +134,22 @@ function SquadCard({ squad, isMe, expanded, onToggle }: {
           {players.length === 0
             ? <p className="text-center py-3 text-xs text-slate-400 italic">No players yet</p>
             : <div className="divide-y divide-slate-50 max-h-48 overflow-y-auto">
-                {players.map((p) => {
-                  const st = specialismStyle(p.specialism)
-                  return (
-                    <div key={p.id} className="flex items-center justify-between px-3.5 py-2 hover:bg-slate-50">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-semibold text-slate-700 truncate">{p.name}</p>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          {p.specialism && <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold border ${st.bg} ${st.text} ${st.border}`}>{p.specialism}</span>}
-                          {p.country && <span className="text-[9px] text-slate-400">{p.country}</span>}
-                        </div>
+              {players.map((p) => {
+                const st = specialismStyle(p.specialism)
+                return (
+                  <div key={p.id} className="flex items-center justify-between px-3.5 py-2 hover:bg-slate-50">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-slate-700 truncate">{p.name}</p>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        {p.specialism && <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold border ${st.bg} ${st.text} ${st.border}`}>{p.specialism}</span>}
+                        {p.country && <span className="text-[9px] text-slate-400">{p.country}</span>}
                       </div>
-                      {p.soldPrice != null && <span className="text-[11px] font-black text-emerald-600 tabular-nums ml-2">{fmt(p.soldPrice)}</span>}
                     </div>
-                  )
-                })}
-              </div>
+                    {p.soldPrice != null && <span className="text-[11px] font-black text-emerald-600 tabular-nums ml-2">{fmt(p.soldPrice)}</span>}
+                  </div>
+                )
+              })}
+            </div>
           }
         </div>
       )}
@@ -170,11 +170,11 @@ function AdminControlPanel({ auctionId, auction, player, highestBid, bidFeed, al
   const [confirmEnd, setConfirmEnd] = useState(false)
   const isPaused = auction.status === "PAUSED"
 
-  const pause  = useMutation({ mutationFn: () => auctionApi.pause(auctionId),  onSuccess: () => queryClient.invalidateQueries({ queryKey: ["auction", auctionId] }) })
+  const pause = useMutation({ mutationFn: () => auctionApi.pause(auctionId), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["auction", auctionId] }) })
   const resume = useMutation({ mutationFn: () => auctionApi.resume(auctionId), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["auction", auctionId] }) })
-  const end    = useMutation({ mutationFn: () => auctionApi.end(auctionId),    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["auction", auctionId] }) })
+  const end = useMutation({ mutationFn: () => auctionApi.end(auctionId), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["auction", auctionId] }) })
 
-  const currentBid   = highestBid?.amount ?? Number(player.basePrice ?? 0)
+  const currentBid = highestBid?.amount ?? Number(player.basePrice ?? 0)
   const totalPlayers = allSquads?.flatMap(s => s.players ?? []).length ?? 0
 
   return (
@@ -213,9 +213,9 @@ function AdminControlPanel({ auctionId, auction, player, highestBid, bidFeed, al
           </div>
           <div className="border-t border-white/10 grid grid-cols-3 divide-x divide-white/10">
             {[
-              { label: "TEST", value: player.testCaps ?? 0, color: "text-sky-300",    played: (player.testCaps ?? 0) > 0 },
-              { label: "ODI",  value: player.odiCaps  ?? 0, color: "text-violet-300", played: (player.odiCaps  ?? 0) > 0 },
-              { label: "T20",  value: player.t20Caps  ?? 0, color: "text-amber-300",  played: (player.t20Caps  ?? 0) > 0 },
+              { label: "TEST", value: player.testCaps ?? 0, color: "text-sky-300", played: (player.testCaps ?? 0) > 0 },
+              { label: "ODI", value: player.odiCaps ?? 0, color: "text-violet-300", played: (player.odiCaps ?? 0) > 0 },
+              { label: "T20", value: player.t20Caps ?? 0, color: "text-amber-300", played: (player.t20Caps ?? 0) > 0 },
             ].map(({ label, value, color, played }) => (
               <div key={label} className={`flex flex-col items-center py-3.5 ${played ? "opacity-100" : "opacity-35"}`}>
                 <span className={`text-xl font-black tabular-nums ${played ? color : "text-slate-500"}`}>{played ? value : "—"}</span>
@@ -245,18 +245,18 @@ function AdminControlPanel({ auctionId, auction, player, highestBid, bidFeed, al
             {bidFeed.length === 0
               ? <div className="flex items-center justify-center h-full"><p className="text-xs text-slate-300 italic">No bids yet</p></div>
               : [...bidFeed].reverse().map((bid, i) => (
-                  <div key={i} className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs
+                <div key={i} className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs
                     ${i === 0 ? "bg-emerald-50 border border-emerald-200" : "bg-slate-50 border border-transparent"}`}>
-                    <div className="flex items-center gap-2">
-                      <span>{i === 0 ? "🏆" : "·"}</span>
-                      <span className={`font-bold ${i === 0 ? "text-emerald-700" : "text-slate-600"}`}>{bid.squadName}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`font-black tabular-nums ${i === 0 ? "text-emerald-600" : "text-slate-500"}`}>{fmt(bid.amount)}</span>
-                      <span className="text-slate-300 text-[10px]">{timeAgo(bid.timestamp)}</span>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <span>{i === 0 ? "🏆" : "·"}</span>
+                    <span className={`font-bold ${i === 0 ? "text-emerald-700" : "text-slate-600"}`}>{bid.squadName}</span>
                   </div>
-                ))
+                  <div className="flex items-center gap-2">
+                    <span className={`font-black tabular-nums ${i === 0 ? "text-emerald-600" : "text-slate-500"}`}>{fmt(bid.amount)}</span>
+                    <span className="text-slate-300 text-[10px]">{timeAgo(bid.timestamp)}</span>
+                  </div>
+                </div>
+              ))
             }
           </div>
         </div>
@@ -271,9 +271,9 @@ function AdminControlPanel({ auctionId, auction, player, highestBid, bidFeed, al
           <p className="text-4xl font-black tabular-nums text-slate-800">{fmt(currentBid)}</p>
           {highestBid?.bidderName
             ? <div className="mt-3 inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1.5">
-                <span>🏆</span>
-                <span className="text-sm font-bold text-emerald-700">{highestBid.bidderName}</span>
-              </div>
+              <span>🏆</span>
+              <span className="text-sm font-bold text-emerald-700">{highestBid.bidderName}</span>
+            </div>
             : <p className="mt-2 text-xs text-slate-300 italic">No bids yet</p>
           }
         </div>
@@ -282,9 +282,9 @@ function AdminControlPanel({ auctionId, auction, player, highestBid, bidFeed, al
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shrink-0">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Auction Stats</p>
           {[
-            { label: "Squads",         value: String(allSquads?.length ?? 0) },
+            { label: "Squads", value: String(allSquads?.length ?? 0) },
             { label: "Players Bought", value: String(totalPlayers) },
-            { label: "Status",         value: auction.status },
+            { label: "Status", value: auction.status },
           ].map(({ label, value }) => (
             <div key={label} className="flex items-center justify-between py-1.5 border-b border-slate-50 last:border-0">
               <span className="text-xs text-slate-400">{label}</span>
@@ -299,26 +299,26 @@ function AdminControlPanel({ auctionId, auction, player, highestBid, bidFeed, al
           <div className="space-y-2">
             {isPaused
               ? <button onClick={() => resume.mutate()} disabled={resume.isPending}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-black text-sm transition-all shadow-[0_2px_12px_rgba(16,185,129,0.3)]">
-                  ▶ Resume Auction
-                </button>
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-black text-sm transition-all shadow-[0_2px_12px_rgba(16,185,129,0.3)]">
+                ▶ Resume Auction
+              </button>
               : <button onClick={() => pause.mutate()} disabled={pause.isPending}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-amber-400 hover:bg-amber-500 disabled:opacity-50 text-white font-black text-sm transition-all">
-                  ⏸ Pause Auction
-                </button>
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-amber-400 hover:bg-amber-500 disabled:opacity-50 text-white font-black text-sm transition-all">
+                ⏸ Pause Auction
+              </button>
             }
             {!confirmEnd
               ? <button onClick={() => setConfirmEnd(true)}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-50 hover:bg-red-50 border border-slate-200 hover:border-red-200 text-slate-400 hover:text-red-500 font-bold text-sm transition-all">
-                  🏁 End Auction
-                </button>
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-50 hover:bg-red-50 border border-slate-200 hover:border-red-200 text-slate-400 hover:text-red-500 font-bold text-sm transition-all">
+                🏁 End Auction
+              </button>
               : <div className="space-y-2">
-                  <p className="text-xs text-red-500 text-center font-semibold">This cannot be undone.</p>
-                  <div className="flex gap-2">
-                    <button onClick={() => setConfirmEnd(false)} className="flex-1 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-500 text-xs font-bold hover:bg-slate-100 transition-all">Cancel</button>
-                    <button onClick={() => { end.mutate(); setConfirmEnd(false) }} disabled={end.isPending} className="flex-1 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-black transition-all">End Now</button>
-                  </div>
+                <p className="text-xs text-red-500 text-center font-semibold">This cannot be undone.</p>
+                <div className="flex gap-2">
+                  <button onClick={() => setConfirmEnd(false)} className="flex-1 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-500 text-xs font-bold hover:bg-slate-100 transition-all">Cancel</button>
+                  <button onClick={() => { end.mutate(); setConfirmEnd(false) }} disabled={end.isPending} className="flex-1 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-black transition-all">End Now</button>
                 </div>
+              </div>
             }
           </div>
         </div>
@@ -338,7 +338,7 @@ function AdminControlPanel({ auctionId, auction, player, highestBid, bidFeed, al
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
         </div>
         <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2 min-h-0">
-          {(allSquads ?? []).map(s => <SquadCard key={s.id ?? s.name} squad={s} isMe={false} expanded={false} onToggle={() => {}} />)}
+          {(allSquads ?? []).map(s => <SquadCard key={s.id ?? s.name} squad={s} isMe={false} expanded={false} onToggle={() => { }} />)}
           {(!allSquads || allSquads.length === 0) && (
             <div className="flex items-center justify-center h-full"><p className="text-xs text-slate-300 italic">No squads yet</p></div>
           )}
@@ -346,7 +346,7 @@ function AdminControlPanel({ auctionId, auction, player, highestBid, bidFeed, al
         <div className="px-4 py-3 border-t border-slate-200/60 shrink-0">
           <div className="flex flex-wrap gap-x-3 gap-y-1">
             {[{ label: "Batsman", color: "bg-sky-400" }, { label: "Bowler", color: "bg-rose-400" },
-              { label: "All-Rounder", color: "bg-violet-400" }, { label: "Keeper", color: "bg-amber-400" }].map(({ label, color }) => (
+            { label: "All-Rounder", color: "bg-violet-400" }, { label: "Keeper", color: "bg-amber-400" }].map(({ label, color }) => (
               <div key={label} className="flex items-center gap-1.5">
                 <div className={`w-1.5 h-1.5 rounded-full ${color}`} />
                 <span className="text-[10px] text-slate-400">{label}</span>
@@ -361,31 +361,31 @@ function AdminControlPanel({ auctionId, auction, player, highestBid, bidFeed, al
 
 /* ─── PAGE ─── */
 function AuctionRoomPage() {
-  const { auctionId }    = useParams({ from: "/auction/$auctionId" })
-  const queryClient      = useQueryClient()
-  const timerRef         = useRef<ReturnType<typeof setInterval> | null>(null)
-  const pollRef          = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { auctionId } = useParams({ from: "/auction/$auctionId" })
+  const queryClient = useQueryClient()
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [expandedSquad, setExpandedSquad] = useState<string | null>(null)
 
-  const squadName            = useAuctionRoomStore(s => s.squadName)
-  const seconds              = useAuctionRoomStore(s => s.seconds)
-  const soldInfo             = useAuctionRoomStore(s => s.soldInfo)
-  const showSquadDialog      = useAuctionRoomStore(s => s.showSquadDialog)
-  const wallet               = useAuctionRoomStore(s => s.wallet)
-  const bidFeed              = useAuctionRoomStore(s => s.bidFeed)
-  const setSquadName         = useAuctionRoomStore(s => s.setSquadName)
-  const setSeconds           = useAuctionRoomStore(s => s.setSeconds)
-  const decrementSeconds     = useAuctionRoomStore(s => s.decrementSeconds)
-  const setSoldInfo          = useAuctionRoomStore(s => s.setSoldInfo)
-  const addBidToFeed         = useAuctionRoomStore(s => s.addBidToFeed)
-  const setWallet            = useAuctionRoomStore(s => s.setWallet)
-  const resetForNextPlayer   = useAuctionRoomStore(s => s.resetForNextPlayer)
-  const setShowSquadDialog   = useAuctionRoomStore(s => s.setShowSquadDialog)
-  const timerKey             = useAuctionRoomStore(s => s.timerKey)
-  const pendingNextPlayer    = useAuctionRoomStore(s => s.pendingNextPlayer)
+  const squadName = useAuctionRoomStore(s => s.squadName)
+  const seconds = useAuctionRoomStore(s => s.seconds)
+  const soldInfo = useAuctionRoomStore(s => s.soldInfo)
+  const showSquadDialog = useAuctionRoomStore(s => s.showSquadDialog)
+  const wallet = useAuctionRoomStore(s => s.wallet)
+  const bidFeed = useAuctionRoomStore(s => s.bidFeed)
+  const setSquadName = useAuctionRoomStore(s => s.setSquadName)
+  const setSeconds = useAuctionRoomStore(s => s.setSeconds)
+  const decrementSeconds = useAuctionRoomStore(s => s.decrementSeconds)
+  const setSoldInfo = useAuctionRoomStore(s => s.setSoldInfo)
+  const addBidToFeed = useAuctionRoomStore(s => s.addBidToFeed)
+  const setWallet = useAuctionRoomStore(s => s.setWallet)
+  const resetForNextPlayer = useAuctionRoomStore(s => s.resetForNextPlayer)
+  const setShowSquadDialog = useAuctionRoomStore(s => s.setShowSquadDialog)
+  const timerKey = useAuctionRoomStore(s => s.timerKey)
+  const pendingNextPlayer = useAuctionRoomStore(s => s.pendingNextPlayer)
   const setPendingNextPlayer = useAuctionRoomStore(s => s.setPendingNextPlayer)
 
-  const { data: me }      = useQuery({ queryKey: ["me"], queryFn: authApi.me })
+  const { data: me } = useQuery({ queryKey: ["me"], queryFn: authApi.me })
   const { data: auction } = useQuery({ queryKey: ["auction", auctionId], queryFn: () => auctionApi.getById(auctionId), refetchInterval: 3000 })
   const { data: player, refetch: refetchPlayer } = useQuery<Player>({ queryKey: ["currentPlayer", auctionId], queryFn: () => auctionEngineApi.currentPlayer(auctionId), refetchInterval: false })
   const { data: highestBid } = useQuery<HighestBid>({ queryKey: ["highestBid", player?.id], queryFn: () => biddingApi.highestBid(auctionId, player!.id), enabled: !!player?.id, refetchInterval: 2000 })
@@ -393,7 +393,7 @@ function AuctionRoomPage() {
   const { data: squad, error: squadError, refetch: refetchSquad } = useQuery<Squad>({ queryKey: ["mySquad", auctionId, me?.participantId], queryFn: () => squadApi.mySquad(auctionId, me!.participantId), enabled: !!me?.participantId && me?.role === "PARTICIPANT", retry: false })
   const { data: allSquads, refetch: refetchAllSquads } = useQuery<Squad[]>({ queryKey: ["allSquads", auctionId], queryFn: () => squadApi.allSquads(auctionId), refetchInterval: 5000 })
 
-  const isAdmin  = me?.role === "ADMIN"
+  const isAdmin = me?.role === "ADMIN"
   const isPaused = auction?.status === "PAUSED"
 
   const startCountdown = useCallback((from: number) => {
@@ -416,7 +416,7 @@ function AuctionRoomPage() {
   }
 
   const createSquad = useMutation({ mutationFn: squadApi.create, onSuccess: () => refetchSquad() })
-  const placeBid    = useMutation({
+  const placeBid = useMutation({
     mutationFn: biddingApi.placeBid,
     onError: (err) => alert(err instanceof AxiosError ? err.response?.data?.message ?? "Bid failed" : "Bid failed"),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["highestBid", player?.id] }),
@@ -434,7 +434,7 @@ function AuctionRoomPage() {
         setPendingNextPlayer(currentPlayerId)
         const poll = async () => {
           const result = await refetchPlayer()
-          const next   = result.data
+          const next = result.data
           if (next?.id && next.id !== currentPlayerId) { setPendingNextPlayer(null); pollRef.current = null }
           else pollRef.current = setTimeout(poll, 1500)
         }
@@ -486,8 +486,8 @@ function AuctionRoomPage() {
     )
   }
 
-  const currentBid   = highestBid?.amount ?? Number(player.basePrice ?? 0)
-  const canBid       = auction.status === "LIVE" && !!squad && !soldInfo && !pendingNextPlayer && !!me.participantId
+  const currentBid = highestBid?.amount ?? Number(player.basePrice ?? 0)
+  const canBid = auction.status === "LIVE" && !!squad && !soldInfo && !pendingNextPlayer && !!me.participantId
   const squadMissing = !isAdmin && me.role === "PARTICIPANT" && squadError instanceof AxiosError && squadError.response?.status === 404
   const squadPlayers = squad?.players ?? []
   const sortedSquads = [...(allSquads ?? [])].sort((a, b) => {
@@ -535,37 +535,37 @@ function AuctionRoomPage() {
           </DialogHeader>
           {squadPlayers.length > 0
             ? <div className="overflow-y-auto flex-1 mt-2">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-slate-100">
-                      {["Player", "Role", "Caps (T/O/T)", "Sold For"].map(h => <TableHead key={h} className="text-slate-400">{h}</TableHead>)}
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-slate-100">
+                    {["Player", "Role", "Caps (T/O/T)", "Sold For"].map(h => <TableHead key={h} className="text-slate-400">{h}</TableHead>)}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {squadPlayers.map(p => (
+                    <TableRow key={p.id} className="border-slate-50">
+                      <TableCell>
+                        <p className="font-semibold text-sm text-slate-700">{p.name}</p>
+                        <p className="text-xs text-slate-400">{[p.country, p.age ? `Age ${p.age}` : null].filter(Boolean).join(" · ")}</p>
+                      </TableCell>
+                      <TableCell>{p.specialism && <Badge variant="secondary" className="text-xs bg-slate-100 text-slate-600">{p.specialism}</Badge>}</TableCell>
+                      <TableCell className="text-sm tabular-nums">
+                        <span className={(p.testCaps ?? 0) > 0 ? "text-sky-600 font-semibold" : "text-slate-300"}>{p.testCaps ?? 0}</span>
+                        <span className="text-slate-200 mx-1">/</span>
+                        <span className={(p.odiCaps ?? 0) > 0 ? "text-violet-600 font-semibold" : "text-slate-300"}>{p.odiCaps ?? 0}</span>
+                        <span className="text-slate-200 mx-1">/</span>
+                        <span className={(p.t20Caps ?? 0) > 0 ? "text-amber-600 font-semibold" : "text-slate-300"}>{p.t20Caps ?? 0}</span>
+                      </TableCell>
+                      <TableCell className="text-right"><span className="font-bold text-emerald-600">{p.soldPrice ? fmt(p.soldPrice) : "—"}</span></TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {squadPlayers.map(p => (
-                      <TableRow key={p.id} className="border-slate-50">
-                        <TableCell>
-                          <p className="font-semibold text-sm text-slate-700">{p.name}</p>
-                          <p className="text-xs text-slate-400">{[p.country, p.age ? `Age ${p.age}` : null].filter(Boolean).join(" · ")}</p>
-                        </TableCell>
-                        <TableCell>{p.specialism && <Badge variant="secondary" className="text-xs bg-slate-100 text-slate-600">{p.specialism}</Badge>}</TableCell>
-                        <TableCell className="text-sm tabular-nums">
-                          <span className={(p.testCaps ?? 0) > 0 ? "text-sky-600 font-semibold" : "text-slate-300"}>{p.testCaps ?? 0}</span>
-                          <span className="text-slate-200 mx-1">/</span>
-                          <span className={(p.odiCaps ?? 0) > 0 ? "text-violet-600 font-semibold" : "text-slate-300"}>{p.odiCaps ?? 0}</span>
-                          <span className="text-slate-200 mx-1">/</span>
-                          <span className={(p.t20Caps ?? 0) > 0 ? "text-amber-600 font-semibold" : "text-slate-300"}>{p.t20Caps ?? 0}</span>
-                        </TableCell>
-                        <TableCell className="text-right"><span className="font-bold text-emerald-600">{p.soldPrice ? fmt(p.soldPrice) : "—"}</span></TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
             : <div className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="text-5xl mb-3">🛒</div>
-                <p className="font-medium text-slate-500">No players yet</p>
-              </div>
+              <div className="text-5xl mb-3">🛒</div>
+              <p className="font-medium text-slate-500">No players yet</p>
+            </div>
           }
         </DialogContent>
       </Dialog>
@@ -642,8 +642,8 @@ function AuctionRoomPage() {
             ${auction.status === "LIVE"
               ? "bg-emerald-50 text-emerald-700 border-emerald-200"
               : auction.status === "PAUSED"
-              ? "bg-amber-50 text-amber-700 border-amber-200"
-              : "bg-slate-50 text-slate-500 border-slate-200"}`}>
+                ? "bg-amber-50 text-amber-700 border-amber-200"
+                : "bg-slate-50 text-slate-500 border-slate-200"}`}>
             {auction.status === "LIVE" && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
             {auction.status}
           </div>
@@ -680,9 +680,9 @@ function AuctionRoomPage() {
               </div>
               <div className="border-t border-white/10 grid grid-cols-3 divide-x divide-white/10">
                 {[
-                  { label: "TEST", value: player.testCaps ?? 0, color: "text-sky-300",    played: (player.testCaps ?? 0) > 0 },
-                  { label: "ODI",  value: player.odiCaps  ?? 0, color: "text-violet-300", played: (player.odiCaps  ?? 0) > 0 },
-                  { label: "T20",  value: player.t20Caps  ?? 0, color: "text-amber-300",  played: (player.t20Caps  ?? 0) > 0 },
+                  { label: "TEST", value: player.testCaps ?? 0, color: "text-sky-300", played: (player.testCaps ?? 0) > 0 },
+                  { label: "ODI", value: player.odiCaps ?? 0, color: "text-violet-300", played: (player.odiCaps ?? 0) > 0 },
+                  { label: "T20", value: player.t20Caps ?? 0, color: "text-amber-300", played: (player.t20Caps ?? 0) > 0 },
                 ].map(({ label, value, color, played }) => (
                   <div key={label} className={`flex flex-col items-center py-3.5 ${played ? "opacity-100" : "opacity-35"}`}>
                     <span className={`text-xl font-black tabular-nums ${played ? color : "text-slate-500"}`}>{played ? value : "—"}</span>
@@ -712,18 +712,18 @@ function AuctionRoomPage() {
                 {bidFeed.length === 0
                   ? <div className="flex items-center justify-center h-full"><p className="text-xs text-slate-300 italic">No bids yet — be first!</p></div>
                   : [...bidFeed].reverse().map((bid, i) => (
-                      <div key={i} className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs
+                    <div key={i} className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs
                         ${i === 0 ? "bg-emerald-50 border border-emerald-200" : "bg-slate-50 border border-transparent"}`}>
-                        <div className="flex items-center gap-2">
-                          <span>{i === 0 ? "🏆" : "·"}</span>
-                          <span className={`font-bold ${i === 0 ? "text-emerald-700" : "text-slate-600"}`}>{bid.squadName}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`font-black tabular-nums ${i === 0 ? "text-emerald-600" : "text-slate-500"}`}>{fmt(bid.amount)}</span>
-                          <span className="text-slate-300 text-[10px]">{timeAgo(bid.timestamp)}</span>
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <span>{i === 0 ? "🏆" : "·"}</span>
+                        <span className={`font-bold ${i === 0 ? "text-emerald-700" : "text-slate-600"}`}>{bid.squadName}</span>
                       </div>
-                    ))
+                      <div className="flex items-center gap-2">
+                        <span className={`font-black tabular-nums ${i === 0 ? "text-emerald-600" : "text-slate-500"}`}>{fmt(bid.amount)}</span>
+                        <span className="text-slate-300 text-[10px]">{timeAgo(bid.timestamp)}</span>
+                      </div>
+                    </div>
+                  ))
                 }
               </div>
             </div>
@@ -738,9 +738,9 @@ function AuctionRoomPage() {
               <p className="text-4xl font-black tabular-nums text-slate-800">{fmt(currentBid)}</p>
               {highestBid?.bidderName
                 ? <div className="mt-3 inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1.5">
-                    <span>🏆</span>
-                    <span className="text-sm font-bold text-emerald-700">{highestBid.bidderName}</span>
-                  </div>
+                  <span>🏆</span>
+                  <span className="text-sm font-bold text-emerald-700">{highestBid.bidderName}</span>
+                </div>
                 : <p className="mt-2 text-xs text-slate-300 italic">No bids yet</p>
               }
             </div>
@@ -760,7 +760,7 @@ function AuctionRoomPage() {
                   { label: "+10L", sub: "₹10 Lakhs", increment: 1_000_000 },
                   { label: "+25L", sub: "₹25 Lakhs", increment: 2_500_000 },
                   { label: "+50L", sub: "₹50 Lakhs", increment: 5_000_000 },
-                  { label: "+1Cr", sub: "₹1 Crore",  increment: 10_000_000 },
+                  { label: "+1Cr", sub: "₹1 Crore", increment: 10_000_000 },
                 ].map(({ label, sub, increment }) => (
                   <button key={label}
                     disabled={!canBid || placeBid.isPending}
@@ -802,16 +802,16 @@ function AuctionRoomPage() {
               {sortedSquads.length === 0
                 ? <div className="flex items-center justify-center h-full"><p className="text-xs text-slate-300 italic">No squads yet</p></div>
                 : sortedSquads.map(s => {
-                    const key = s.id ?? s.name
-                    return <SquadCard key={key} squad={s} isMe={s.name === squad?.name}
-                      expanded={expandedSquad === key} onToggle={() => setExpandedSquad(expandedSquad === key ? null : key)} />
-                  })
+                  const key = s.id ?? s.name
+                  return <SquadCard key={key} squad={s} isMe={s.name === squad?.name}
+                    expanded={expandedSquad === key} onToggle={() => setExpandedSquad(expandedSquad === key ? null : key)} />
+                })
               }
             </div>
             <div className="px-4 py-3 border-t border-slate-200/60 shrink-0">
               <div className="flex flex-wrap gap-x-3 gap-y-1">
                 {[{ label: "Batsman", color: "bg-sky-400" }, { label: "Bowler", color: "bg-rose-400" },
-                  { label: "All-Rounder", color: "bg-violet-400" }, { label: "Keeper", color: "bg-amber-400" }].map(({ label, color }) => (
+                { label: "All-Rounder", color: "bg-violet-400" }, { label: "Keeper", color: "bg-amber-400" }].map(({ label, color }) => (
                   <div key={label} className="flex items-center gap-1.5">
                     <div className={`w-1.5 h-1.5 rounded-full ${color}`} />
                     <span className="text-[10px] text-slate-400">{label}</span>
