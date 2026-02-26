@@ -1000,6 +1000,11 @@ const styles = `
     animation-duration: 4.5s;
     animation-delay: -1s;
   }
+  .fc-4 {
+    top: 65%; right: 10%;
+    animation-duration: 5.5s;
+    animation-delay: -3s;
+  }
 
   @keyframes floatCard {
     from { transform: translateY(0px); }
@@ -1174,6 +1179,15 @@ function RouteComponent() {
             <span className="hfc-role">Fast Bowler</span>
           </div>
           <span className="hfc-bid">₹9.5 Cr</span>
+        </div>
+
+        <div className="hero-floating-card fc-4">
+          <span className="hfc-flag">🇮🇳</span>
+          <div className="hfc-left">
+            <span className="hfc-name">Rohit Sharma</span>
+            <span className="hfc-role">Batsman</span>
+          </div>
+          <span className="hfc-bid">₹20 Cr</span>
         </div>
 
         <div className="hero-floating-card fc-3">
