@@ -1,7 +1,6 @@
 package com.example.ipl_backend.repository
 
 import com.example.ipl_backend.model.Player
-import com.example.ipl_backend.model.PlayerPurchases
 import com.example.ipl_backend.model.Players
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction

@@ -4,7 +4,6 @@ import com.example.ipl_backend.model.Auctions
 import com.example.ipl_backend.model.Bids
 import com.example.ipl_backend.model.Otps
 import com.example.ipl_backend.model.Participants
-import com.example.ipl_backend.model.PlayerPurchases
 import com.example.ipl_backend.model.Players
 import com.example.ipl_backend.model.SquadPlayers
 import com.example.ipl_backend.model.Squads
@@ -22,7 +21,6 @@ class SchemaInitializer {
     fun init() {
         transaction {
             SchemaUtils.create(Players,
-                PlayerPurchases,
                 Wallets,
                 Participants,
                 Auctions,
