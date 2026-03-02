@@ -1,9 +1,10 @@
 package com.example.ipl_backend.dto
 
 import java.math.BigDecimal
-import java.util.UUID
 
 data class WalletResponse(
-    val participantId: UUID,
+    val id: java.util.UUID,
+    val participantId: java.util.UUID,
+    val auctionId: String,
     val balance: BigDecimal
 )

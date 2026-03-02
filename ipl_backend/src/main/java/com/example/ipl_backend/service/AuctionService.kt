@@ -1,109 +1,122 @@
 package com.example.ipl_backend.service
 
-import com.example.ipl_backend.dto.*
+import com.example.ipl_backend.dto.CreateAuctionRequest
+import com.example.ipl_backend.dto.UpdateAuctionRequest
 import com.example.ipl_backend.exception.AuctionNotFoundException
 import com.example.ipl_backend.exception.InvalidAuctionStateException
-import com.example.ipl_backend.model.*
+import com.example.ipl_backend.model.Auction
+import com.example.ipl_backend.model.AuctionStatus
 import com.example.ipl_backend.repository.AuctionRepository
+import com.example.ipl_backend.repository.ParticipantRepository
+import com.example.ipl_backend.repository.PlayerRepository
+import com.example.ipl_backend.repository.WalletRepository
 import org.springframework.stereotype.Service
+import java.math.BigDecimal
 import java.time.Instant
-import java.util.*
+import java.util.UUID
 
 @Service
 class AuctionService(
     private val auctionRepository: AuctionRepository,
-    private val auctionEngineService: AuctionEngineService,
+    private val auctionPoolService: AuctionPoolService,
     private val auctionTimerService: AuctionTimerService,
+    private val participantRepository: ParticipantRepository,
+    private val walletRepository: WalletRepository,
+    private val playerRepository: PlayerRepository,
+    private val auctionEngineService: AuctionEngineService
 ) {
 
     fun create(request: CreateAuctionRequest): Auction {
         val now = Instant.now().toEpochMilli()
         val auction = Auction(
-            id        = UUID.randomUUID().toString(),
-            name      = request.name,
-            status    = AuctionStatus.PRE_AUCTION,
-            createdAt = now,
-            updatedAt = now
+            id                = UUID.randomUUID().toString(),
+            name              = request.name,
+            status            = AuctionStatus.PRE_AUCTION,
+            analysisTimerSecs = request.analysisTimerSecs ?: 30,
+            minBidIncrement   = request.minBidIncrement ?: BigDecimal("500000.00"),
+            createdAt         = now,
+            updatedAt         = now
         )
         auctionRepository.save(auction)
+
+        // Auto-create pools based on player specialisms in DB
+        auctionPoolService.createDefaultPools(auction.id)
+
+        // Create 100CR wallet for every existing participant
+        val allParticipantIds = participantRepository.findAllIds()
+        walletRepository.createForAllParticipants(auction.id, allParticipantIds)
+        println("💰 Created ${allParticipantIds.size} wallets of 100CR for auction=${auction.id}")
+
         return auction
     }
 
-    fun updateStatus(id: String, request: UpdateAuctionStatusRequest): Auction {
-        val auction = auctionRepository.findById(id)
-            ?: throw AuctionNotFoundException("Auction not found")
-
-        if (request.status == AuctionStatus.LIVE) {
-            val active = auctionRepository.findActiveAuction()
-            if (active != null && active.id != id) {
-                throw InvalidAuctionStateException("Another auction already LIVE")
-            }
-            println("🚀 Auction LIVE → Loading first player")
-            auctionEngineService.loadNextPlayer(id)
-        }
-
-        auctionRepository.updateStatus(id, request.status)
-        return auctionRepository.findById(id)
-            ?: throw AuctionNotFoundException("Auction not found after update")
+    fun update(id: String, request: UpdateAuctionRequest): Auction {
+        auctionRepository.findById(id) ?: throw AuctionNotFoundException("Auction not found")
+        auctionRepository.update(
+            id                = id,
+            name              = request.name,
+            analysisTimerSecs = request.analysisTimerSecs,
+            minBidIncrement   = request.minBidIncrement
+        )
+        return auctionRepository.findById(id)!!
     }
 
-    /** Admin: pause the running auction — stops the countdown timer. */
+    fun updateStatus(id: String, status: AuctionStatus): Auction {
+        auctionRepository.findById(id)
+            ?: throw AuctionNotFoundException("Auction not found")
+
+        auctionRepository.updateStatus(id, status)
+
+        if (status == AuctionStatus.LIVE) {
+            playerRepository.resetAllPlayers()
+            auctionEngineService.resetForNewAuction(id)
+            println("🔄 All players reset and engine state cleared for auction=$id")
+            println("🚀 Auction $id is now LIVE — admin must activate a pool to begin")
+        }
+
+        return auctionRepository.findById(id)!!
+    }
+
     fun pause(id: String): Auction {
         val auction = auctionRepository.findById(id)
             ?: throw AuctionNotFoundException("Auction not found")
+        if (auction.status != AuctionStatus.LIVE)
+            throw InvalidAuctionStateException("Auction is not LIVE")
 
-        if (auction.status != AuctionStatus.LIVE) {
-            throw InvalidAuctionStateException("Auction is not LIVE — cannot pause")
-        }
-
-        auctionTimerService.pauseTimer(id)
+        auctionTimerService.cancelAllForAuction(id)
         auctionRepository.updateStatus(id, AuctionStatus.PAUSED)
-
-        println("⏸ Auction $id paused by admin")
+        println("⏸ Auction $id paused")
         return auctionRepository.findById(id)!!
     }
 
-    /** Admin: resume a paused auction — restarts the countdown from where it stopped. */
     fun resume(id: String): Auction {
         val auction = auctionRepository.findById(id)
             ?: throw AuctionNotFoundException("Auction not found")
-
-        if (auction.status != AuctionStatus.PAUSED) {
-            throw InvalidAuctionStateException("Auction is not PAUSED — cannot resume")
-        }
+        if (auction.status != AuctionStatus.PAUSED)
+            throw InvalidAuctionStateException("Auction is not PAUSED")
 
         auctionRepository.updateStatus(id, AuctionStatus.LIVE)
-        auctionTimerService.resumeTimer(id)
-
-        println("▶️ Auction $id resumed by admin")
+        println("▶️ Auction $id resumed")
         return auctionRepository.findById(id)!!
     }
 
-    /** Admin: end the auction immediately regardless of remaining players. */
     fun end(id: String): Auction {
-        val auction = auctionRepository.findById(id)
-            ?: throw AuctionNotFoundException("Auction not found")
-
-        if (auction.status == AuctionStatus.COMPLETED) {
-            throw InvalidAuctionStateException("Auction is already completed")
-        }
-
-        // Cancel any running timer
-        auctionTimerService.pauseTimer(id)
-
+        auctionRepository.findById(id) ?: throw AuctionNotFoundException("Auction not found")
+        auctionTimerService.cancelAllForAuction(id)
         auctionRepository.updateStatus(id, AuctionStatus.COMPLETED)
-
-        println("🏁 Auction $id ended by admin")
+        println("🏁 Auction $id ended")
         return auctionRepository.findById(id)!!
     }
 
     fun getById(id: String): Auction =
-        auctionRepository.findById(id)
-            ?: throw AuctionNotFoundException("Auction not found")
+        auctionRepository.findById(id) ?: throw AuctionNotFoundException("Auction not found")
 
     fun list(): List<Auction> =
         auctionRepository.findAll()
 
-    fun getActiveAuction(): Auction? =
-        auctionRepository.findActiveAuction()
+    fun delete(id: String) {
+        auctionRepository.findById(id) ?: throw AuctionNotFoundException("Auction not found")
+        auctionTimerService.cancelAllForAuction(id)
+        auctionRepository.delete(id)
+    }
 }

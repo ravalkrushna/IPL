@@ -14,31 +14,23 @@ class SquadService(
     private val squadRepository: SquadRepository
 ) {
 
-    fun findMySquad(
-        participantId: UUID,
-        auctionId: String
-    ): Squad? {
-        return squadRepository.findByParticipantAndAuction(participantId, auctionId)
-    }
+    fun findMySquad(participantId: UUID, auctionId: String): Squad? =
+        squadRepository.findByParticipantAndAuction(participantId, auctionId)
 
     fun create(request: CreateSquadRequest): Squad {
-        val existingSquad = squadRepository
-            .findByParticipantAndAuction(request.participantId, request.auctionId)
-
-        if (existingSquad != null) {
-            throw SquadAlreadyExistsException("Squad already exists for participant")
-        }
+        val existing = squadRepository.findByParticipantAndAuction(
+            request.participantId, request.auctionId
+        )
+        if (existing != null) throw SquadAlreadyExistsException("Squad already exists for participant")
 
         val squad = Squad(
-            id = UUID.randomUUID().toString(),
+            id            = UUID.randomUUID().toString(),
             participantId = request.participantId,
-            auctionId = request.auctionId,
-            name = request.name,
-            createdAt = Instant.now().toEpochMilli()
+            auctionId     = request.auctionId,
+            name          = request.name,
+            createdAt     = Instant.now().toEpochMilli()
         )
-
         squadRepository.save(squad)
-
         return squad
     }
 
@@ -49,38 +41,44 @@ class SquadService(
         val players = squadRepository.getPlayers(squadId)
 
         return SquadResponse(
-            squadId = squad.id,
+            squadId       = squad.id,
             participantId = squad.participantId,
-            players = players
+            players       = players
         )
     }
 
-    fun findMySquadWithPlayers(
-        participantId: UUID,
-        auctionId: String
-    ): MySquadResponse? {
+    fun findMySquadWithPlayers(participantId: UUID, auctionId: String): MySquadResponse? {
         val squad = squadRepository.findByParticipantAndAuction(participantId, auctionId)
             ?: return null
 
         val players = squadRepository.getSquadPlayers(participantId, auctionId)
 
         return MySquadResponse(
-            squadId = squad.id,
-            name = squad.name,
+            squadId       = squad.id,
+            name          = squad.name,
             participantId = squad.participantId,
-            players = players
+            players       = players
         )
     }
 
-    fun findAllSquadsWithPlayers(auctionId: String): List<MySquadResponse> {
-        return squadRepository.findAllByAuction(auctionId).map { squad ->
+    fun findAllSquadsWithPlayers(auctionId: String): List<MySquadResponse> =
+        squadRepository.findAllByAuction(auctionId).map { squad ->
             val players = squadRepository.getSquadPlayersBySquadId(squad.id)
             MySquadResponse(
-                squadId = squad.id,
-                name = squad.name,
+                squadId       = squad.id,
+                name          = squad.name,
                 participantId = squad.participantId,
-                players = players
+                players       = players
             )
         }
+
+    fun update(id: String, name: String) {
+        squadRepository.findById(id) ?: throw SquadNotFoundException("Squad not found")
+        squadRepository.update(id, name)
+    }
+
+    fun delete(id: String) {
+        squadRepository.findById(id) ?: throw SquadNotFoundException("Squad not found")
+        squadRepository.delete(id)
     }
 }

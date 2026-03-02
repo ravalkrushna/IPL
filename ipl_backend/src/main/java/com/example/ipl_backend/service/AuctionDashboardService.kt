@@ -18,26 +18,24 @@ class AuctionDashboardService(
     fun unsoldPlayers() =
         playerRepository.findUnsoldPlayers()
 
-    fun walletLeaderboard() =
-        walletRepository.leaderboard()
+    // Leaderboard is now per-auction
+    fun walletLeaderboard(auctionId: String) =
+        walletRepository.leaderboard(auctionId)
 
     fun participantProfile(
         participantId: UUID,
         auctionId: String
     ): ParticipantProfileResponse {
 
-        val wallet = walletRepository.findByParticipantId(participantId)
-            ?: throw RuntimeException("Wallet not found")
+        val wallet = walletRepository.findByParticipantAndAuction(participantId, auctionId)
+            ?: throw RuntimeException("Wallet not found for participant in this auction")
 
-        val squadPlayers = squadRepository.getSquadPlayers(
-            participantId,
-            auctionId
-        )
+        val squadPlayers = squadRepository.getSquadPlayers(participantId, auctionId)
 
         return ParticipantProfileResponse(
             participantId = participantId,
             walletBalance = wallet.balance,
-            squad = squadPlayers
+            squad         = squadPlayers
         )
     }
 }

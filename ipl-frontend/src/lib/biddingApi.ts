@@ -1,38 +1,39 @@
 import { api } from "./api"
 
-export const biddingApi = {
+export interface HighestBidResponse {
+  playerId: string
+  participantId: string | null
+  participantName: string | null
+  amount: number
+  isManual: boolean
+}
 
-  placeBid: async (data: {
+export interface WalletResponse {
+  id: string
+  participantId: string
+  auctionId: string
+  balance: number
+}
+
+export const biddingApi = {
+  placeBid: (data: {
     auctionId: string
     playerId: string
     participantId: string
     amount: number
-  }) => {
-    const res = await api.post("/bidding/place", data)
-    return res.data
-  },
+  }): Promise<string> =>
+    api.post("/bidding/place", data).then(r => r.data),
 
-  getWallet: async (participantId: string) => {
-    const res = await api.get(`/bidding/wallet/${participantId}`)
-    return res.data  // returns { participantId, balance }
-  },
+  // Per-auction wallet
+  getWallet: (participantId: string, auctionId: string): Promise<WalletResponse> =>
+    api.get(`/bidding/wallet/${participantId}/${auctionId}`).then(r => r.data),
 
-  leaderboard: () =>
-    api.get("/dashboard/wallet/leaderboard")
-         .then(res => res.data),
+  highestBid: (auctionId: string, playerId: string): Promise<HighestBidResponse> =>
+    api.get(`/bidding/highest/${auctionId}/${playerId}`).then(r => r.data),
 
-  highestBid: async (auctionId: string, playerId: string) => {
-    const res = await api.get(`/bidding/highest/${auctionId}/${playerId}`)
-    return res.data
-  },
+  bidHistory: (auctionId: string, playerId: string) =>
+    api.get(`/bidding/history/${auctionId}/${playerId}`).then(r => r.data),
 
-  /* ✅ ADD THIS */
-  passPlayer: async (data: {
-    auctionId: string
-    playerId: string
-    participantId: string
-  }) => {
-    const res = await api.post("/bidding/pass", data)
-    return res.data
-  },
+  passPlayer: (data: { auctionId: string; playerId: string; participantId: string }): Promise<string> =>
+    api.post("/bidding/pass", data).then(r => r.data),
 }

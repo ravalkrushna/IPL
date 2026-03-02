@@ -3,70 +3,61 @@ package com.example.ipl_backend.repository
 import com.example.ipl_backend.model.Player
 import com.example.ipl_backend.model.Players
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.stereotype.Repository
+import java.time.Instant
 
 @Repository
 class PlayerRepository {
 
-    private fun ResultRow.toPlayer(): Player {
-        return Player(
-            id = this[Players.id],
-            name = this[Players.name],
-            country = this[Players.country],
-            age = this[Players.age],
-            specialism = this[Players.specialism],
+    private fun ResultRow.toPlayer(): Player =
+        Player(
+            id           = this[Players.id],
+            name         = this[Players.name],
+            country      = this[Players.country],
+            age          = this[Players.age],
+            specialism   = this[Players.specialism],
             battingStyle = this[Players.battingStyle],
             bowlingStyle = this[Players.bowlingStyle],
-            testCaps = this[Players.testCaps],
-            odiCaps = this[Players.odiCaps],
-            t20Caps = this[Players.t20Caps],
-            basePrice = this[Players.basePrice],
-            isSold = this[Players.isSold],
-            isAuctioned = this[Players.isAuctioned],   // ← new field
-            createdAt = this[Players.createdAt],
-            updatedAt = this[Players.updatedAt]
+            testCaps     = this[Players.testCaps],
+            odiCaps      = this[Players.odiCaps],
+            t20Caps      = this[Players.t20Caps],
+            basePrice    = this[Players.basePrice],
+            isSold       = this[Players.isSold],
+            isAuctioned  = this[Players.isAuctioned],
+            createdAt    = this[Players.createdAt],
+            updatedAt    = this[Players.updatedAt]
         )
-    }
 
     fun save(player: Player) {
         transaction {
             Players.insert {
-                it[id] = player.id
-                it[name] = player.name
-                it[country] = player.country
-                it[age] = player.age
-                it[specialism] = player.specialism
+                it[id]           = player.id
+                it[name]         = player.name
+                it[country]      = player.country
+                it[age]          = player.age
+                it[specialism]   = player.specialism
                 it[battingStyle] = player.battingStyle
                 it[bowlingStyle] = player.bowlingStyle
-                it[testCaps] = player.testCaps
-                it[odiCaps] = player.odiCaps
-                it[t20Caps] = player.t20Caps
-                it[basePrice] = player.basePrice
-                it[isSold] = player.isSold
-                it[isAuctioned] = false
-                it[createdAt] = player.createdAt
-                it[updatedAt] = player.updatedAt
+                it[testCaps]     = player.testCaps
+                it[odiCaps]      = player.odiCaps
+                it[t20Caps]      = player.t20Caps
+                it[basePrice]    = player.basePrice
+                it[isSold]       = player.isSold
+                it[isAuctioned]  = false
+                it[createdAt]    = player.createdAt
+                it[updatedAt]    = player.updatedAt
             }
         }
     }
 
-    fun findById(id: String): Player? {
-        return transaction {
-            Players.selectAll()
-                .where { Players.id eq id }
-                .firstOrNull()
-                ?.toPlayer()
-        }
-    }
-
-    fun existsByName(name: String): Boolean {
-        return transaction {
+    fun existsByName(name: String): Boolean =
+        transaction {
             Players.selectAll()
                 .where { Players.name.lowerCase() eq name.lowercase() }
                 .count() > 0
         }
-    }
 
     fun findAll(
         search: String?,
@@ -76,50 +67,49 @@ class PlayerRepository {
         getAll: Boolean,
         page: Int,
         size: Int
-    ): List<Player> {
-        return transaction {
-            var query = Players.selectAll()
-            query = query.where {
-                var condition: Op<Boolean> = Op.TRUE
-                if (!search.isNullOrBlank()) {
-                    condition = condition and (Players.name.lowerCase() like "%${search.lowercase()}%")
-                }
-                if (!specialisms.isNullOrEmpty()) {
-                    condition = condition and (Players.specialism inList specialisms)
-                }
-                if (!countries.isNullOrEmpty()) {
-                    condition = condition and (Players.country inList countries)
-                }
-                if (isSold != null) {
-                    condition = condition and (Players.isSold eq isSold)
-                }
-                condition
+    ): List<Player> = transaction {
+        var query = Players.selectAll()
+        query = query.where {
+            var condition: Op<Boolean> = Op.TRUE
+            if (!search.isNullOrBlank()) {
+                condition = condition and (Players.name.lowerCase() like "%${search.lowercase()}%")
             }
-            query = query.orderBy(Players.createdAt to SortOrder.DESC)
-            if (!getAll) {
-                query = query.limit(size, ((page - 1) * size).toLong())
+            if (!specialisms.isNullOrEmpty()) {
+                condition = condition and (Players.specialism inList specialisms)
             }
-            query.map { it.toPlayer() }
+            if (!countries.isNullOrEmpty()) {
+                condition = condition and (Players.country inList countries)
+            }
+            if (isSold != null) {
+                condition = condition and (Players.isSold eq isSold)
+            }
+            condition
         }
+        query = query.orderBy(Players.createdAt to SortOrder.DESC)
+        if (!getAll) {
+            query = query.limit(size, ((page - 1) * size).toLong())
+        }
+        query.map { it.toPlayer() }
     }
 
-    fun findSoldPlayers(): List<Player> {
-        return transaction {
-            Players.selectAll()
-                .where { Players.isSold eq true }
-                .orderBy(Players.name)
-                .map { it.toPlayer() }
-        }
-    }
+    fun findAll(): List<Player> =
+        transaction { Players.selectAll().map { it.toPlayer() } }
 
-    fun findUnsoldPlayers(): List<Player> {
-        return transaction {
+    fun findById(id: String): Player? =
+        transaction {
             Players.selectAll()
-                .where { Players.isSold eq false }
-                .orderBy(Players.name)
+                .where { Players.id eq id }
                 .map { it.toPlayer() }
+                .singleOrNull()
         }
-    }
+
+    fun findByName(name: String): Player? =
+        transaction {
+            Players.selectAll()
+                .where { Players.name.lowerCase() eq name.lowercase() }
+                .firstOrNull()
+                ?.toPlayer()
+        }
 
     fun findByIds(ids: List<String>): List<Player> {
         if (ids.isEmpty()) return emptyList()
@@ -130,60 +120,93 @@ class PlayerRepository {
         }
     }
 
-    fun markAsSold(playerId: String) {
+    fun findSoldPlayers(): List<Player> =
         transaction {
-            Players.update({ Players.id eq playerId }) {
-                it[isSold] = true
-                it[isAuctioned] = true   // ← mark as processed
-                it[updatedAt] = System.currentTimeMillis()
-            }
+            Players.selectAll()
+                .where { Players.isSold eq true }
+                .orderBy(Players.name)
+                .map { it.toPlayer() }
         }
-    }
 
-    fun markAsUnsold(playerId: String) {
+    fun findUnsoldPlayers(): List<Player> =
         transaction {
-            Players.update({ Players.id eq playerId }) {
-                it[isSold] = false
-                it[isAuctioned] = true   // ← CRITICAL: exclude from future rounds
-                it[updatedAt] = System.currentTimeMillis()
-            }
+            Players.selectAll()
+                .where { Players.isSold eq false }
+                .orderBy(Players.name)
+                .map { it.toPlayer() }
         }
-    }
 
-    fun findForUpdate(playerId: String): Player? =
-        Players.selectAll()
-            .where { Players.id eq playerId }
-            .forUpdate()
-            .limit(1)
-            .map { it.toPlayer() }
-            .singleOrNull()
-
-    // ✅ FIXED: exclude players that have already been through the auction
-    //    (both sold AND unsold) using isAuctioned flag.
-    //    Previously only PlayerPurchases was checked — unsold players were
-    //    never added there so they kept appearing as "available".
-    fun findNextAvailablePlayer(auctionId: String): Player? =
+    /** Next player in a specific pool (specialism) that hasn't been auctioned yet.
+     *  Ordered by base price descending — biggest names go first. */
+    fun findNextAvailablePlayerInPool(auctionId: String, specialism: String): Player? =
         transaction {
             Players.selectAll()
                 .where {
-                    Players.isAuctioned eq false   // ← single clean condition
+                    (Players.isAuctioned eq false) and
+                            (Players.specialism eq specialism)
                 }
+                .orderBy(Players.basePrice to SortOrder.DESC)
+                .limit(1)
+                .map { it.toPlayer() }
+                .singleOrNull()
+        }
+
+    /** Legacy — kept for any callers that haven't migrated to pool-based yet */
+    fun findNextAvailablePlayer(auctionId: String): Player? =
+        transaction {
+            Players.selectAll()
+                .where { Players.isAuctioned eq false }
                 .orderBy(Players.createdAt to SortOrder.ASC)
                 .limit(1)
                 .map { it.toPlayer() }
                 .singleOrNull()
         }
 
-    // ─── ADD THESE TWO METHODS to your existing PlayerRepository ───────────────
-
-    fun findByName(name: String): Player? {
-        return transaction {
+    fun countBySpecialism(specialism: String): Long =
+        transaction {
             Players.selectAll()
-                .where { Players.name.lowerCase() eq name.lowercase() }
-                .firstOrNull()
-                ?.toPlayer()
+                .where { Players.specialism eq specialism }
+                .count()
+        }
+
+    fun countAuctionedBySpecialism(specialism: String): Long =
+        transaction {
+            Players.selectAll()
+                .where {
+                    (Players.specialism eq specialism) and
+                            (Players.isAuctioned eq true)
+                }
+                .count()
+        }
+
+    fun markAsSold(id: String) {
+        transaction {
+            val now = Instant.now().toEpochMilli()
+            Players.update({ Players.id eq id }) {
+                it[isSold]      = true
+                it[isAuctioned] = true
+                it[updatedAt]   = now
+            }
         }
     }
+
+    fun markAsUnsold(id: String) {
+        transaction {
+            val now = Instant.now().toEpochMilli()
+            Players.update({ Players.id eq id }) {
+                it[isSold]      = false
+                it[isAuctioned] = true
+                it[updatedAt]   = now
+            }
+        }
+    }
+
+    fun findForUpdate(id: String): Player? =
+        Players.selectAll()
+            .where { Players.id eq id }
+            .forUpdate()
+            .map { it.toPlayer() }
+            .singleOrNull()
 
     fun updateStats(
         id: String,
@@ -212,5 +235,38 @@ class PlayerRepository {
                 it[Players.updatedAt]    = updatedAt
             }
         }
+    }
+
+    fun update(player: Player) {
+        transaction {
+            Players.update({ Players.id eq player.id }) {
+                it[name]         = player.name
+                it[country]      = player.country
+                it[age]          = player.age
+                it[specialism]   = player.specialism
+                it[battingStyle] = player.battingStyle
+                it[bowlingStyle] = player.bowlingStyle
+                it[testCaps]     = player.testCaps
+                it[odiCaps]      = player.odiCaps
+                it[t20Caps]      = player.t20Caps
+                it[basePrice]    = player.basePrice
+                it[updatedAt]    = Instant.now().toEpochMilli()
+            }
+        }
+    }
+
+    fun resetAllPlayers() {
+        transaction {
+            val now = Instant.now().toEpochMilli()
+            Players.update {
+                it[isSold]      = false
+                it[isAuctioned] = false
+                it[updatedAt]   = now
+            }
+        }
+    }
+
+    fun delete(id: String) {
+        transaction { Players.deleteWhere { Players.id eq id } }
     }
 }

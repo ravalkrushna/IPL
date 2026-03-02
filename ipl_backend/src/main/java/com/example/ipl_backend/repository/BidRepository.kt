@@ -4,10 +4,6 @@ import com.example.ipl_backend.model.*
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.stereotype.Repository
-import java.util.*
-import java.time.Instant
-import java.math.BigDecimal
-import java.util.UUID
 
 @Repository
 class BidRepository {

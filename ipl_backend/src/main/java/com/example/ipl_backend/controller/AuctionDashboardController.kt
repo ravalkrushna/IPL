@@ -21,18 +21,17 @@ class AuctionDashboardController(
     fun unsoldPlayers(): ResponseEntity<List<Player>> =
         ResponseEntity.ok(dashboardService.unsoldPlayers())
 
-    @GetMapping("/wallet/leaderboard")
-    fun leaderboard(): ResponseEntity<List<WalletLeaderboardResponse>> =
-        ResponseEntity.ok(dashboardService.walletLeaderboard())
+    // auctionId is now required since wallets are per-auction
+    @GetMapping("/wallet/leaderboard/{auctionId}")
+    fun leaderboard(
+        @PathVariable auctionId: String
+    ): ResponseEntity<List<WalletLeaderboardResponse>> =
+        ResponseEntity.ok(dashboardService.walletLeaderboard(auctionId))
 
     @GetMapping("/participant/{participantId}/auction/{auctionId}")
     fun participantProfile(
-        @PathVariable participantId: UUID,   // ✅ FIXED
+        @PathVariable participantId: UUID,
         @PathVariable auctionId: String
-    ): ResponseEntity<ParticipantProfileResponse> {
-
-        return ResponseEntity.ok(
-            dashboardService.participantProfile(participantId, auctionId)
-        )
-    }
+    ): ResponseEntity<ParticipantProfileResponse> =
+        ResponseEntity.ok(dashboardService.participantProfile(participantId, auctionId))
 }

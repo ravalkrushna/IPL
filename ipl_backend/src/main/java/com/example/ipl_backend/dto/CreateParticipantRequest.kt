@@ -1,5 +1,7 @@
 package com.example.ipl_backend.dto
 
+
 data class CreateParticipantRequest(
-    val name: String
+    val name: String,
+    val userId: java.util.UUID
 )

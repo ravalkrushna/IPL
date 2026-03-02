@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query"
-import { biddingApi } from "@/lib/biddingApi"
+import { dashboardApi } from "@/lib/dashboardApi"
 
-export function useWalletLeaderboard() {
+export function useWalletLeaderboard(auctionId: string | undefined) {
   return useQuery({
-    queryKey: ["walletLeaderboard"],
-    queryFn: biddingApi.leaderboard,
+    queryKey: ["leaderboard", auctionId],
+    queryFn:  () => dashboardApi.leaderboard(auctionId!),
+    enabled:  !!auctionId,
   })
 }

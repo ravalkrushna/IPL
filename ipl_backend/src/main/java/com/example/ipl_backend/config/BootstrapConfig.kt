@@ -37,11 +37,11 @@ class BootstrapConfig {
 
                 userRepository.promoteToAdmin(email)   // 🔥 MAGIC FIX
 
-                println("🔥 USER PROMOTED TO ADMIN: $email")
+                println("ROLE UPDATED TO ADMIN: $email")
             }
 
             else -> {
-                println("✅ Admin already configured")
+                println("Admin already present in database")
             }
         }
     }

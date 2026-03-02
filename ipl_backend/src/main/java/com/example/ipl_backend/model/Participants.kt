@@ -8,7 +8,7 @@ object Participants : UUIDTable("participants") {
     val userId = reference(
         name = "user_id",
         foreign = Users
-    ).uniqueIndex()
+    ).nullable()   // removed uniqueIndex() — multiple offline participants would all be null
 
     val name = varchar("name", 255)
 
@@ -18,7 +18,7 @@ object Participants : UUIDTable("participants") {
 
 data class Participant(
     val id: UUID,
-    val userId: UUID,
+    val userId: UUID?,   // null for offline/manual participants
     val name: String,
     val createdAt: Long,
     val updatedAt: Long

@@ -1,135 +1,76 @@
 package com.example.ipl_backend.service
 
-import com.example.ipl_backend.repository.SquadRepository
+import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Service
-import java.util.UUID
-import java.util.concurrent.*
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 
 @Service
 class AuctionTimerService(
-    private val hammerService: HammerService,
-    private val squadRepository: SquadRepository,
-    private val presenceService: ParticipantPresenceService,
+    @Lazy private val auctionEngineService: AuctionEngineService
 ) {
 
-    private val passedParticipants   = ConcurrentHashMap<String, MutableSet<UUID>>()
-    private val activeTimers         = ConcurrentHashMap<String, ScheduledFuture<*>>()
-    private val timerAuction         = ConcurrentHashMap<String, String>() // playerId → auctionId (running)
-    private val pendingStart         = ConcurrentHashMap<String, String>() // playerId → auctionId (parked)
-    private val sessionPlayer        = ConcurrentHashMap<String, String>() // sessionId → playerId
-    private val auctionCurrentPlayer = ConcurrentHashMap<String, String>() // auctionId → playerId
+    // playerId → running analysis timer future
+    private val activeTimers = ConcurrentHashMap<String, ScheduledFuture<*>>()
 
-    private val TIMER_SECONDS = 10L
-    private val scheduler: ScheduledExecutorService = Executors.newScheduledThreadPool(4)
+    // playerId → timer state (for status queries via polling)
+    private val timerState = ConcurrentHashMap<String, TimerState>()
 
-    /* ═══════════════════ PUBLIC API ═══════════════════ */
+    private val scheduler = Executors.newScheduledThreadPool(4)
 
-    fun startTimer(playerId: String, auctionId: String) {
+    data class TimerState(
+        val auctionId: String,
+        val totalSecs: Int,
+        @Volatile var secondsRemaining: Int
+    )
+
+    /**
+     * Starts the analysis timer for a player.
+     * When timer reaches 0 → sets biddingOpen=true in AuctionEngineService.
+     * Frontend polls /engine/state to get secondsRemaining and biddingOpen.
+     */
+    fun startAnalysisTimer(playerId: String, auctionId: String, durationSecs: Int) {
         cancelTimer(playerId)
-        auctionCurrentPlayer[auctionId] = playerId
 
-        if (!presenceService.hasParticipants(playerId)) {
-            println("⏸ No participants on player topic $playerId — parking")
-            pendingStart[playerId] = auctionId
-            return
-        }
+        val state = TimerState(auctionId, durationSecs, durationSecs)
+        timerState[playerId] = state
 
-        schedule(playerId, auctionId)
+        val tickTask = scheduler.scheduleAtFixedRate({
+            val current = timerState[playerId] ?: return@scheduleAtFixedRate
+            current.secondsRemaining -= 1
+
+            if (current.secondsRemaining <= 0) {
+                cancelTimer(playerId)
+                auctionEngineService.onAnalysisTimerExpired(auctionId, playerId)
+                println("⏰ Analysis timer expired → biddingOpen=true player=$playerId auction=$auctionId")
+            }
+        }, 1, 1, TimeUnit.SECONDS)
+
+        activeTimers[playerId] = tickTask
+        println("⏱ Analysis timer started: player=$playerId auction=$auctionId duration=${durationSecs}s")
     }
-
-    fun resetTimer(playerId: String, auctionId: String) = startTimer(playerId, auctionId)
 
     fun cancelTimer(playerId: String) {
         activeTimers.remove(playerId)?.cancel(false)
-        timerAuction.remove(playerId)
+        timerState.remove(playerId)
     }
 
-    fun onParticipantsAvailable(playerId: String) {
-        val auctionId = pendingStart.remove(playerId) ?: return
-        println("▶️ onParticipantsAvailable: starting parked timer for player=$playerId auction=$auctionId")
-        schedule(playerId, auctionId)
-    }
+    fun getSecondsRemaining(playerId: String): Int =
+        timerState[playerId]?.secondsRemaining ?: 0
 
-    fun onSessionDisconnected(sessionId: String) {
-        val playerId = sessionPlayer.remove(sessionId) ?: return
-        presenceService.onDisconnect(playerId, sessionId)
+    fun getTotalSecs(playerId: String): Int =
+        timerState[playerId]?.totalSecs ?: 0
 
-        if (!presenceService.hasParticipants(playerId)) {
-            val auctionId = timerAuction[playerId] ?: pendingStart[playerId]
-            if (auctionId != null) {
-                println("⏸ Last participant left player topic $playerId — pausing timer")
-                cancelTimer(playerId)
-                pendingStart[playerId] = auctionId
-            }
-        }
-    }
+    fun isTimerRunning(playerId: String): Boolean =
+        activeTimers[playerId]?.isDone == false
 
-    fun registerSession(sessionId: String, playerId: String) {
-        sessionPlayer[sessionId] = playerId
-    }
-
-    fun pauseTimer(auctionId: String) {
-        val playerId = auctionCurrentPlayer[auctionId] ?: run {
-            println("⏸ pauseTimer: no current player for auction $auctionId")
-            return
-        }
-        println("⏸ Admin pause: auction=$auctionId player=$playerId")
-        cancelTimer(playerId)
-        pendingStart[playerId] = auctionId
-    }
-
-    fun resumeTimer(auctionId: String) {
-        val playerId = auctionCurrentPlayer[auctionId] ?: run {
-            println("▶️ resumeTimer: no current player for auction $auctionId")
-            return
-        }
-        val auctionIdFromPending = pendingStart.remove(playerId) ?: run {
-            println("▶️ resumeTimer: player $playerId not in pendingStart")
-            return
-        }
-        if (!presenceService.hasParticipants(playerId)) {
-            println("▶️ resumeTimer: no participants yet — re-parking $playerId")
-            pendingStart[playerId] = auctionIdFromPending
-            return
-        }
-        println("▶️ Admin resume: auction=$auctionId player=$playerId")
-        schedule(playerId, auctionIdFromPending)
-    }
-
-    fun getPassSet(playerId: String): MutableSet<UUID> =
-        passedParticipants.computeIfAbsent(playerId) { ConcurrentHashMap.newKeySet() }
-
-    fun clearPasses(playerId: String) = passedParticipants.remove(playerId)
-
-    fun checkIfEveryonePassed(playerId: String, auctionId: String) {
-        val total  = squadRepository.countParticipantsInAuction(auctionId)
-        if (total == 0L) return
-        val passed = passedParticipants[playerId]?.size ?: 0
-        if (passed >= total) {
-            println("⚠ Everyone passed → hammering immediately")
-            cancelTimer(playerId)
-            clearPasses(playerId)
-            scheduler.submit {
-                try   { hammerService.hammerPlayer(playerId, auctionId) }
-                catch (ex: Exception) { println("⛔ Everyone-passed hammer failed: ${ex.message}") }
-            }
-        }
-    }
-
-    /* ═══════════════════ PRIVATE ═══════════════════ */
-
-    private fun schedule(playerId: String, auctionId: String) {
-        timerAuction[playerId] = auctionId
-        val task = scheduler.schedule({
-            try   { hammerService.hammerPlayer(playerId, auctionId) }
-            catch (ex: Exception) { println("⛔ Hammer failed: ${ex.message}") }
-            finally {
-                clearPasses(playerId)
-                timerAuction.remove(playerId)
-                presenceService.clearPlayer(playerId)
-            }
-        }, TIMER_SECONDS, TimeUnit.SECONDS)
-        activeTimers[playerId] = task
-        println("⏱ Timer scheduled: player=$playerId auction=$auctionId")
+    fun cancelAllForAuction(auctionId: String) {
+        val toCancel = timerState.entries
+            .filter { it.value.auctionId == auctionId }
+            .map { it.key }
+        toCancel.forEach { cancelTimer(it) }
+        println("🛑 All timers cancelled for auction=$auctionId")
     }
 }

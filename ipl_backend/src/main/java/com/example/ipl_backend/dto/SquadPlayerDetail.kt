@@ -1,8 +1,6 @@
-// dto/SquadPlayerDetail.kt
 package com.example.ipl_backend.dto
 
 import java.math.BigDecimal
-
 data class SquadPlayerDetail(
     val id: String,
     val name: String,

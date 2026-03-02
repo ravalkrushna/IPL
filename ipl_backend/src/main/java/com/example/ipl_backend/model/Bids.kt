@@ -11,13 +11,16 @@ object Bids : Table("bids") {
     val playerId = varchar("player_id", 255)
         .index()
 
-    val participantId = uuid("participant_id")   // ✅ UUID because Participants = UUIDTable
+    val participantId = uuid("participant_id")
         .index()
 
     val auctionId = varchar("auction_id", 255)
         .index()
 
     val amount = decimal("amount", 18, 2)
+
+    // true = admin manually entered this bid (offline mode)
+    val isManual = bool("is_manual").default(false)
 
     val createdAt = long("created_at")
 
@@ -30,5 +33,6 @@ data class Bid(
     val participantId: UUID,
     val auctionId: String,
     val amount: BigDecimal,
+    val isManual: Boolean = false,
     val createdAt: Long
 )

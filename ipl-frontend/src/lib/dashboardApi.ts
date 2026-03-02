@@ -1,17 +1,24 @@
-import { api } from "./api";
+import { api } from "./api"
+import { Player } from "@/types/player"
+
+export interface LeaderboardEntry {
+  participantId: string
+  participantName: string
+  squadName: string
+  balance: number
+}
 
 export const dashboardApi = {
-  soldPlayers: () =>
-    api.get("/dashboard/players/sold").then(res => res.data),
+  soldPlayers: (): Promise<Player[]> =>
+    api.get("/dashboard/players/sold").then(r => r.data),
 
-  unsoldPlayers: () =>
-    api.get("/dashboard/players/unsold").then(res => res.data),
+  unsoldPlayers: (): Promise<Player[]> =>
+    api.get("/dashboard/players/unsold").then(r => r.data),
 
-  leaderboard: () =>
-    api.get("/dashboard/wallet/leaderboard").then(res => res.data),
+  // Leaderboard is now per-auction
+  leaderboard: (auctionId: string): Promise<LeaderboardEntry[]> =>
+    api.get(`/dashboard/wallet/leaderboard/${auctionId}`).then(r => r.data),
 
   participantProfile: (participantId: string, auctionId: string) =>
-    api
-      .get(`/dashboard/participant/${participantId}/auction/${auctionId}`)
-      .then(res => res.data),
-};
+    api.get(`/dashboard/participant/${participantId}/auction/${auctionId}`).then(r => r.data),
+}

@@ -21,7 +21,7 @@ class SecurityConfig {
         val securityContextRepository = HttpSessionSecurityContextRepository()
 
         http
-            .cors { it.configurationSource(corsConfigurationSource()) }  // ← explicit reference
+            .cors { it.configurationSource(corsConfigurationSource()) }
             .csrf { it.disable() }
             .sessionManagement {
                 it.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
@@ -33,10 +33,15 @@ class SecurityConfig {
             .authorizeHttpRequests {
                 it
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                    // Auth endpoints — public
                     .requestMatchers("/api/v1/auth/signup").permitAll()
                     .requestMatchers("/api/v1/auth/verify-otp").permitAll()
                     .requestMatchers("/api/v1/auth/login").permitAll()
                     .requestMatchers("/api/v1/auth/logout").permitAll()
+                    // SSE stream — public so projector view works without login
+                    .requestMatchers("/api/v1/auctions/*/stream").permitAll()
+                    .requestMatchers("/api/v1/auctions/*/stream/count").permitAll()
+                    // Everything else requires authentication
                     .anyRequest().authenticated()
             }
             .formLogin { it.disable() }
@@ -49,10 +54,11 @@ class SecurityConfig {
     fun corsConfigurationSource(): CorsConfigurationSource {
         val config = CorsConfiguration()
         config.allowedOrigins = listOf("http://localhost:5173")
-        config.allowedMethods = listOf("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")  // ← PATCH added
+        config.allowedMethods = listOf("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
         config.allowedHeaders = listOf("*")
         config.allowCredentials = true
-        config.exposedHeaders = listOf("Set-Cookie")
+        // Expose these so SSE works properly in browser
+        config.exposedHeaders = listOf("Set-Cookie", "Content-Type", "Cache-Control", "X-Accel-Buffering")
 
         val source = UrlBasedCorsConfigurationSource()
         source.registerCorsConfiguration("/**", config)

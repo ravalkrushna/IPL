@@ -1,27 +1,34 @@
 import { api } from "./api"
+import { Auction } from "@/types/auction"
 
 export const auctionApi = {
-  active: () =>
-    api.get("/auctions/active").then(res => res.data),
+  list: (): Promise<Auction[]> =>
+    api.get("/auctions/list").then(r => r.data),
 
-  list: () =>
-    api.get("/auctions/list").then(res => res.data),
+  activeList: (): Promise<Auction[]> =>
+    api.get("/auctions/active").then(r => r.data),
 
-  createAuction: (data: { name: string }) =>
-    api.post("/auctions/create", data).then(res => res.data),
+  getById: (id: string): Promise<Auction> =>
+    api.get(`/auctions/get/${id}`).then(r => r.data),
 
-  updateStatus: (id: string, status: string) =>
-    api.put(`/auctions/status/${id}`, { status }).then(res => res.data),
+  create: (data: { name: string; analysisTimerSecs?: number }): Promise<Auction> =>
+    api.post("/auctions/create", data).then(r => r.data),
 
-  getById: (id: string) =>
-    api.get(`/auctions/get/${id}`).then(res => res.data),
+  updateStatus: (id: string, status: string): Promise<Auction> =>
+    api.put(`/auctions/status/${id}`, { status }).then(r => r.data),
 
-  pause: (id: string) =>
-    api.put(`/auctions/${id}/pause`).then(res => res.data),
+  update: (id: string, data: { name: string; analysisTimerSecs: number }): Promise<Auction> =>
+    api.put(`/auctions/${id}`, data).then(r => r.data),
 
-  resume: (id: string) =>
-    api.put(`/auctions/${id}/resume`).then(res => res.data),
+  pause: (id: string): Promise<Auction> =>
+    api.put(`/auctions/${id}/pause`).then(r => r.data),
 
-  end: (id: string) =>
-    api.put(`/auctions/${id}/end`).then(res => res.data),
+  resume: (id: string): Promise<Auction> =>
+    api.put(`/auctions/${id}/resume`).then(r => r.data),
+
+  end: (id: string): Promise<Auction> =>
+    api.put(`/auctions/${id}/end`).then(r => r.data),
+
+  delete: (id: string): Promise<void> =>
+    api.delete(`/auctions/${id}`).then(r => r.data),
 }

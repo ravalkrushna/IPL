@@ -4,8 +4,10 @@ import com.example.ipl_backend.dto.*
 import com.example.ipl_backend.exception.*
 import com.example.ipl_backend.model.Role
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository
+import com.example.ipl_backend.repository.AuctionRepository
 import com.example.ipl_backend.repository.ParticipantRepository
 import com.example.ipl_backend.repository.UserRepository
+import com.example.ipl_backend.repository.WalletRepository
 import jakarta.servlet.http.HttpServletRequest
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
@@ -21,7 +23,9 @@ class AuthService(
     private val participantService: ParticipantService,
     private val participantRepository: ParticipantRepository,
     private val otpService: OtpService,
-    private val passwordEncoder: PasswordEncoder
+    private val passwordEncoder: PasswordEncoder,
+    private val walletRepository: WalletRepository,
+    private val auctionRepository: AuctionRepository
 ) {
 
     fun signup(request: SignupRequest): String = transaction {
@@ -31,46 +35,51 @@ class AuthService(
         }
 
         val userId: UUID = userRepository.create(
-            name = request.name,
-            email = request.email,
-            password = passwordEncoder.encode(request.password).toString(), // ✅ cleaner
-            role = Role.PARTICIPANT
+            name     = request.name,
+            email    = request.email,
+            password = passwordEncoder.encode(request.password).toString(),
+            role     = Role.PARTICIPANT
         )
 
-        participantService.create(
-            name = request.name,
+        val participant = participantService.create(
+            name   = request.name,
             userId = userId
         )
 
-        otpService.generateOtp(request.email)   // 🔥 Will send mail now
+        // Give new participant 100CR wallet for every currently active auction
+        val activeAuctionIds = auctionRepository.findAllActiveIds()
+        if (activeAuctionIds.isNotEmpty()) {
+            walletRepository.createForParticipantInAllActiveAuctions(
+                participantId    = participant.id,
+                activeAuctionIds = activeAuctionIds
+            )
+            println("💰 New participant ${participant.name} got 100CR wallets for ${activeAuctionIds.size} active auctions")
+        }
 
+        otpService.generateOtp(request.email)
         "OTP sent"
     }
 
     fun verifyOtp(request: VerifyOtpRequest): String = transaction {
-
         otpService.validateOtp(request.email, request.otp)
         userRepository.markVerified(request.email)
-
         "Verified"
     }
 
     fun login(request: LoginRequest, servletRequest: HttpServletRequest): String {
 
-        val session = servletRequest.getSession(true)   // 🚀 MOVE TO TOP
+        val session = servletRequest.getSession(true)
 
         val user = transaction {
             userRepository.findByEmail(request.email)
                 ?: throw InvalidCredentialsException()
         }
 
-        if (!passwordEncoder.matches(request.password, user.password)) {
+        if (!passwordEncoder.matches(request.password, user.password))
             throw InvalidCredentialsException()
-        }
 
-        if (!user.isVerified) {
+        if (!user.isVerified)
             throw AccountNotVerifiedException()
-        }
 
         val authentication = UsernamePasswordAuthenticationToken(
             user.email,
@@ -80,7 +89,6 @@ class AuthService(
 
         val context = SecurityContextHolder.createEmptyContext()
         context.authentication = authentication
-
         SecurityContextHolder.setContext(context)
 
         session.setAttribute(
@@ -92,7 +100,6 @@ class AuthService(
     }
 
     fun me(email: String): UserResponse = transaction {
-
         val user = userRepository.findByEmail(email)
             ?: throw RuntimeException("User not found")
 
@@ -100,10 +107,10 @@ class AuthService(
             ?: throw RuntimeException("Participant not found")
 
         UserResponse(
-            id = user.id,
-            name = user.name,
-            email = user.email,
-            role = user.role,
+            id            = user.id,
+            name          = user.name,
+            email         = user.email,
+            role          = user.role,
             participantId = participant.id
         )
     }

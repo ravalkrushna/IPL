@@ -3,9 +3,9 @@
 import { api } from "./api";
 
 export const playerApi = {
-
+// playerApi.ts
   list: (filters: any) =>
-    api.post("/players/list", filters).then(res => res.data),
+  api.post("/players/list", { getAll: true, ...filters }).then(res => res.data),
 
   sold: () =>
     api.get("/players/sold").then(res => res.data),

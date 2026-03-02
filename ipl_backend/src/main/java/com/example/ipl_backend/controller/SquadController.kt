@@ -14,18 +14,12 @@ class SquadController(
 ) {
 
     @PostMapping("/create")
-    fun create(
-        @RequestBody request: CreateSquadRequest
-    ): ResponseEntity<Squad> {
-        return ResponseEntity.ok(squadService.create(request))
-    }
+    fun create(@RequestBody request: CreateSquadRequest): ResponseEntity<Squad> =
+        ResponseEntity.ok(squadService.create(request))
 
     @GetMapping("/get/{id}")
-    fun getSquad(
-        @PathVariable id: String
-    ): ResponseEntity<SquadResponse> {
-        return ResponseEntity.ok(squadService.getSquad(id))
-    }
+    fun getSquad(@PathVariable id: String): ResponseEntity<SquadResponse> =
+        ResponseEntity.ok(squadService.getSquad(id))
 
     @GetMapping("/my/{auctionId}")
     fun mySquad(
@@ -34,14 +28,27 @@ class SquadController(
     ): ResponseEntity<MySquadResponse> {
         val response = squadService.findMySquadWithPlayers(participantId, auctionId)
             ?: return ResponseEntity.notFound().build()
-
         return ResponseEntity.ok(response)
     }
 
     @GetMapping("/all/{auctionId}")
-    fun allSquads(
-        @PathVariable auctionId: String
-    ): ResponseEntity<List<MySquadResponse>> {
-        return ResponseEntity.ok(squadService.findAllSquadsWithPlayers(auctionId))
+    fun allSquads(@PathVariable auctionId: String): ResponseEntity<List<MySquadResponse>> =
+        ResponseEntity.ok(squadService.findAllSquadsWithPlayers(auctionId))
+
+    @PutMapping("/{id}")
+    fun update(
+        @PathVariable id: String,
+        @RequestBody request: Map<String, String>
+    ): ResponseEntity<Map<String, String>> {
+        val name = request["name"] ?: return ResponseEntity.badRequest()
+            .body(mapOf("error" to "name is required"))
+        squadService.update(id, name)
+        return ResponseEntity.ok(mapOf("message" to "Squad updated"))
+    }
+
+    @DeleteMapping("/{id}")
+    fun delete(@PathVariable id: String): ResponseEntity<Map<String, String>> {
+        squadService.delete(id)
+        return ResponseEntity.ok(mapOf("message" to "Squad deleted"))
     }
 }

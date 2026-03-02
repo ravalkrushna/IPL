@@ -22,54 +22,44 @@ class BiddingController(
     ): ResponseEntity<String> =
         ResponseEntity.ok(biddingService.placeBid(request))
 
-
     @GetMapping("/highest/{auctionId}/{playerId}")
     fun highestBid(
         @PathVariable auctionId: String,
         @PathVariable playerId: String
     ): ResponseEntity<HighestBidResponse> {
-
-        val bid = biddingService.highestBid(playerId, auctionId)
-
+        val bid = biddingService.getCurrentHighestBid(playerId, auctionId)
         return ResponseEntity.ok(
             HighestBidResponse(
-                playerId = playerId,
-                participantId = bid?.participantId,
-                amount = bid?.amount ?: BigDecimal.ZERO
+                playerId        = playerId,
+                participantId   = bid?.participantId,
+                participantName = null,
+                amount          = bid?.amount ?: BigDecimal.ZERO,
+                isManual        = bid?.isManual ?: false
             )
         )
     }
-
 
     @GetMapping("/history/{auctionId}/{playerId}")
     fun bidHistory(
         @PathVariable auctionId: String,
         @PathVariable playerId: String
     ): ResponseEntity<List<Bid>> =
-        ResponseEntity.ok(
-            biddingService.history(playerId, auctionId)
-        )
+        ResponseEntity.ok(biddingService.getBidHistory(playerId, auctionId))
 
-
-    @PostMapping("/pass")
-    fun passPlayer(
-        @RequestBody request: PassPlayerRequest
-    ): ResponseEntity<String> =
-        ResponseEntity.ok(biddingService.passPlayer(request))
-
-
-    @GetMapping("/wallet/{participantId}")
+    @GetMapping("/wallet/{participantId}/{auctionId}")
     fun getWallet(
-        @PathVariable participantId: UUID
+        @PathVariable participantId: UUID,
+        @PathVariable auctionId: String
     ): ResponseEntity<WalletResponse> {
-
-        val wallet = walletRepository.findByParticipantId(participantId)
+        val wallet = walletRepository.findByParticipantAndAuction(participantId, auctionId)
             ?: return ResponseEntity.notFound().build()
 
         return ResponseEntity.ok(
             WalletResponse(
+                id            = wallet.id,
                 participantId = participantId,
-                balance = wallet.balance
+                auctionId     = auctionId,
+                balance       = wallet.balance
             )
         )
     }
