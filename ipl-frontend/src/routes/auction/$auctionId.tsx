@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react-refresh/only-export-components */
 import { createFileRoute, useParams, useNavigate } from "@tanstack/react-router"
@@ -6,7 +7,7 @@ import { useEffect } from "react"
 import { AxiosError } from "axios"
 
 import { auctionApi } from "@/lib/auctionApi"
-import { auctionEngineApi, auctionPoolApi } from "@/lib/auctionEngineApi"
+import { auctionEngineApi } from "@/lib/auctionEngineApi"
 import { biddingApi } from "@/lib/biddingApi"
 import { hammerApi, participantApi } from "@/lib/hammerApi"
 import { squadApi } from "@/lib/squadApi"
@@ -34,19 +35,17 @@ function fmt(amount: number) {
   return `₹${amount.toLocaleString()}`
 }
 
-function parseCrLakh(value: string): number | null {
-  const v = value.trim().toLowerCase()
-  const crMatch = v.match(/^([\d.]+)\s*cr$/)
-  if (crMatch) return Math.round(parseFloat(crMatch[1]) * 10_000_000)
-  const lMatch = v.match(/^([\d.]+)\s*l$/)
-  if (lMatch) return Math.round(parseFloat(lMatch[1]) * 100_000)
-  const num = parseFloat(v)
-  if (!isNaN(num) && num > 0) return Math.round(num)
-  return null
+function normaliseSpecialism(raw?: string): string {
+  const s = (raw ?? "").toUpperCase().replace(/[\s_-]/g, "")
+  if (s.includes("ALLROUND") || s === "AR") return "ALLROUNDER"
+  if (s.includes("WICKET") || s === "WK") return "WICKETKEEPER"
+  if (s.includes("BOWL") || s === "BWL") return "BOWLER"
+  if (s.includes("BAT")) return "BATSMAN"
+  return ""
 }
 
 function specialismStyle(sp?: string) {
-  switch (sp?.toUpperCase()) {
+  switch (normaliseSpecialism(sp)) {
     case "BATSMAN": return { bg: "bg-sky-100", text: "text-sky-700", border: "border-sky-200", dot: "bg-sky-400", bar: "#38bdf8" }
     case "BOWLER": return { bg: "bg-rose-100", text: "text-rose-700", border: "border-rose-200", dot: "bg-rose-400", bar: "#fb7185" }
     case "ALLROUNDER": return { bg: "bg-violet-100", text: "text-violet-700", border: "border-violet-200", dot: "bg-violet-400", bar: "#a78bfa" }
@@ -114,13 +113,13 @@ function PlayerHeroCard({ player, seconds, total, biddingOpen, paused, battingSt
 }) {
   const st = specialismStyle(player.specialism)
   return (
-    <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm h-full flex flex-col"
+    <div className="rounded-xl overflow-hidden border border-stone-200 shadow-sm h-full flex flex-col"
       style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #334155 100%)" }}>
       <div className="px-5 pt-5 pb-3 flex-1">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <h2 className="text-2xl font-black tracking-tight truncate text-white">{player.name}</h2>
-            {player.country && <p className="text-slate-300 text-sm mt-1">🌍 {player.country}{player.age ? ` · Age ${player.age}` : ""}</p>}
+            {player.country && <p className="text-stone-300 text-sm mt-1">🌍 {player.country}{player.age ? ` · Age ${player.age}` : ""}</p>}
             <div className="flex gap-2 mt-2 flex-wrap">
               {player.specialism && (
                 <span className={`text-xs px-2.5 py-1 rounded-full font-bold border ${st.bg} ${st.text} ${st.border}`}>{player.specialism}</span>
@@ -133,19 +132,19 @@ function PlayerHeroCard({ player, seconds, total, biddingOpen, paused, battingSt
           <div className="mt-3 grid grid-cols-3 gap-2">
             {battingStyle && (
               <div className="bg-white/5 rounded-xl px-2.5 py-2">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Bat</p>
+                <p className="text-[9px] font-semibold text-stone-400 uppercase tracking-widest mb-0.5">Bat</p>
                 <p className="text-xs font-semibold text-white leading-tight">{battingStyle}</p>
               </div>
             )}
             {bowlingStyle && (
               <div className="bg-white/5 rounded-xl px-2.5 py-2">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Bowl</p>
+                <p className="text-[9px] font-semibold text-stone-400 uppercase tracking-widest mb-0.5">Bowl</p>
                 <p className="text-xs font-semibold text-white leading-tight">{bowlingStyle}</p>
               </div>
             )}
             {player.basePrice && (
               <div className="bg-white/5 rounded-xl px-2.5 py-2">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Base</p>
+                <p className="text-[9px] font-semibold text-stone-400 uppercase tracking-widest mb-0.5">Base</p>
                 <p className="text-xs font-black text-amber-400">{fmt(Number(player.basePrice))}</p>
               </div>
             )}
@@ -160,7 +159,7 @@ function PlayerHeroCard({ player, seconds, total, biddingOpen, paused, battingSt
         ].map(({ label, value, color }) => (
           <div key={label} className={`flex flex-col items-center py-3.5 ${value > 0 ? "opacity-100" : "opacity-35"}`}>
             <span className={`text-xl font-black tabular-nums ${value > 0 ? color : "text-slate-500"}`}>{value > 0 ? value : "—"}</span>
-            <span className="text-[10px] text-slate-400 font-semibold tracking-widest mt-0.5">{label}</span>
+            <span className="text-[10px] text-stone-400 font-semibold tracking-widest mt.0.5">{label}</span>
           </div>
         ))}
       </div>
@@ -195,18 +194,18 @@ function UpcomingPlayers({ upcomingPlayers, currentPlayerId }: {
   if (display.length === 0) return null
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm shrink-0">
-      <div className="px-4 pt-3.5 pb-2 border-b border-slate-100">
-        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Up Next</span>
+    <div className="rounded-xl border border-stone-200 bg-white shrink-0">
+      <div className="px-4 pt-3.5 pb-2 border-b border-stone-100">
+        <span className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest">Up Next</span>
       </div>
-      <div className="divide-y divide-slate-50 overflow-y-auto">
+      <div className="divide-y divide-stone-50 overflow-y-auto">
         {display.map((p: Player, i: number) => {
           const st = specialismStyle(p.specialism)
           return (
-            <div key={p.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 transition-colors">
-              <span className="text-[11px] font-black text-slate-300 w-4 shrink-0">{i + 1}</span>
+            <div key={p.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-stone-50 transition-colors">
+              <span className="text-[11px] font-semibold text-stone-300 w-4 shrink-0">{i + 1}</span>
               <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${st.dot}`} />
-              <span className="text-sm font-semibold text-slate-700 flex-1 truncate">{p.name}</span>
+              <span className="text-sm font-semibold text-stone-700 flex-1 truncate">{p.name}</span>
               <span className="text-xs font-black text-amber-600 tabular-nums shrink-0">{fmt(Number(p.basePrice))}</span>
             </div>
           )
@@ -246,8 +245,8 @@ function RadialChart({ segments }: { segments: { label: string; value: number; c
         {segments.map(seg => (
           <div key={seg.label} className="flex items-center gap-1">
             <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: seg.color }} />
-            <span className="text-[9px] font-semibold text-slate-500 truncate">{seg.label}</span>
-            <span className="text-[9px] font-black text-slate-600 ml-auto tabular-nums">{seg.value}</span>
+            <span className="text-[9px] font-semibold text-stone-500 truncate">{seg.label}</span>
+            <span className="text-[9px] font-black text-stone-600 ml-auto tabular-nums">{seg.value}</span>
           </div>
         ))}
       </div>
@@ -293,7 +292,7 @@ function BidHistoryTable({ auctionId, auctionedCount }: { auctionId: string; auc
   }
   const specialismCount: Record<string, number> = {}
   allSales.forEach(s => {
-    const sp = (s.specialism ?? "Unknown").toUpperCase()
+    const sp = normaliseSpecialism(s.specialism) || "Unknown"
     specialismCount[sp] = (specialismCount[sp] ?? 0) + 1
   })
   const radialSegments = Object.entries(specialismCount).map(([label, value]) => ({
@@ -302,10 +301,8 @@ function BidHistoryTable({ auctionId, auctionedCount }: { auctionId: string; auc
 
   return (
     <div className="flex flex-col gap-2 h-full min-h-0 overflow-hidden">
-
-      {/* ── Single stats row: Sold + Unsold + Remaining + By Role ── */}
       <div className="grid grid-cols-4 gap-2 shrink-0">
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 shadow-sm">
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
           <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Sold</p>
           <p className="text-lg font-black text-emerald-600 tabular-nums leading-tight">{soldCount}</p>
           <p className="text-[9px] text-emerald-400 font-semibold">of {totalPlayers}</p>
@@ -316,8 +313,7 @@ function BidHistoryTable({ auctionId, auctionedCount }: { auctionId: string; auc
             </div>
           )}
         </div>
-
-        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 shadow-sm">
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2">
           <p className="text-[9px] font-black text-red-400 uppercase tracking-widest">Unsold</p>
           <p className="text-lg font-black text-red-500 tabular-nums leading-tight">{unsoldCount}</p>
           <p className="text-[9px] text-red-400 font-semibold">of {totalPlayers}</p>
@@ -328,52 +324,48 @@ function BidHistoryTable({ auctionId, auctionedCount }: { auctionId: string; auc
             </div>
           )}
         </div>
-
-        <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 shadow-sm">
-          <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">Remaining</p>
-          <p className="text-lg font-black text-indigo-600 tabular-nums leading-tight">{remainingCount}</p>
-          <p className="text-[9px] text-indigo-400 font-semibold">of {totalPlayers}</p>
+        <div className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2">
+          <p className="text-[9px] font-semibold text-stone-400 uppercase tracking-widest">Remaining</p>
+          <p className="text-lg font-black text-stone-700 tabular-nums leading-tight">{remainingCount}</p>
+          <p className="text-[9px] text-stone-400 font-semibold">of {totalPlayers}</p>
           {totalPlayers > 0 && (
-            <div className="mt-1 h-0.5 rounded-full bg-indigo-100 overflow-hidden">
-              <div className="h-full rounded-full bg-indigo-400 transition-all duration-500"
+            <div className="mt-1 h-0.5 rounded-full bg-stone-100 overflow-hidden">
+              <div className="h-full rounded-full bg-stone-400 transition-all duration-500"
                 style={{ width: `${Math.min((remainingCount / totalPlayers) * 100, 100)}%` }} />
             </div>
           )}
         </div>
-
         {radialSegments.length > 0 ? (
-          <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">By Role</p>
+          <div className="rounded-lg border border-stone-200 bg-white px-3 py-2">
+            <p className="text-[9px] font-semibold text-stone-400 uppercase tracking-widest mb-1">By Role</p>
             <RadialChart segments={radialSegments} />
           </div>
         ) : (
-          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 flex items-center justify-center">
-            <p className="text-[10px] text-slate-300 italic">No sales yet</p>
+          <div className="rounded-lg border border-dashed border-stone-200 bg-stone-50 px-3 py-2 flex items-center justify-center">
+            <p className="text-[10px] text-stone-400 italic">No sales yet</p>
           </div>
         )}
       </div>
-
-      {/* ── Bid History ── */}
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col flex-1 min-h-0">
-        <div className="px-4 pt-3.5 pb-2 border-b border-slate-100 flex items-center justify-between shrink-0">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Bid History</span>
-          {soldCount > 0 && <span className="text-[10px] font-black text-slate-300">{soldCount} sold</span>}
+      <div className="rounded-xl border border-stone-200 bg-white flex flex-col flex-1 min-h-0">
+        <div className="px-4 pt-3.5 pb-2 border-b border-stone-100 flex items-center justify-between shrink-0">
+          <span className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest">Bid History</span>
+          {soldCount > 0 && <span className="text-[10px] font-semibold text-stone-400">{soldCount} sold</span>}
         </div>
         {allSales.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 gap-2">
             <span className="text-2xl opacity-30">🏏</span>
-            <p className="text-xs text-slate-300 italic">No players sold yet</p>
+            <p className="text-xs text-stone-300 italic">No players sold yet</p>
           </div>
         ) : (
-          <div className="divide-y divide-slate-50 overflow-y-auto flex-1">
+          <div className="divide-y divide-stone-50 overflow-y-auto flex-1">
             {allSales.map((s, i) => {
-              const color = SPEC_COLORS[(s.specialism ?? "").toUpperCase()] ?? "#94a3b8"
+              const color = SPEC_COLORS[normaliseSpecialism(s.specialism)] ?? "#94a3b8"
               return (
-                <div key={i} className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 transition-colors">
+                <div key={i} className="flex items-center gap-3 px-4 py-2.5 hover:bg-stone-50 transition-colors">
                   <div className="w-1 h-8 rounded-full shrink-0" style={{ background: color }} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-slate-700 truncate">{s.playerName}</p>
-                    <p className="text-[10px] text-slate-400 truncate">→ {s.squadName}</p>
+                    <p className="text-xs font-bold text-stone-700 truncate">{s.playerName}</p>
+                    <p className="text-[10px] text-stone-400 truncate">→ {s.squadName}</p>
                   </div>
                   <span className="text-xs font-black text-emerald-600 tabular-nums shrink-0">{fmt(s.soldPrice)}</span>
                 </div>
@@ -399,8 +391,8 @@ function SquadCard({ squad, isMe, expanded, onToggle, remainingBudget }: {
     <div onClick={onToggle}
       className={`rounded-2xl border transition-all duration-200 overflow-hidden cursor-pointer
         ${isMe ? "border-emerald-300 bg-emerald-50 shadow-[0_2px_12px_rgba(16,185,129,0.15)]"
-          : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"}`}>
-      <div className="px-3.5 py-3 flex items-center justify-between gap-2">
+          : "border-stone-200 bg-white hover:border-stone-300 hover:shadow-sm"}`}>
+      <div className="px-3.5 py-3 flex items-center justify-between gap-2 bg-white">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className={`w-2 h-2 rounded-full shrink-0 ${isMe ? "bg-emerald-500" : "bg-slate-300"}`} />
           <span className={`font-bold text-sm truncate ${isMe ? "text-emerald-700" : "text-slate-700"}`}>{squad.name}</span>
@@ -413,17 +405,17 @@ function SquadCard({ squad, isMe, expanded, onToggle, remainingBudget }: {
           {players.length >= MAX_SQUAD_SIZE && (
             <span className="text-[9px] font-black bg-red-100 text-red-500 border border-red-200 px-1.5 py-0.5 rounded-full shrink-0">FULL</span>
           )}
-          <svg className={`w-3 h-3 text-slate-400 transition-transform ${expanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <svg className={`w-3 h-3 text-stone-400 transition-transform ${expanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
           </svg>
         </div>
       </div>
       <div className="px-3.5 pb-2.5 flex items-center justify-between gap-2">
-        <span className="text-[11px] text-slate-400">
+        <span className="text-[11px] text-stone-400">
           Spent: <span className={`font-semibold ${isMe ? "text-emerald-600" : "text-slate-600"}`}>{fmt(spent)}</span>
         </span>
         {remainingBudget != null && (
-          <span className="text-[11px] text-slate-400">
+          <span className="text-[11px] text-stone-400">
             Left:{" "}
             <span className={`font-semibold tabular-nums ${remainingBudget < 10_000_000 ? "text-red-500" : remainingBudget < 50_000_000 ? "text-amber-500" : "text-indigo-600"}`}>
               {fmt(remainingBudget)}
@@ -432,16 +424,16 @@ function SquadCard({ squad, isMe, expanded, onToggle, remainingBudget }: {
         )}
       </div>
       {expanded && (
-        <div className="border-t border-slate-100">
+        <div className="border-t border-stone-100">
           {players.length === 0
-            ? <p className="text-center py-3 text-xs text-slate-400 italic">No players yet</p>
-            : <div className="divide-y divide-slate-50 max-h-48 overflow-y-auto">
+            ? <p className="text-center py-3 text-xs text-stone-400 italic">No players yet</p>
+            : <div className="divide-y divide-stone-50 max-h-48 overflow-y-auto">
               {players.map((p) => {
                 const st = specialismStyle(p.specialism)
                 return (
-                  <div key={p.id} className="flex items-center justify-between px-3.5 py-2 hover:bg-slate-50">
+                  <div key={p.id} className="flex items-center justify-between px-3.5 py-2 hover:bg-stone-50">
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-slate-700 truncate">{p.name}</p>
+                      <p className="text-xs font-semibold text-stone-700 truncate">{p.name}</p>
                       {p.specialism && <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold border ${st.bg} ${st.text} ${st.border}`}>{p.specialism}</span>}
                     </div>
                     {p.soldPrice != null && <span className="text-[11px] font-black text-emerald-600 tabular-nums ml-2">{fmt(p.soldPrice)}</span>}
@@ -456,7 +448,7 @@ function SquadCard({ squad, isMe, expanded, onToggle, remainingBudget }: {
   )
 }
 
-// ─── MANUAL HAMMER DIALOG ────────────────────────────────────────────────
+// ─── HAMMER DIALOG ───────────────────────────────────────────────────────
 
 function ManualHammerDialog({
   open, onOpenChange, currentPlayer, participants, participantsLoading, allSquads, onHammer, isPending,
@@ -475,28 +467,32 @@ function ManualHammerDialog({
   const setRawInput = useAuctionRoomStore(s => s.setHammerRawInput)
   const inputError = useAuctionRoomStore(s => s.hammerInputError)
   const setInputError = useAuctionRoomStore(s => s.setHammerInputError)
-
   useEffect(() => {
     if (open) {
       setSelectedParticipantId("")
-      setAmount("")
+      setAmount(null)
       setRawInput("")
       setInputError("")
     }
   }, [open])
 
+  // Input is always in Crore — e.g. 0.25 = ₹25L
   const handleRawInput = (val: string) => {
     setRawInput(val)
     setInputError("")
-    if (!val.trim()) { setAmount(""); return }
-    const parsed = parseCrLakh(val)
-    if (parsed !== null) setAmount(parsed)
-    else setInputError("Use formats like: 1.5Cr, 50L, or plain number")
+    if (!val.trim()) { setAmount(null); return }
+    const num = parseFloat(val)
+    if (!isNaN(num) && num > 0) {
+      setAmount(Math.round(num * 10_000_000))
+    } else {
+      setAmount(null)
+      setInputError("Enter a valid number")
+    }
   }
 
   const handleQuickAmount = (value: number) => {
     setAmount(value)
-    setRawInput(fmt(value).replace("₹", ""))
+    setRawInput(String(value / 10_000_000))
     setInputError("")
   }
 
@@ -516,68 +512,96 @@ function ManualHammerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md bg-white border-slate-200 text-slate-800 shadow-2xl">
-        <DialogHeader><DialogTitle className="text-lg font-black">✍️ Manual Hammer</DialogTitle></DialogHeader>
-        <div className="space-y-4 mt-2">
-          <div>
-            <p className="text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wider">Player</p>
-            <p className="font-bold text-slate-700">{currentPlayer?.name ?? "—"}</p>
-            <p className="text-xs text-slate-400 mt-0.5">Base: <span className="font-bold text-amber-600">{fmt(basePrice)}</span></p>
+      <DialogContent className="max-w-xl bg-white border-stone-200 text-stone-800 shadow-2xl">
+        <DialogHeader>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="text-lg font-black">🔨 Hammer</DialogTitle>
+            {/* Player inline in header */}
+            <div className="text-right mr-6">
+              <p className="font-bold text-stone-700 text-sm">{currentPlayer?.name ?? "—"}</p>
+              <p className="text-xs text-slate-400">Base: <span className="font-bold text-amber-600">{fmt(basePrice)}</span></p>
+            </div>
           </div>
+        </DialogHeader>
+        <div className="space-y-4 mt-2">
+
+          {/* Quick select — full width */}
           <div>
-            <p className="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Quick Select</p>
+            <p className="text-xs font-semibold text-stone-400 mb-2 uppercase tracking-wider">Quick Select</p>
             <div className="grid grid-cols-4 gap-1.5">
               {QUICK_AMOUNTS.map(({ label, value }) => (
                 <button key={label} onClick={() => handleQuickAmount(value)}
-                  className={`py-2 rounded-xl text-xs font-black transition-all border ${amount === value ? "bg-amber-500 text-white border-amber-500 shadow-sm" : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-amber-50 hover:border-amber-200 hover:text-amber-700"}`}>
+                  className={`py-2 rounded-xl text-xs font-black transition-all border ${Number(amount) === value ? "bg-amber-500 text-white border-amber-500 shadow-sm" : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-amber-50 hover:border-amber-200 hover:text-amber-700"}`}>
                   ₹{label}
                 </button>
               ))}
             </div>
           </div>
-          <div>
-            <p className="text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Custom Amount</p>
-            <Input placeholder="e.g. 1.5Cr, 75L, 15000000" value={rawInput} onChange={(e) => handleRawInput(e.target.value)} className={`bg-slate-50 ${inputError ? "border-red-300" : "border-slate-200"}`} />
-            <div className="mt-1 flex items-center justify-between">
-              {inputError ? <p className="text-xs text-red-500 font-medium">{inputError}</p>
-                : Number(amount) > 0 ? <p className="text-xs text-amber-600 font-semibold">= {fmt(Number(amount))}</p>
-                  : <p className="text-xs text-slate-300">Accepts: 1.5Cr · 75L · raw number</p>}
-              {belowBase && <p className="text-xs text-red-500 font-semibold">⚠️ Below base price ({fmt(basePrice)})</p>}
+
+          {/* ── Two columns: Amount (left) + Participant (right) ── */}
+          <div className="grid grid-cols-2 gap-4 items-start">
+
+            {/* Left: Custom Amount */}
+            <div>
+              <p className="text-xs font-semibold text-stone-400 mb-1.5 uppercase tracking-wider">Custom Amount (Crore)</p>
+              <div className="relative">
+                <Input
+                  placeholder="e.g. 0.25 or 1.5"
+                  value={rawInput}
+                  onChange={(e) => handleRawInput(e.target.value)}
+                  className={`bg-stone-50 pr-10 ${inputError ? "border-red-300 focus-visible:ring-red-300" : "border-stone-200"}`}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-black text-stone-400">Cr</span>
+              </div>
+              <div className="mt-1.5 min-h-5">
+                {inputError
+                  ? <p className="text-xs text-red-500 font-medium">{inputError}</p>
+                  : Number(amount) > 0
+                    ? <p className="text-sm font-black text-amber-500">= {fmt(Number(amount))}</p>
+                    : <p className="text-xs text-stone-300">0.25 Cr = ₹25L</p>
+                }
+                {belowBase && (
+                  <p className="text-xs text-red-500 font-semibold mt-0.5">⚠️ Below base</p>
+                )}
+              </div>
             </div>
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Participant</p>
-            {participantsLoading ? <p className="text-xs text-slate-400 italic">Loading…</p>
-              : (participants ?? []).length === 0
-                ? <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-center"><p className="text-xs text-slate-400">No participants yet.</p></div>
-                : <Select value={selectedParticipantId} onValueChange={setSelectedParticipantId}>
-                  <SelectTrigger className="bg-slate-50 border-slate-200"><SelectValue placeholder="Select participant…" /></SelectTrigger>
-                  <SelectContent>
-                    {(participants ?? []).map(p => {
-                      const sq = (allSquads ?? []).find(s => s.participantId === p.id)
-                      const full = (sq?.players?.length ?? 0) >= MAX_SQUAD_SIZE
-                      return (
-                        <SelectItem key={p.id} value={p.id} disabled={full}>
-                          <div className="flex items-center justify-between gap-4 w-full">
-                            <span className={`font-semibold ${full ? "text-slate-300" : ""}`}>{p.name}</span>
-                            <div className="flex items-center gap-2">
+
+            {/* Right: Participant */}
+            <div>
+              <p className="text-xs font-semibold text-stone-400 mb-1.5 uppercase tracking-wider">Participant</p>
+              {participantsLoading
+                ? <p className="text-xs text-stone-400 italic">Loading…</p>
+                : (participants ?? []).length === 0
+                  ? <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-center"><p className="text-xs text-slate-400">No participants yet.</p></div>
+                  : <Select value={selectedParticipantId} onValueChange={setSelectedParticipantId}>
+                    <SelectTrigger className="bg-stone-50 border-stone-200 w-full"><SelectValue placeholder="Select…" /></SelectTrigger>
+                    <SelectContent>
+                      {(participants ?? []).map(p => {
+                        const sq = (allSquads ?? []).find(s => s.participantId === p.id)
+                        const full = (sq?.players?.length ?? 0) >= MAX_SQUAD_SIZE
+                        return (
+                          <SelectItem key={p.id} value={p.id} disabled={full}>
+                            <div className="flex items-center justify-between gap-3 w-full">
+                              <span className={`font-semibold ${full ? "text-slate-300" : ""}`}>{p.name}</span>
                               {full
                                 ? <span className="text-[9px] font-black text-red-400 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-full">FULL</span>
                                 : p.walletBalance != null
-                                  ? <span className="text-xs text-slate-400">({fmt(p.walletBalance)} left)</span>
+                                  ? <span className="text-xs text-slate-400">{fmt(p.walletBalance)}</span>
                                   : null}
                             </div>
-                          </div>
-                        </SelectItem>
-                      )
-                    })}
-                  </SelectContent>
-                </Select>
-            }
+                          </SelectItem>
+                        )
+                      })}
+                    </SelectContent>
+                  </Select>
+              }
+              {selectedSquadFull && (
+                <p className="text-xs text-red-500 font-semibold mt-1">⚠️ Squad full ({MAX_SQUAD_SIZE}/{MAX_SQUAD_SIZE})</p>
+              )}
+            </div>
           </div>
-          {selectedSquadFull && (
-            <p className="text-xs text-red-500 font-semibold mt-1">⚠️ This squad is full ({MAX_SQUAD_SIZE}/{MAX_SQUAD_SIZE} players)</p>
-          )}
+
+          {/* Actions */}
           <div className="flex gap-2 pt-1">
             <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-black" disabled={!canSubmit}
@@ -618,21 +642,21 @@ function AddParticipantDialog({ open, onOpenChange, auctionId, onAdded }: {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md bg-white border-slate-200 text-slate-800 shadow-2xl">
+      <DialogContent className="max-w-md bg-white border-stone-200 text-slate-800 shadow-2xl">
         <DialogHeader><DialogTitle className="text-lg font-black">＋ Add Participant</DialogTitle></DialogHeader>
         <div className="space-y-4 mt-1">
           <div>
-            <p className="text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Search Existing</p>
+            <p className="text-xs font-semibold text-stone-400 mb-1.5 uppercase tracking-wider">Search Existing</p>
             <Input placeholder="Search by name…" value={search} onChange={e => setSearch(e.target.value)} className="bg-slate-50 border-slate-200" />
           </div>
-          <div className="max-h-56 overflow-y-auto rounded-xl border border-slate-100 divide-y divide-slate-50">
+          <div className="max-h-56 overflow-y-auto rounded-lg border border-stone-100 divide-y divide-stone-50">
             {isLoading ? <p className="text-xs text-slate-400 italic text-center py-4">Loading…</p>
               : filtered.length === 0 ? <p className="text-xs text-slate-400 italic text-center py-4">No participants found</p>
                 : filtered.map(p => {
                   const inAuction = alreadyInAuction.has(p.id)
                   return (
-                    <div key={p.id} className="flex items-center justify-between px-3 py-2.5 hover:bg-slate-50">
-                      <span className="text-sm font-semibold text-slate-700">{p.name}</span>
+                    <div key={p.id} className="flex items-center justify-between px-3 py-2.5 hover:bg-stone-50">
+                      <span className="text-sm font-semibold text-stone-700">{p.name}</span>
                       {inAuction
                         ? <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">In auction</span>
                         : <button disabled={addMutation.isPending} onClick={() => addMutation.mutate({ participantId: p.id })}
@@ -646,20 +670,20 @@ function AddParticipantDialog({ open, onOpenChange, auctionId, onAdded }: {
             }
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex-1 border-t border-slate-200" />
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">or create new</span>
-            <div className="flex-1 border-t border-slate-200" />
+            <div className="flex-1 border-t border-stone-200" />
+            <span className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest">or create new</span>
+            <div className="flex-1 border-t border-stone-200" />
           </div>
           {!showNewForm
-            ? <button onClick={() => setShowNewForm(true)} className="w-full py-2.5 rounded-xl border-2 border-dashed border-indigo-200 text-indigo-600 text-sm font-bold hover:bg-indigo-50 transition-all">＋ Create New Participant</button>
-            : <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3 space-y-2">
-              <p className="text-xs font-black text-indigo-600 uppercase tracking-wider">New Participant</p>
-              <Input autoFocus placeholder="e.g. Rohit Sharma" value={newName} onChange={e => setNewName(e.target.value)} className="bg-white border-indigo-200" />
-              <p className="text-[11px] text-indigo-400">Squad named <span className="font-bold">"{newName || "…"}"</span> will be auto-created with ₹100Cr budget.</p>
+            ? <button onClick={() => setShowNewForm(true)} className="w-full py-2.5 rounded-lg border-2 border-dashed border-emerald-300 text-emerald-700 text-sm font-bold hover:bg-emerald-50 transition-all">＋ Create New Participant</button>
+            : <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 space-y-2">
+              <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">New Participant</p>
+              <Input autoFocus placeholder="e.g. Rohit Sharma" value={newName} onChange={e => setNewName(e.target.value)} className="bg-white border-emerald-200" />
+              <p className="text-[11px] text-emerald-600">Squad named <span className="font-bold">"{newName || "…"}"</span> will be auto-created with ₹100Cr budget.</p>
               <div className="flex gap-2 pt-1">
                 <button onClick={() => { setShowNewForm(false); setNewName("") }} className="flex-1 py-1.5 rounded-lg border border-slate-200 text-slate-500 text-xs font-bold hover:bg-slate-50">Cancel</button>
                 <button disabled={!newName.trim() || addMutation.isPending} onClick={() => addMutation.mutate({ newParticipantName: newName.trim() })}
-                  className="flex-1 py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-black disabled:opacity-40 transition-all">
+                  className="flex-1 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black disabled:opacity-40 transition-all">
                   {addMutation.isPending ? "Creating…" : "Create & Add"}
                 </button>
               </div>
@@ -670,6 +694,96 @@ function AddParticipantDialog({ open, onOpenChange, auctionId, onAdded }: {
     </Dialog>
   )
 }
+
+// ─── BUDGET OVERVIEW (merged with squad list) ────────────────────────────
+
+function BudgetOverview({
+  allSquads, walletMap, expandedSquad, setExpandedSquad,
+}: {
+  allSquads: { id?: string; name: string; participantId?: string; players?: { id: string; name: string; specialism?: string; soldPrice?: number }[] }[] | undefined
+  walletMap: Record<string, number | null> | undefined
+  expandedSquad: string | null
+  setExpandedSquad: (id: string | null) => void
+}) {
+  const TEAM_COLORS = ["#6366f1","#10b981","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#f97316","#ec4899"]
+
+  const rows = (allSquads ?? []).map((s, i) => {
+    const spent = (s.players ?? []).reduce((acc, p) => acc + (p.soldPrice ?? 0), 0)
+    const remaining = s.participantId ? (walletMap?.[s.participantId] ?? null) : null
+    const total = remaining != null ? spent + remaining : spent
+    const key = s.id ?? s.name
+    return { key, name: s.name, spent, remaining: remaining ?? 0, total: total || 1_000_000_000, players: s.players ?? [], color: TEAM_COLORS[i % TEAM_COLORS.length] }
+  }).sort((a, b) => b.spent - a.spent)
+
+  if (rows.length === 0) return null
+
+  return (
+    <div className="rounded-xl border border-stone-200 bg-white shrink-0 shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-4 pt-3.5 pb-2">
+        <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest">Teams</p>
+        <span className="text-[10px] text-stone-300 font-semibold">{rows.length} teams · {rows.reduce((a, r) => a + r.players.length, 0)} players</span>
+      </div>
+      <div className="divide-y divide-slate-50">
+        {rows.map((row, i) => {
+          const spentPct = Math.min((row.spent / row.total) * 100, 100)
+          const remainPct = Math.min((row.remaining / row.total) * 100, 100)
+          const isTopSpender = i === 0 && row.spent > 0
+          const isExpanded = expandedSquad === row.key
+          return (
+            <div key={row.key}>
+              {/* Row header — clickable to expand */}
+              <button className="w-full text-left px-4 py-2.5 hover:bg-stone-50 transition-colors" onClick={() => setExpandedSquad(isExpanded ? null : row.key)}>
+                <div className="flex items-center justify-between mb-1.5 gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <div className="w-2 h-2 rounded-full shrink-0" style={{ background: row.color }} />
+                    <span className="text-xs font-bold text-stone-700 truncate">{row.name}</span>
+                    {isTopSpender && <span className="text-[8px] font-black bg-amber-100 text-amber-600 border border-amber-200 px-1.5 py-0.5 rounded-full shrink-0">TOP</span>}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[10px] font-semibold text-stone-400 tabular-nums">{row.players.length}/{MAX_SQUAD_SIZE}</span>
+                    <span className="text-[10px] font-black tabular-nums" style={{ color: row.color }}>{row.spent > 0 ? fmt(row.spent) : "—"}</span>
+                    <span className="text-[9px] text-slate-300">{isExpanded ? "▲" : "▼"}</span>
+                  </div>
+                </div>
+                <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden flex">
+                  <div className="h-full rounded-full transition-all duration-700" style={{ width: `${spentPct}%`, background: row.color, opacity: 0.9 }} />
+                  <div className="h-full transition-all duration-700" style={{ width: `${remainPct}%`, background: row.color, opacity: 0.15 }} />
+                </div>
+                <div className="flex justify-between mt-0.5">
+                  <span className="text-[9px] text-slate-300">spent</span>
+                  <span className="text-[9px] font-semibold" style={{ color: row.color, opacity: 0.7 }}>{row.remaining > 0 ? `${fmt(row.remaining)} left` : "—"}</span>
+                </div>
+              </button>
+              {/* Expanded player list */}
+              {isExpanded && (
+                <div className="bg-stone-50 border-t border-stone-100 px-4 py-2 space-y-1 max-h-48 overflow-y-auto">
+                  {row.players.length === 0
+                    ? <p className="text-xs text-slate-300 italic py-1">No players yet</p>
+                    : row.players.map(p => {
+                      const st = specialismStyle(p.specialism)
+                      return (
+                        <div key={p.id} className="flex items-center justify-between gap-2 py-0.5">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full border ${st.bg} ${st.text} ${st.border} shrink-0`}>
+                              {normaliseSpecialism(p.specialism) === "WICKETKEEPER" ? "WK" : normaliseSpecialism(p.specialism) === "ALLROUNDER" ? "AR" : normaliseSpecialism(p.specialism) === "BOWLER" ? "BWL" : "BAT"}
+                            </span>
+                            <span className="text-xs text-stone-600 font-semibold truncate">{p.name}</span>
+                          </div>
+                          <span className="text-[10px] font-black tabular-nums text-stone-500 shrink-0">{p.soldPrice ? fmt(p.soldPrice) : "—"}</span>
+                        </div>
+                      )
+                    })
+                  }
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 
 // ─── ADMIN PANEL ─────────────────────────────────────────────────────────
 
@@ -682,9 +796,6 @@ function AdminPanel({ auctionId }: { auctionId: string }) {
   const setShowManualHammer = useAuctionRoomStore(s => s.setShowManualHammer)
   const expandedSquad = useAuctionRoomStore(s => s.expandedSquad)
   const setExpandedSquad = useAuctionRoomStore(s => s.setExpandedSquad)
-  const showAddParticipant = useAuctionRoomStore(s => s.showAddParticipant)
-  const setShowAddParticipant = useAuctionRoomStore(s => s.setShowAddParticipant)
-
   const { data: engineState } = useQuery({
     queryKey: ["engineState", auctionId],
     queryFn: () => auctionEngineApi.state(auctionId),
@@ -694,10 +805,6 @@ function AdminPanel({ auctionId }: { auctionId: string }) {
   const currentPlayer = engineState?.currentPlayer ?? null
   const allPool = engineState?.pools?.[0] ?? null
   const poolStatus = allPool?.status ?? null
-  const isActive = poolStatus === "ACTIVE"
-  const isPending = poolStatus === "PENDING"
-  const isPausedPool = poolStatus === "PAUSED"
-  const isCompleted = poolStatus === "COMPLETED"
   const poolExhausted = engineState?.poolExhausted ?? false
 
   const { data: auction } = useQuery({ queryKey: ["auction", auctionId], queryFn: () => auctionApi.getById(auctionId), refetchInterval: 5000 })
@@ -709,9 +816,6 @@ function AdminPanel({ auctionId }: { auctionId: string }) {
   })
   const { data: walletMap } = useWalletMap(auctionId, allSquads)
 
-  const isAuctionPaused = auction?.status === "PAUSED"
-
-  const resume = useMutation({ mutationFn: () => auctionApi.resume(auctionId), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["auction", auctionId] }) })
   const endAuction = useMutation({ mutationFn: () => auctionApi.end(auctionId), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["auction", auctionId] }) })
 
   const nextPlayer = useMutation({
@@ -722,10 +826,6 @@ function AdminPanel({ auctionId }: { auctionId: string }) {
       queryClient.invalidateQueries({ queryKey: ["players", { getAll: true }] })
     },
   })
-  const activatePool = useMutation({ mutationFn: (poolType: string) => auctionPoolApi.activatePool(auctionId, poolType), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["engineState", auctionId] }) })
-  const pausePool = useMutation({ mutationFn: () => auctionPoolApi.pausePool(auctionId), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["engineState", auctionId] }) })
-  const completePool = useMutation({ mutationFn: () => auctionPoolApi.completePool(auctionId), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["engineState", auctionId] }) })
-
   const manualHammer = useMutation({
     mutationFn: (data: { participantId: string; finalAmount: number }) =>
       hammerApi.manualHammer({ playerId: currentPlayer!.id, auctionId, ...data } as Parameters<typeof hammerApi.manualHammer>[0]),
@@ -740,30 +840,23 @@ function AdminPanel({ auctionId }: { auctionId: string }) {
   })
 
   return (
-    <div className="flex-1 flex gap-0 overflow-hidden min-h-0">
+    <div className="flex-1 flex gap-0 overflow-hidden min-h-0 bg-[#f5f3ef]">
 
       {/* ── Left: Player Info + Data ── */}
-      <div className="flex-1 flex flex-col min-w-0 border-r border-slate-200/60 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 border-r border-stone-200 overflow-hidden">
         <div className="flex gap-3 p-4 pb-2 shrink-0">
           <div className="flex-1 min-w-0 flex flex-col">
-            {isAuctionPaused && (
-              <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 flex items-center gap-2 mb-2 shrink-0">
-                <span>⏸</span><p className="text-xs font-bold text-amber-700">Auction Paused</p>
-              </div>
-            )}
             {poolExhausted && (
-              <div className="rounded-xl bg-indigo-50 border border-indigo-200 px-3 py-2 flex items-center gap-2 mb-2 shrink-0">
-                <span>🏁</span><p className="text-xs font-bold text-indigo-700">All players auctioned</p>
+              <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 flex items-center gap-2 mb-2 shrink-0">
+                <span>🏁</span><p className="text-xs font-semibold text-emerald-700">All players auctioned</p>
               </div>
             )}
             {currentPlayer
-              ? <div className="flex-1"><PlayerHeroCard player={currentPlayer} seconds={0} total={0} biddingOpen={false} paused={isAuctionPaused} battingStyle={currentPlayer.battingStyle} bowlingStyle={currentPlayer.bowlingStyle} /></div>
-              : <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center flex-1 min-h-32">
+              ? <div className="flex-1"><PlayerHeroCard player={currentPlayer} seconds={0} total={0} biddingOpen={false} battingStyle={currentPlayer.battingStyle} bowlingStyle={currentPlayer.bowlingStyle} /></div>
+              : <div className="rounded-xl border border-dashed border-stone-200 bg-stone-50 flex items-center justify-center flex-1 min-h-32">
                 <div className="text-center">
                   <div className="text-3xl mb-1">🏏</div>
-                  <p className="text-xs font-semibold text-slate-400">
-                    {isActive ? "Press Next Player" : "Start the auction to begin"}
-                  </p>
+                  <p className="text-xs font-semibold text-stone-400">Press Next Player to begin</p>
                 </div>
               </div>
             }
@@ -780,138 +873,46 @@ function AdminPanel({ auctionId }: { auctionId: string }) {
       </div>
 
       {/* ── Centre: Admin Controls ── */}
-      <div className="w-72 shrink-0 flex flex-col p-4 gap-3 border-r border-slate-200/60 overflow-y-auto">
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shrink-0">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Auction</p>
-
-          {isActive && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                <span className="text-sm font-bold text-emerald-700">Auction Running</span>
-                <span className="ml-auto text-[10px] font-black text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">LIVE</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => pausePool.mutate()} disabled={pausePool.isPending}
-                  className="py-2 rounded-xl border border-amber-200 bg-amber-50 text-amber-700 text-xs font-bold hover:bg-amber-100 transition-all disabled:opacity-40">
-                  ⏸ Pause
-                </button>
-                <button onClick={() => { if (confirm("Permanently complete the auction?")) completePool.mutate() }} disabled={completePool.isPending}
-                  className="py-2 rounded-xl border border-red-200 bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 transition-all disabled:opacity-40">
-                  ✓ Complete
-                </button>
-              </div>
-            </div>
-          )}
-
-          {isPending && (
-            <button onClick={() => { if (allPool) activatePool.mutate(allPool.poolType) }} disabled={activatePool.isPending}
-              className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-white font-black text-sm transition-all shadow-sm">
-              ▶ Start Auction
+      <div className="w-72 shrink-0 flex flex-col p-4 gap-3 border-r border-stone-200 overflow-y-auto">
+        {/* ── Controls: Next Player + Hammer + End Auction merged ── */}
+        <div className="rounded-xl border border-stone-200 bg-white shrink-0 overflow-hidden">
+          <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest px-4 pt-3.5 pb-2">Controls</p>
+          <div className="px-3 pb-3 flex flex-col gap-2">
+            <button onClick={() => nextPlayer.mutate()} disabled={nextPlayer.isPending}
+              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-black text-sm transition-all shadow-sm">
+              ⏭ Next Player
             </button>
-          )}
-
-          {isPausedPool && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-amber-50 border border-amber-200">
-                <span className="text-sm">⏸</span>
-                <span className="text-sm font-bold text-amber-700">Auction Paused</span>
-              </div>
-              <button onClick={() => { if (allPool) activatePool.mutate(allPool.poolType) }} disabled={activatePool.isPending}
-                className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-white font-black text-sm transition-all">
-                ▶ Resume Auction
-              </button>
-            </div>
-          )}
-
-          {isCompleted && (
-            <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 opacity-60">
-              <span className="text-sm">✓</span>
-              <span className="text-sm font-semibold text-slate-500">Auction Completed</span>
-            </div>
-          )}
-
-          {!allPool && (
-            <p className="text-xs text-slate-400 text-center italic py-2">No auction pool configured</p>
-          )}
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-3 shrink-0">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Player Flow</p>
-          <button onClick={() => nextPlayer.mutate()} disabled={nextPlayer.isPending || !isActive}
-            className="w-full py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 disabled:opacity-40 text-white font-black text-sm transition-all shadow-sm">
-            ⏭ Next Player
-          </button>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-3 shrink-0">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Hammer</p>
-          <button onClick={() => setShowManualHammer(true)}
-            className="w-full py-2.5 rounded-xl border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 font-bold text-sm transition-all">
-            ✍️ Manual Hammer
-          </button>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-3 shrink-0">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Session</p>
-          <div className="space-y-2">
-            {isAuctionPaused && (
-              <button onClick={() => resume.mutate()} disabled={resume.isPending}
-                className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-black text-sm transition-all">
-                ▶ Resume
-              </button>
-            )}
-            {!confirmEnd
-              ? <button onClick={() => setConfirmEnd(true)}
-                className="w-full py-2.5 rounded-xl bg-slate-50 hover:bg-red-50 border border-slate-200 hover:border-red-200 text-slate-400 hover:text-red-500 font-bold text-sm transition-all">
-                🏁 End Auction
-              </button>
-              : <div className="space-y-2">
-                <p className="text-xs text-red-500 text-center font-semibold">Cannot be undone.</p>
-                <div className="flex gap-2">
-                  <button onClick={() => setConfirmEnd(false)} className="flex-1 py-2 rounded-lg bg-slate-50 border text-slate-500 text-xs font-bold hover:bg-slate-100">Cancel</button>
-                  <button onClick={() => { endAuction.mutate(); setConfirmEnd(false) }} disabled={endAuction.isPending} className="flex-1 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-black">End</button>
+            <button onClick={() => setShowManualHammer(true)}
+              className="w-full py-2.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold text-sm transition-all">
+              🔨 Hammer
+            </button>
+            <div className="border-t border-stone-100 pt-2">
+              {!confirmEnd
+                ? <button onClick={() => setConfirmEnd(true)}
+                  className="w-full py-2 rounded-lg bg-stone-50 hover:bg-red-50 border border-stone-200 hover:border-red-200 text-stone-400 hover:text-red-500 font-bold text-sm transition-all">
+                  🏁 End Auction
+                </button>
+                : <div className="space-y-1.5">
+                  <p className="text-xs text-red-500 text-center font-semibold">Cannot be undone.</p>
+                  <div className="flex gap-2">
+                    <button onClick={() => setConfirmEnd(false)} className="flex-1 py-1.5 rounded-lg bg-slate-50 border text-slate-500 text-xs font-bold hover:bg-slate-100">Cancel</button>
+                    <button onClick={() => { endAuction.mutate(); setConfirmEnd(false) }} disabled={endAuction.isPending} className="flex-1 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-black">End</button>
+                  </div>
                 </div>
-              </div>
-            }
+              }
+            </div>
           </div>
         </div>
+
+        <BudgetOverview allSquads={allSquads} walletMap={walletMap} expandedSquad={expandedSquad} setExpandedSquad={setExpandedSquad} />
       </div>
 
-      {/* ── Right: All Squads ── */}
-      <div className="w-56 shrink-0 flex flex-col bg-slate-50/50">
-        <div className="px-4 pt-4 pb-3 flex items-center justify-between shrink-0 border-b border-slate-200/60">
-          <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">All Squads</p>
-            <p className="text-xs text-slate-600 mt-0.5 font-semibold">{allSquads?.length ?? 0} participants</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setShowAddParticipant(true)} className="text-[10px] font-black text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2 py-1 rounded-lg transition-all">＋ Add</button>
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2 min-h-0">
-          {(allSquads ?? []).map((s: { id?: string; name: string; participantId?: string; players?: { id: string; name: string; specialism?: string; soldPrice?: number }[] }) => {
-            const key = s.id ?? s.name
-            const remaining = s.participantId ? (walletMap?.[s.participantId] ?? null) : null
-            return (
-              <SquadCard key={key} squad={s} isMe={false} expanded={expandedSquad === key}
-                onToggle={() => setExpandedSquad(expandedSquad === key ? null : key)} remainingBudget={remaining} />
-            )
-          })}
-        </div>
-      </div>
 
       <ManualHammerDialog open={showManualHammer} onOpenChange={setShowManualHammer}
         currentPlayer={currentPlayer} participants={participants} participantsLoading={participantsLoading}
         allSquads={allSquads}
         onHammer={(data) => manualHammer.mutate(data)} isPending={manualHammer.isPending} />
-      <AddParticipantDialog open={showAddParticipant} onOpenChange={setShowAddParticipant} auctionId={auctionId}
-        onAdded={() => {
-          queryClient.invalidateQueries({ queryKey: ["allSquads", auctionId] })
-          queryClient.invalidateQueries({ queryKey: ["participants", auctionId] })
-        }} />
+
     </div>
   )
 }
@@ -1002,7 +1003,7 @@ function ParticipantView({ auctionId, me }: { auctionId: string; me: { participa
     <>
       {squadMissing && (
         <Dialog open>
-          <DialogContent className="bg-white border-slate-200 text-slate-800 shadow-2xl">
+          <DialogContent className="bg-white border-stone-200 text-slate-800 shadow-2xl">
             <DialogHeader><DialogTitle className="text-xl text-slate-800">🏏 Name Your Squad</DialogTitle></DialogHeader>
             <p className="text-sm text-slate-500 mb-3">Choose a name to enter the auction.</p>
             <Input placeholder="e.g. Mumbai Indians" value={squadNameInput} onChange={e => setSquadNameInput(e.target.value)} className="bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-300" />
@@ -1015,7 +1016,7 @@ function ParticipantView({ auctionId, me }: { auctionId: string; me: { participa
       )}
 
       <Dialog open={showSquadDialog} onOpenChange={setShowSquadDialog}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col bg-white border-slate-200 text-slate-800 shadow-2xl">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col bg-white border-stone-200 text-slate-800 shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-slate-800">
               🏏 {(squad as { name?: string } | undefined)?.name ?? "My Squad"}
@@ -1042,15 +1043,13 @@ function ParticipantView({ auctionId, me }: { auctionId: string; me: { participa
         </DialogContent>
       </Dialog>
 
-      <div className="flex-1 flex gap-0 overflow-hidden min-h-0">
-
-        {/* Col 1: Player + Data */}
-        <div className="flex-1 flex flex-col min-w-0 border-r border-slate-200/60 overflow-hidden">
+      <div className="flex-1 flex gap-0 overflow-hidden min-h-0 bg-[#f5f3ef]">
+        <div className="flex-1 flex flex-col min-w-0 border-r border-stone-200 overflow-hidden">
           <div className="flex gap-3 p-4 pb-2 shrink-0">
             <div className="flex-1 min-w-0 flex flex-col">
               {currentPlayer
                 ? <div className="flex-1"><PlayerHeroCard player={currentPlayer} seconds={analysisSeconds} total={analysisTotalSecs} biddingOpen={biddingOpen} paused={isPaused} battingStyle={currentPlayer.battingStyle} bowlingStyle={currentPlayer.bowlingStyle} /></div>
-                : <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center flex-1 min-h-32">
+                : <div className="rounded-xl border border-dashed border-stone-200 bg-stone-50 flex items-center justify-center flex-1 min-h-32">
                   <div className="text-center"><div className="text-3xl mb-1 animate-pulse">🏏</div><p className="text-xs text-slate-400 font-medium">Waiting for next player…</p></div>
                 </div>
               }
@@ -1066,7 +1065,6 @@ function ParticipantView({ auctionId, me }: { auctionId: string; me: { participa
           </div>
         </div>
 
-        {/* Col 2: Bidding + Wallet */}
         <div className="w-64 shrink-0 flex flex-col p-5 gap-4 border-r border-slate-200/60 overflow-hidden">
           <div className="rounded-2xl border border-emerald-200 bg-linear-to-br from-emerald-50 to-white p-4 shrink-0 shadow-sm">
             <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Your Balance</p>
@@ -1107,7 +1105,7 @@ function ParticipantView({ auctionId, me }: { auctionId: string; me: { participa
                     auctionId, playerId: currentPlayer!.id, participantId: me.participantId,
                     amount: (queryClient.getQueryData<{ amount: number }>(["highestBid", currentPlayer?.id])?.amount ?? Number(currentPlayer?.basePrice ?? 0)) + amount,
                   })}
-                  className={`flex items-center justify-center py-2.5 rounded-xl font-black text-sm transition-all ${label === "+10Cr" ? "col-span-2" : ""} ${canBid ? "bg-linear-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-[0_2px_8px_rgba(16,185,129,0.25)]" : "bg-slate-50 text-slate-300 cursor-not-allowed border border-slate-100"}`}>
+                  className={`flex items-center justify-center py-2.5 rounded-xl font-black text-sm transition-all ${label === "+10Cr" ? "col-span-2" : ""} ${canBid ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-stone-50 text-stone-300 cursor-not-allowed border border-stone-100"}`}>
                   {label}
                 </button>
               ))}
@@ -1124,18 +1122,17 @@ function ParticipantView({ auctionId, me }: { auctionId: string; me: { participa
           </div>
         </div>
 
-        {/* Col 3: Squads */}
-        <div className="w-56 shrink-0 flex flex-col bg-slate-50/80">
+        <div className="w-56 shrink-0 flex flex-col bg-stone-50">
           <div className="px-4 pt-4 pb-3 flex items-center justify-between shrink-0 border-b border-slate-200/60">
             <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">All Squads</p>
-              <p className="text-xs text-slate-600 mt-0.5 font-semibold">{sortedSquads.length} participants</p>
+              <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest">All Squads</p>
+              <p className="text-xs text-stone-600 mt-0.5 font-semibold">{sortedSquads.length} participants</p>
             </div>
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
           </div>
           <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2 min-h-0">
             {sortedSquads.length === 0
-              ? <div className="flex items-center justify-center h-full"><p className="text-xs text-slate-300 italic">No squads yet</p></div>
+              ? <div className="flex items-center justify-center h-full"><p className="text-xs text-stone-300 italic">No squads yet</p></div>
               : sortedSquads.map((s: { id?: string; name: string; players?: unknown[]; participantId?: string }) => {
                 const key = s.id ?? s.name
                 const remaining = s.participantId ? (walletMap?.[s.participantId] ?? null) : null
@@ -1151,6 +1148,23 @@ function ParticipantView({ auctionId, me }: { auctionId: string; me: { participa
           </div>
         </div>
       </div>
+    </>
+  )
+}
+
+// ─── ADD PARTICIPANT NAV BUTTON ──────────────────────────────────────────
+
+function AddParticipantNavButton({ auctionId }: { auctionId: string }) {
+  const queryClient = useQueryClient()
+  const setShowAddParticipant = useAuctionRoomStore(s => s.setShowAddParticipant)
+  const showAddParticipant = useAuctionRoomStore(s => s.showAddParticipant)
+  return (
+    <>
+      <button onClick={() => setShowAddParticipant(true)}
+        className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 transition-all">
+        ＋ Add Participant
+      </button>
+
     </>
   )
 }
@@ -1173,9 +1187,16 @@ function AuctionRoomPage() {
   useEffect(() => {
     const result = engineState?.lastResult
     if (!result) return
-    if (result.timestamp === lastSeenResultTimestamp) return
-    setLastSeenResultTimestamp(result.timestamp)
-    setSoldInfo({ playerName: result.playerName, squadName: result.squadName, amount: result.amount, unsold: result.unsold, timestamp: result.timestamp })
+    const ts = result.timestamp != null ? String(result.timestamp) : null
+    if (ts == null || ts === lastSeenResultTimestamp) return
+    setLastSeenResultTimestamp(ts)
+    setSoldInfo({
+      playerName: String(result.playerName ?? ""),
+      squadName: result.squadName != null ? String(result.squadName) : undefined,
+      amount: result.amount != null ? Number(result.amount) : undefined,
+      unsold: result.unsold != null ? Boolean(result.unsold) : undefined,
+      timestamp: ts,
+    })
     const t = setTimeout(() => setSoldInfo(null), result.unsold ? 2500 : 3500)
     return () => clearTimeout(t)
   }, [engineState?.lastResult?.timestamp])
@@ -1184,53 +1205,68 @@ function AuctionRoomPage() {
 
   if (!auction || !me) {
     return (
-      <div className="flex items-center justify-center h-screen bg-slate-100">
-        <div className="text-center space-y-3"><div className="text-5xl animate-pulse">🏏</div><p className="text-slate-500 text-sm font-medium">Loading auction room…</p></div>
+      <div className="flex items-center justify-center h-screen bg-stone-100">
+        <div className="text-center space-y-3"><div className="text-5xl animate-pulse">🏏</div><p className="text-stone-500 text-sm font-medium">Loading auction room…</p></div>
       </div>
     )
   }
 
-  const isPaused = auction.status === "PAUSED"
-
   return (
-    <div className="h-screen flex flex-col overflow-hidden" style={{ fontFamily: "'DM Sans', system-ui, sans-serif", background: "linear-gradient(160deg, #f8fafc 0%, #f1f5f9 40%, #e8edf5 100%)" }}>
+    <div className="h-screen flex flex-col overflow-hidden" style={{ fontFamily: "'DM Sans', system-ui, sans-serif", background: "#f5f3ef" }}>
 
       {soldInfo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm pointer-events-none">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 backdrop-blur-sm pointer-events-none">
           <div className={`text-center p-10 rounded-3xl border-2 max-w-sm w-full mx-4 shadow-2xl animate-in zoom-in-95 duration-300 ${soldInfo.unsold ? "bg-red-50 border-red-200" : "bg-emerald-50 border-emerald-200"}`}>
             <div className="text-7xl mb-4">{soldInfo.unsold ? "🚫" : "🎉"}</div>
             <p className={`text-3xl font-black ${soldInfo.unsold ? "text-red-600" : "text-emerald-700"}`}>{soldInfo.unsold ? "Unsold" : "Sold!"}</p>
-            <p className="text-xl font-bold mt-2 text-slate-600">{soldInfo.playerName}</p>
+            <p className="text-xl font-bold mt-2 text-stone-600">{soldInfo.playerName}</p>
             {!soldInfo.unsold && soldInfo.amount != null && (
               <div className="mt-5 bg-white rounded-2xl border border-emerald-100 p-4 shadow-sm">
-                <p className="text-sm text-slate-400">to</p>
+                <p className="text-sm text-stone-400">to</p>
                 <p className="font-black text-xl text-emerald-600">{soldInfo.squadName}</p>
-                <p className="text-3xl font-black tabular-nums mt-1 text-slate-800">{fmt(soldInfo.amount)}</p>
+                <p className="text-3xl font-black tabular-nums mt-1 text-stone-800">{fmt(soldInfo.amount)}</p>
               </div>
             )}
           </div>
         </div>
       )}
 
-      <header className="shrink-0 flex items-center justify-between px-5 py-3.5 border-b border-slate-200/80 bg-white/70 backdrop-blur-xl shadow-sm">
+      <header className="shrink-0 flex items-center justify-between px-5 py-3.5 border-b border-stone-200 bg-white shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-linear-to-br from-slate-700 to-slate-900 flex items-center justify-center text-base shadow-sm">🏏</div>
-          <div>
-            <h1 className="font-black text-base leading-tight tracking-tight text-slate-800">{auction.name}</h1>
-            <p className="text-[11px] text-slate-400">{isAdmin ? "Admin View" : "Participant"}</p>
-          </div>
+          <div className="w-8 h-8 rounded-xl bg-linear-to-br from-emerald-700 to-emerald-900 flex items-center justify-center text-base shadow-sm">🏏</div>
+          <h1 className="font-black text-base leading-tight tracking-tight text-stone-800">{auction.name}</h1>
+          {/* Auction running status — moved from admin panel card */}
+          {(() => {
+            const pool = engineState?.pools?.[0]
+            const status = pool?.status
+            if (status === "ACTIVE") return (
+              <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <span className="text-xs font-bold text-emerald-700">Running</span>
+              </div>
+            )
+            if (status === "COMPLETED") return (
+              <div className="flex items-center gap-1.5 bg-stone-100 border border-stone-200 rounded-full px-2.5 py-1">
+                <span className="text-xs">✓</span>
+                <span className="text-xs font-bold text-slate-500">Completed</span>
+              </div>
+            )
+            if (engineState?.poolExhausted) return (
+              <div className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 rounded-lg px-2.5 py-1">
+                <span className="text-xs">🏁</span>
+                <span className="text-xs font-bold text-indigo-600">All auctioned</span>
+              </div>
+            )
+            return (
+              <div className="flex items-center gap-1.5 bg-stone-50 border border-stone-200 rounded-full px-2.5 py-1">
+                <span className="text-xs font-bold text-slate-400">Ready</span>
+              </div>
+            )
+          })()}
         </div>
         <div className="flex items-center gap-2">
-          {isPaused && (
-            <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
-              <span className="text-sm">⏸</span><span className="text-xs font-bold text-amber-600">PAUSED</span>
-            </div>
-          )}
-          <div className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border ${auction.status === "LIVE" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : auction.status === "PAUSED" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-slate-50 text-slate-500 border-slate-200"}`}>
-            {auction.status === "LIVE" && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
-            {auction.status}
-          </div>
-          <button onClick={() => navigate({ to: "/auction" })} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all">
+          {isAdmin && <AddParticipantNavButton auctionId={auctionId} />}
+          <button onClick={() => navigate({ to: "/auction" })} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border border-stone-200 bg-white text-stone-500 hover:bg-stone-50 hover:text-stone-700 transition-all">
             ← Back to Lobby
           </button>
         </div>

@@ -1,57 +1,49 @@
 import { create } from "zustand"
 
-export type BidEntry = {
-  squadName: string
-  participantName: string
-  amount: number
-  isManual: boolean
-  timestamp: number
-}
+// ─── Types ────────────────────────────────────────────────────────────────
 
-export type SoldInfo = {
+interface SoldInfo {
   playerName: string
-  squadName: string | null
-  amount: number | null
-  unsold: boolean
-  timestamp: number
+  squadName?: string
+  amount?: number
+  unsold?: boolean
+  timestamp: string
 }
 
-type AuctionRoomState = {
-  // ── Sold / unsold overlay (driven by polling lastResult) ──
+// ─── State shape ─────────────────────────────────────────────────────────
+
+interface AuctionRoomState {
+  // ── Sold overlay ──
   soldInfo: SoldInfo | null
   setSoldInfo: (info: SoldInfo | null) => void
-  lastSeenResultTimestamp: number | null
-  setLastSeenResultTimestamp: (ts: number | null) => void
+  lastSeenResultTimestamp: string | null
+  setLastSeenResultTimestamp: (ts: string | null) => void
 
-  // ── My wallet balance ──
-  myBalance: number | null
-  setMyBalance: (v: number | null) => void
-
-  // ── Admin UI state ──
-  confirmEnd: boolean
-  setConfirmEnd: (v: boolean) => void
+  // ── Manual Hammer dialog ──
   showManualHammer: boolean
   setShowManualHammer: (v: boolean) => void
-  expandedSquad: string | null
-  setExpandedSquad: (key: string | null) => void
-  showSquadDialog: boolean
-  setShowSquadDialog: (v: boolean) => void
-
-  // ── Squad name creation ──
-  squadNameInput: string
-  setSquadNameInput: (v: string) => void
-
-  // ── ManualHammerDialog ──
   hammerParticipantId: string
-  setHammerParticipantId: (v: string) => void
-  hammerAmount: number | ""
-  setHammerAmount: (v: number | "") => void
+  setHammerParticipantId: (id: string) => void
+  hammerAmount: number | null
+  setHammerAmount: (v: number | null) => void
   hammerRawInput: string
   setHammerRawInput: (v: string) => void
   hammerInputError: string
   setHammerInputError: (v: string) => void
+  /**
+   * NEW — unit for the split number+unit custom amount input.
+   * "Thousand" | "Lakh" | "Crore"  (default: "Lakh")
+   */
+  hammerUnit: string
+  setHammerUnit: (unit: string) => void
 
-  // ── AddParticipantDialog ──
+  // ── Squad panel ──
+  expandedSquad: string | null
+  setExpandedSquad: (id: string | null) => void
+
+  // ── Add participant dialog ──
+  showAddParticipant: boolean
+  setShowAddParticipant: (v: boolean) => void
   addSearch: string
   setAddSearch: (v: string) => void
   addNewName: string
@@ -59,47 +51,52 @@ type AuctionRoomState = {
   addShowNewForm: boolean
   setAddShowNewForm: (v: boolean) => void
 
-  // ── AdminPanel ──
-  showAddParticipant: boolean
-  setShowAddParticipant: (v: boolean) => void
+  // ── Session / end auction ──
+  confirmEnd: boolean
+  setConfirmEnd: (v: boolean) => void
+
+  // ── Participant view: squad dialog ──
+  showSquadDialog: boolean
+  setShowSquadDialog: (v: boolean) => void
+  squadNameInput: string
+  setSquadNameInput: (v: string) => void
+
+  // ── Participant view: wallet ──
+  myBalance: number | null
+  setMyBalance: (v: number | null) => void
 }
 
+// ─── Store ────────────────────────────────────────────────────────────────
+
 export const useAuctionRoomStore = create<AuctionRoomState>((set) => ({
-  // ── Sold / unsold overlay ──
+  // ── Sold overlay ──
   soldInfo: null,
   setSoldInfo: (info) => set({ soldInfo: info }),
   lastSeenResultTimestamp: null,
   setLastSeenResultTimestamp: (ts) => set({ lastSeenResultTimestamp: ts }),
 
-  // ── My wallet balance ──
-  myBalance: null,
-  setMyBalance: (v) => set({ myBalance: v }),
-
-  // ── Admin UI state ──
-  confirmEnd: false,
-  setConfirmEnd: (v) => set({ confirmEnd: v }),
+  // ── Manual Hammer dialog ──
   showManualHammer: false,
   setShowManualHammer: (v) => set({ showManualHammer: v }),
-  expandedSquad: null,
-  setExpandedSquad: (key) => set({ expandedSquad: key }),
-  showSquadDialog: false,
-  setShowSquadDialog: (v) => set({ showSquadDialog: v }),
-
-  // ── Squad name creation ──
-  squadNameInput: "",
-  setSquadNameInput: (v) => set({ squadNameInput: v }),
-
-  // ── ManualHammerDialog ──
   hammerParticipantId: "",
-  setHammerParticipantId: (v) => set({ hammerParticipantId: v }),
-  hammerAmount: "",
+  setHammerParticipantId: (id) => set({ hammerParticipantId: id }),
+  hammerAmount: null,
   setHammerAmount: (v) => set({ hammerAmount: v }),
   hammerRawInput: "",
   setHammerRawInput: (v) => set({ hammerRawInput: v }),
   hammerInputError: "",
   setHammerInputError: (v) => set({ hammerInputError: v }),
+  // NEW
+  hammerUnit: "Lakh",
+  setHammerUnit: (unit) => set({ hammerUnit: unit }),
 
-  // ── AddParticipantDialog ──
+  // ── Squad panel ──
+  expandedSquad: null,
+  setExpandedSquad: (id) => set({ expandedSquad: id }),
+
+  // ── Add participant dialog ──
+  showAddParticipant: false,
+  setShowAddParticipant: (v) => set({ showAddParticipant: v }),
   addSearch: "",
   setAddSearch: (v) => set({ addSearch: v }),
   addNewName: "",
@@ -107,7 +104,17 @@ export const useAuctionRoomStore = create<AuctionRoomState>((set) => ({
   addShowNewForm: false,
   setAddShowNewForm: (v) => set({ addShowNewForm: v }),
 
-  // ── AdminPanel ──
-  showAddParticipant: false,
-  setShowAddParticipant: (v) => set({ showAddParticipant: v }),
+  // ── Session / end auction ──
+  confirmEnd: false,
+  setConfirmEnd: (v) => set({ confirmEnd: v }),
+
+  // ── Participant view: squad dialog ──
+  showSquadDialog: false,
+  setShowSquadDialog: (v) => set({ showSquadDialog: v }),
+  squadNameInput: "",
+  setSquadNameInput: (v) => set({ squadNameInput: v }),
+
+  // ── Participant view: wallet ──
+  myBalance: null,
+  setMyBalance: (v) => set({ myBalance: v }),
 }))
