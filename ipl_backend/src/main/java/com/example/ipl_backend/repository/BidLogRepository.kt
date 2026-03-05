@@ -28,7 +28,7 @@ class BidLogRepository {
 
     fun save(
         auctionId: String,
-        playerId: String,
+        playerId: String?,
         participantId: UUID? = null,
         participantName: String? = null,
         squadName: String? = null,

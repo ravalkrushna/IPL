@@ -39,30 +39,6 @@ class AuctionEngineController(
         }
     }
 
-    @GetMapping("/state")
-    fun getState(@PathVariable auctionId: String): ResponseEntity<Map<String, Any?>> {
-        val currentPlayer     = auctionEngineService.getCurrentPlayer(auctionId)
-        val biddingOpen       = auctionEngineService.isBiddingOpen(auctionId)
-        val lastResult        = auctionEngineService.getLastResult(auctionId)
-        val poolExhausted     = auctionEngineService.isPoolExhausted(auctionId)
-        val activePool        = auctionPoolService.getActivePool(auctionId)
-        val allPools          = auctionPoolService.getPoolsForAuction(auctionId)
-        val analysisSeconds   = currentPlayer?.let { auctionTimerService.getSecondsRemaining(it.id) } ?: 0
-        val analysisTotalSecs = currentPlayer?.let { auctionTimerService.getTotalSecs(it.id) } ?: 0
-
-        val response: Map<String, Any?> = mapOf(
-            "currentPlayer"     to currentPlayer,
-            "biddingOpen"       to biddingOpen,
-            "analysisSeconds"   to analysisSeconds,
-            "analysisTotalSecs" to analysisTotalSecs,
-            "activePool"        to activePool?.poolType?.name,
-            "pools"             to allPools,
-            "lastResult"        to lastResult,
-            "poolExhausted"     to poolExhausted
-        )
-        return ResponseEntity.ok(response)
-    }
-
     @GetMapping("/last-result")
     fun getLastResult(@PathVariable auctionId: String): ResponseEntity<Map<String, Any?>> {
         val result = auctionEngineService.getLastResult(auctionId)
@@ -73,6 +49,32 @@ class AuctionEngineController(
             "unsold"     to result.unsold,
             "timestamp"  to result.timestamp
         ) else mapOf("result" to null)
+        return ResponseEntity.ok(response)
+    }
+
+    @GetMapping("/state")
+    fun getState(@PathVariable auctionId: String): ResponseEntity<Map<String, Any?>> {
+        val currentPlayer     = auctionEngineService.getCurrentPlayer(auctionId)
+        val biddingOpen       = auctionEngineService.isBiddingOpen(auctionId)
+        val lastResult        = auctionEngineService.getLastResult(auctionId)
+        val poolExhausted     = auctionEngineService.isPoolExhausted(auctionId)
+        val activePool        = auctionPoolService.getActivePool(auctionId)
+        val allPools          = auctionPoolService.getPoolsForAuction(auctionId)
+        val analysisSeconds   = currentPlayer?.let { auctionTimerService.getSecondsRemaining(it.id) } ?: 0
+        val analysisTotalSecs = currentPlayer?.let { auctionTimerService.getTotalSecs(it.id) } ?: 0
+        val upcomingPlayers   = auctionEngineService.getUpcomingPlayers(auctionId) // ← ADD
+
+        val response: Map<String, Any?> = mapOf(
+            "currentPlayer"     to currentPlayer,
+            "biddingOpen"       to biddingOpen,
+            "analysisSeconds"   to analysisSeconds,
+            "analysisTotalSecs" to analysisTotalSecs,
+            "activePool"        to activePool?.poolType?.name,
+            "pools"             to allPools,
+            "lastResult"        to lastResult,
+            "poolExhausted"     to poolExhausted,
+            "upcomingPlayers"   to upcomingPlayers  // ← ADD
+        )
         return ResponseEntity.ok(response)
     }
 }

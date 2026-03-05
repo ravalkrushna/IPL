@@ -12,6 +12,7 @@ object BidLogs : UUIDTable("bid_logs") {
 
     val playerId = varchar("player_id", 255)
         .references(Players.id)
+        .nullable()   // ← add this
         .index()
 
     // Nullable — system events like PLAYER_UNSOLD have no participant
@@ -31,7 +32,7 @@ object BidLogs : UUIDTable("bid_logs") {
 data class BidLog(
     val id: UUID,
     val auctionId: String,
-    val playerId: String,
+    val playerId: String?,  // ← String? not String
     val participantId: UUID?,
     val participantName: String?,
     val squadName: String?,

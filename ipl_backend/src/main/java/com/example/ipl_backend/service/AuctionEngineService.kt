@@ -18,17 +18,11 @@ class AuctionEngineService(
     private val auctionTimerService: AuctionTimerService
 ) {
 
-    // auctionId → current player being auctioned
     private val currentPlayers = ConcurrentHashMap<String, Player>()
-
-    // auctionId → whether bidding is currently open
-    private val biddingOpen = ConcurrentHashMap<String, Boolean>()
-
-    // auctionId → last hammer result (for polling)
-    private val lastResults = ConcurrentHashMap<String, LastResult>()
-
-    // auctionId → pool exhausted flag
-    private val poolExhausted = ConcurrentHashMap<String, Boolean>()
+    private val biddingOpen    = ConcurrentHashMap<String, Boolean>()
+    private val lastResults    = ConcurrentHashMap<String, LastResult>()
+    private val poolExhausted  = ConcurrentHashMap<String, Boolean>()
+    private val playerQueues   = ConcurrentHashMap<String, ArrayDeque<Player>>()
 
     data class LastResult(
         val playerName: String,
@@ -38,30 +32,47 @@ class AuctionEngineService(
         val timestamp: Long = System.currentTimeMillis()
     )
 
-    fun getCurrentPlayer(auctionId: String): Player? =
-        currentPlayers[auctionId]
+    fun getCurrentPlayer(auctionId: String): Player? = currentPlayers[auctionId]
+    fun isBiddingOpen(auctionId: String): Boolean    = biddingOpen[auctionId] == true
+    fun getLastResult(auctionId: String): LastResult? = lastResults[auctionId]
+    fun isPoolExhausted(auctionId: String): Boolean  = poolExhausted[auctionId] == true
 
-    fun isBiddingOpen(auctionId: String): Boolean =
-        biddingOpen[auctionId] == true
-
-    fun getLastResult(auctionId: String): LastResult? =
-        lastResults[auctionId]
-
-    fun isPoolExhausted(auctionId: String): Boolean =
-        poolExhausted[auctionId] == true
+    // ─── QUEUE ───────────────────────────────────────────────────────────────
 
     /**
-     * Admin explicitly calls this to move to the next player in the active pool.
+     * Builds a stable ordered queue once:
+     * - All unauctioned players fetched
+     * - Grouped by base price tier, highest first
+     * - Shuffled ONCE within each tier at build time
+     * - Never reshuffled again until resetForNewAuction is called
      */
+    fun initQueue(auctionId: String) {
+        val allPlayers: List<Player> = playerRepository.findAll()
+            .filter { !it.isAuctioned }
+
+        val grouped: Map<BigDecimal, List<Player>> = allPlayers
+            .groupBy { player -> player.basePrice }
+
+        val sorted: List<Map.Entry<BigDecimal, List<Player>>> = grouped.entries
+            .sortedByDescending { entry -> entry.key }
+
+        val queue: List<Player> = sorted
+            .flatMap { entry -> entry.value.shuffled() }
+
+        playerQueues[auctionId] = ArrayDeque(queue)
+        println("📋 Queue built for auction=$auctionId — ${playerQueues[auctionId]?.size} players")
+    }
+
+    // ─── NEXT PLAYER ─────────────────────────────────────────────────────────
+
     fun loadNextPlayer(auctionId: String) {
-        val auction = auctionRepository.findById(auctionId)
+        auctionRepository.findById(auctionId)
             ?: throw AuctionNotFoundException("Auction not found")
 
-        val activePool = auctionPoolRepository.findActivePool(auctionId)
-            ?: throw InvalidAuctionStateException("No active pool — admin must activate a pool first")
+        auctionPoolRepository.findActivePool(auctionId)
+            ?: throw InvalidAuctionStateException("No active pool — admin must activate the auction first")
 
-        // If there's a current player who was never hammered, mark them as unsold
-        // so they don't appear again in the queue
+        // If there's a current player who was never hammered, mark them unsold
         val existingPlayer = currentPlayers[auctionId]
         if (existingPlayer != null) {
             val playerState = playerRepository.findById(existingPlayer.id)
@@ -78,34 +89,57 @@ class AuctionEngineService(
             }
         }
 
-        val nextPlayer = playerRepository.findNextAvailablePlayerInPool(
-            auctionId  = auctionId,
-            specialism = activePool.poolType.name
-        )
+        // Build queue lazily on first call if not yet initialized
+        if (!playerQueues.containsKey(auctionId)) {
+            initQueue(auctionId)
+        }
 
-        if (nextPlayer == null) {
-            println("🏁 Pool ${activePool.poolType} exhausted — no more players")
+        val queue = playerQueues[auctionId]!!
+
+        // Skip any players already auctioned (handles server restarts gracefully)
+        while (queue.isNotEmpty()) {
+            val candidate = queue.first()
+            val fresh = playerRepository.findById(candidate.id)
+            if (fresh == null || fresh.isAuctioned) {
+                queue.removeFirst()
+                continue
+            }
+            break
+        }
+
+        if (queue.isEmpty()) {
+            println("🏁 Queue exhausted — auction complete")
             poolExhausted[auctionId] = true
             currentPlayers.remove(auctionId)
             biddingOpen[auctionId] = false
             return
         }
 
+        val nextPlayer = queue.removeFirst()
         poolExhausted[auctionId] = false
         currentPlayers[auctionId] = nextPlayer
-        biddingOpen[auctionId] = false
+        biddingOpen[auctionId]    = false
 
-        println("🎯 Next player → ${nextPlayer.name} (${nextPlayer.specialism}) in auction=$auctionId")
-        // Timer is NOT auto-started — admin must click "Start Analysis Timer" explicitly
+        println("🎯 Next player → ${nextPlayer.name} (${nextPlayer.specialism}, base=${nextPlayer.basePrice}) in auction=$auctionId")
     }
 
-    /** Called by AuctionTimerService when analysis timer expires */
+    // ─── UPCOMING PLAYERS ────────────────────────────────────────────────────
+
+    /**
+     * Returns next 5 from the stable queue — no shuffle on read, always consistent.
+     */
+    fun getUpcomingPlayers(auctionId: String): List<Player> {
+        val queue = playerQueues[auctionId] ?: return emptyList()
+        return queue.take(5)
+    }
+
+    // ─── TIMER ───────────────────────────────────────────────────────────────
+
     fun onAnalysisTimerExpired(auctionId: String, playerId: String) {
         biddingOpen[auctionId] = true
         println("✅ Bidding OPEN for player=$playerId auction=$auctionId")
     }
 
-    /** Admin restarts analysis timer manually */
     fun startAnalysisTimer(auctionId: String) {
         val auction = auctionRepository.findById(auctionId)
             ?: throw AuctionNotFoundException("Auction not found")
@@ -120,28 +154,27 @@ class AuctionEngineService(
         )
     }
 
-    /** Called after hammer — clears current player state and stores result for polling */
+    // ─── MISC ────────────────────────────────────────────────────────────────
+
     fun clearCurrentPlayer(auctionId: String) {
         currentPlayers.remove(auctionId)
         biddingOpen[auctionId] = false
     }
 
-    /** Store hammer result so frontend can poll it */
     fun setLastResult(auctionId: String, result: LastResult) {
         lastResults[auctionId] = result
     }
 
-    /** Called when pool is paused — closes bidding without clearing the current player */
     fun setBiddingClosed(auctionId: String) {
         biddingOpen[auctionId] = false
     }
 
-    /** Called when a new auction goes LIVE — wipes all in-memory state for that auctionId */
     fun resetForNewAuction(auctionId: String) {
         currentPlayers.remove(auctionId)
         biddingOpen.remove(auctionId)
         lastResults.remove(auctionId)
         poolExhausted.remove(auctionId)
+        playerQueues.remove(auctionId)
         println("🔄 Engine state reset for auction=$auctionId")
     }
 }

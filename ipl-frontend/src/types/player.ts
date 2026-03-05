@@ -2,12 +2,13 @@ export type Player = {
   id: string
   name: string
   basePrice?: number | string
-  specialism?: string        // ← add
-  country?: string           // ← add
-  age?: number               // ← add
-  testCaps?: number          // ← add
-  odiCaps?: number           // ← add
-  t20Caps?: number           // ← add
-  battingStyle?: string      // ← add
-  bowlingStyle?: string      // ← add
+  specialism?: string
+  country?: string
+  age?: number
+  testCaps?: number
+  odiCaps?: number
+  t20Caps?: number
+  battingStyle?: string
+  bowlingStyle?: string
+  isAuctioned?: boolean   // ← add this
 }

@@ -46,6 +46,10 @@ type AuctionRoomState = {
   setHammerParticipantId: (v: string) => void
   hammerAmount: number | ""
   setHammerAmount: (v: number | "") => void
+  hammerRawInput: string
+  setHammerRawInput: (v: string) => void
+  hammerInputError: string
+  setHammerInputError: (v: string) => void
 
   // ── AddParticipantDialog ──
   addSearch: string
@@ -90,6 +94,10 @@ export const useAuctionRoomStore = create<AuctionRoomState>((set) => ({
   setHammerParticipantId: (v) => set({ hammerParticipantId: v }),
   hammerAmount: "",
   setHammerAmount: (v) => set({ hammerAmount: v }),
+  hammerRawInput: "",
+  setHammerRawInput: (v) => set({ hammerRawInput: v }),
+  hammerInputError: "",
+  setHammerInputError: (v) => set({ hammerInputError: v }),
 
   // ── AddParticipantDialog ──
   addSearch: "",

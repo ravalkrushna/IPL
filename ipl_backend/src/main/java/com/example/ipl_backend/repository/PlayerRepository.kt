@@ -136,31 +136,61 @@ class PlayerRepository {
                 .map { it.toPlayer() }
         }
 
-    /** Next player in a specific pool (specialism) that hasn't been auctioned yet.
-     *  Ordered by base price descending — biggest names go first. */
-    fun findNextAvailablePlayerInPool(auctionId: String, specialism: String): Player? =
+    /**
+     * Next player across ALL specialisms ordered by base price DESC.
+     * Players sharing the same base price are shuffled randomly amongst themselves.
+     * e.g. All 2Cr players appear before 1.5Cr players, but order within 2Cr is random.
+     */
+    fun findNextAvailablePlayerGlobal(auctionId: String): Player? =
         transaction {
-            Players.selectAll()
-                .where {
-                    (Players.isAuctioned eq false) and
-                            (Players.specialism eq specialism)
-                }
+            // Fetch all unauctioned players ordered by base price DESC
+            val allAvailable = Players.selectAll()
+                .where { Players.isAuctioned eq false }
                 .orderBy(Players.basePrice to SortOrder.DESC)
-                .limit(1)
                 .map { it.toPlayer() }
-                .singleOrNull()
+
+            if (allAvailable.isEmpty()) return@transaction null
+
+            // Get the highest base price
+            val highestPrice = allAvailable.first().basePrice
+
+            // Get all players at that price tier and shuffle among them
+            val topTier = allAvailable.filter { it.basePrice == highestPrice }
+            topTier.shuffled().first()
         }
 
-    /** Legacy — kept for any callers that haven't migrated to pool-based yet */
-    fun findNextAvailablePlayer(auctionId: String): Player? =
+    /**
+     * Upcoming players across ALL specialisms for the "Up Next" panel.
+     * Same logic: ordered by base price DESC, shuffled within same price tier.
+     */
+    fun findUpcomingPlayersGlobal(excludeId: String?): List<Player> =
         transaction {
-            Players.selectAll()
-                .where { Players.isAuctioned eq false }
-                .orderBy(Players.createdAt to SortOrder.ASC)
-                .limit(1)
+            val allAvailable = Players.selectAll()
+                .where {
+                    (Players.isAuctioned eq false) and
+                            if (excludeId != null) (Players.id neq excludeId) else Op.TRUE
+                }
+                .orderBy(Players.basePrice to SortOrder.DESC)
                 .map { it.toPlayer() }
-                .singleOrNull()
+
+            if (allAvailable.isEmpty()) return@transaction emptyList()
+
+            // Group by price tier and shuffle within each tier, then flatten
+            allAvailable
+                .groupBy { it.basePrice }
+                .entries
+                .sortedByDescending { it.key }
+                .flatMap { (_, players) -> players.shuffled() }
+                .take(5)
         }
+
+    // ── Kept for backwards compatibility (pool-based callers) ──────────────
+
+    fun findNextAvailablePlayerInPool(auctionId: String, specialism: String): Player? =
+        findNextAvailablePlayerGlobal(auctionId)
+
+    fun findNextAvailablePlayer(auctionId: String): Player? =
+        findNextAvailablePlayerGlobal(auctionId)
 
     fun countBySpecialism(specialism: String): Long =
         transaction {
@@ -169,6 +199,9 @@ class PlayerRepository {
                 .count()
         }
 
+    fun countAll(): Long =
+        transaction { Players.selectAll().count() }
+
     fun countAuctionedBySpecialism(specialism: String): Long =
         transaction {
             Players.selectAll()
@@ -176,6 +209,13 @@ class PlayerRepository {
                     (Players.specialism eq specialism) and
                             (Players.isAuctioned eq true)
                 }
+                .count()
+        }
+
+    fun countAuctioned(): Long =
+        transaction {
+            Players.selectAll()
+                .where { Players.isAuctioned eq true }
                 .count()
         }
 
@@ -269,4 +309,7 @@ class PlayerRepository {
     fun delete(id: String) {
         transaction { Players.deleteWhere { Players.id eq id } }
     }
+
+    fun findUpcomingPlayersInPool(specialism: String, excludeId: String?): List<Player> =
+        findUpcomingPlayersGlobal(excludeId)
 }

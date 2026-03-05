@@ -168,6 +168,14 @@ class SquadRepository(
                 .count()
         }
 
+    fun countPlayers(squadId: String): Int =
+        transaction {
+            SquadPlayers.selectAll()
+                .where { SquadPlayers.squadId eq squadId }
+                .count()
+                .toInt()
+        }
+
     fun update(id: String, name: String) {
         transaction {
             Squads.update({ Squads.id eq id }) {
@@ -189,4 +197,15 @@ class SquadRepository(
             SquadPlayers.deleteWhere { SquadPlayers.id eq id }
         }
     }
+
+    fun isPlayerAlreadySoldInAuction(playerId: String, auctionId: String): Boolean =
+        transaction {
+            (SquadPlayers innerJoin Squads)
+                .selectAll()
+                .where {
+                    (SquadPlayers.playerId eq playerId) and
+                            (Squads.auctionId eq auctionId)
+                }
+                .count() > 0
+        }
 }

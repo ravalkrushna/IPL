@@ -15,7 +15,7 @@ class BidLogService(
 
     fun logBid(
         auctionId: String,
-        playerId: String,
+        playerId: String?,
         participantId: UUID? = null,
         participantName: String? = null,
         squadName: String? = null,

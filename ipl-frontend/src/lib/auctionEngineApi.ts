@@ -29,6 +29,7 @@ export interface EngineState {
   pools: PoolResponse[]
   lastResult: LastResult | null
   poolExhausted: boolean
+  upcomingPlayers: Player[]  // ← ADD THIS
 }
 
 export const auctionEngineApi = {

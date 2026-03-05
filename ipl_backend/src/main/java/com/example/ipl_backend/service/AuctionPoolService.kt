@@ -18,51 +18,39 @@ class AuctionPoolService(
 ) {
 
     /**
-     * Auto-creates the four standard pools for a new auction.
+     * Creates a single ALL pool for the auction.
      * Called by AuctionService on auction creation.
      */
     fun createDefaultPools(auctionId: String) {
-        val now = Instant.now().toEpochMilli()
-        val poolTypes = listOf(
-            PoolType.BATSMAN      to 1,
-            PoolType.BOWLER       to 2,
-            PoolType.ALLROUNDER   to 3,
-            PoolType.WICKETKEEPER to 4
-        )
-        poolTypes.forEach { (poolType, order) ->
-            val playerCount = playerRepository.countBySpecialism(poolType.name)
-            if (playerCount > 0) {
-                val existing = auctionPoolRepository.findByAuctionAndType(auctionId, poolType)
-                if (existing == null) {
-                    auctionPoolRepository.save(
-                        AuctionPool(
-                            id            = UUID.randomUUID(),
-                            auctionId     = auctionId,
-                            poolType      = poolType,
-                            status        = PoolStatus.PENDING,
-                            sequenceOrder = order,
-                            createdAt     = now,
-                            updatedAt     = now
-                        )
+        val now          = Instant.now().toEpochMilli()
+        val playerCount  = playerRepository.countAll()
+
+        if (playerCount > 0) {
+            val existing = auctionPoolRepository.findByAuctionAndType(auctionId, PoolType.ALL)
+            if (existing == null) {
+                auctionPoolRepository.save(
+                    AuctionPool(
+                        id            = UUID.randomUUID(),
+                        auctionId     = auctionId,
+                        poolType      = PoolType.ALL,
+                        status        = PoolStatus.PENDING,
+                        sequenceOrder = 1,
+                        createdAt     = now,
+                        updatedAt     = now
                     )
-                    println("✅ Pool ${poolType.name} created for auction=$auctionId ($playerCount players)")
-                }
-            } else {
-                println("⚠️ Skipping pool ${poolType.name} — no players with that specialism")
+                )
+                println("✅ ALL pool created for auction=$auctionId ($playerCount players)")
             }
+        } else {
+            println("⚠️ Skipping pool creation — no players found")
         }
     }
 
-    /**
-     * Admin ACTIVATES a pool — starts it (PENDING→ACTIVE) or resumes it (PAUSED→ACTIVE).
-     * Frontend will pick up the new pool status on next /engine/state poll.
-     */
     fun activatePool(auctionId: String, poolType: PoolType): AuctionPool {
         val currentlyActive = auctionPoolRepository.findActivePool(auctionId)
         if (currentlyActive != null && currentlyActive.poolType != poolType) {
             throw InvalidAuctionStateException(
-                "Pool ${currentlyActive.poolType} is currently ACTIVE. " +
-                        "Pause or complete it before starting $poolType."
+                "A pool is currently ACTIVE. Pause it before activating another."
             )
         }
 
@@ -71,65 +59,56 @@ class AuctionPoolService(
 
         when (pool.status) {
             PoolStatus.COMPLETED ->
-                throw InvalidAuctionStateException(
-                    "Pool $poolType is COMPLETED and cannot be restarted."
-                )
+                throw InvalidAuctionStateException("Pool is COMPLETED and cannot be restarted.")
             PoolStatus.ACTIVE ->
-                throw InvalidAuctionStateException("Pool $poolType is already ACTIVE.")
+                throw InvalidAuctionStateException("Pool is already ACTIVE.")
             PoolStatus.PENDING, PoolStatus.PAUSED -> {
                 val action = if (pool.status == PoolStatus.PAUSED) "RESUMED" else "STARTED"
                 auctionPoolRepository.updateStatus(pool.id, PoolStatus.ACTIVE)
-                bidLogRepository.save(auctionId = auctionId, playerId = "system", bidType = BidType.POOL_STARTED)
-                println("🏊 Pool ${poolType.name} $action for auction=$auctionId")
+                bidLogRepository.save(auctionId = auctionId, playerId = null, bidType = BidType.POOL_STARTED)
+                println("🏊 Pool $action for auction=$auctionId")
             }
         }
 
         return auctionPoolRepository.findById(pool.id)!!
     }
 
-    /**
-     * Admin PAUSES the current active pool.
-     * Frontend will see activePool=null on next poll.
-     */
     fun pausePool(auctionId: String): AuctionPool {
         val activePool = auctionPoolRepository.findActivePool(auctionId)
             ?: throw InvalidAuctionStateException("No ACTIVE pool to pause for auction $auctionId")
 
         auctionPoolRepository.updateStatus(activePool.id, PoolStatus.PAUSED)
-        bidLogRepository.save(auctionId = auctionId, playerId = "system", bidType = BidType.POOL_ENDED)
-        println("⏸ Pool ${activePool.poolType.name} PAUSED for auction=$auctionId")
+        bidLogRepository.save(auctionId = auctionId, playerId = null, bidType = BidType.POOL_ENDED)
+        println("⏸ Pool PAUSED for auction=$auctionId")
 
         return auctionPoolRepository.findById(activePool.id)!!
     }
 
-    /**
-     * Admin COMPLETES the current active or paused pool — permanent, irreversible.
-     */
     fun completePool(auctionId: String): AuctionPool {
         val pool = auctionPoolRepository.findActivePool(auctionId)
             ?: auctionPoolRepository.findByAuction(auctionId).firstOrNull { it.status == PoolStatus.PAUSED }
             ?: throw InvalidAuctionStateException("No ACTIVE or PAUSED pool to complete for auction $auctionId")
 
         auctionPoolRepository.updateStatus(pool.id, PoolStatus.COMPLETED)
-        bidLogRepository.save(auctionId = auctionId, playerId = "system", bidType = BidType.POOL_ENDED)
-        println("🏁 Pool ${pool.poolType.name} COMPLETED for auction=$auctionId")
+        bidLogRepository.save(auctionId = auctionId, playerId = null, bidType = BidType.POOL_ENDED)
+        println("🏁 Pool COMPLETED for auction=$auctionId")
 
         return auctionPoolRepository.findById(pool.id)!!
     }
 
     fun getPoolsForAuction(auctionId: String): List<PoolResponse> =
         auctionPoolRepository.findByAuction(auctionId).map { pool ->
-            val playerCount    = playerRepository.countBySpecialism(pool.poolType.name)
-            val auctionedCount = playerRepository.countAuctionedBySpecialism(pool.poolType.name)
+            val totalPlayers   = playerRepository.countAll()
+            val auctionedCount = playerRepository.countAuctioned()
             PoolResponse(
                 id             = pool.id,
                 auctionId      = pool.auctionId,
                 poolType       = pool.poolType.name,
                 status         = pool.status.name,
                 sequenceOrder  = pool.sequenceOrder,
-                totalPlayers   = playerCount,
+                totalPlayers   = totalPlayers,
                 auctionedCount = auctionedCount,
-                remaining      = playerCount - auctionedCount
+                remaining      = totalPlayers - auctionedCount
             )
         }
 

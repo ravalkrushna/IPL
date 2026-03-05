@@ -35,9 +35,10 @@ data class AuctionPool(
 )
 
 enum class PoolType {
+    ALL,
     BATSMAN,
     BOWLER,
-    ALLROUNDER,
+    ALLROUNDER,   // ← must exactly match what's stored in auction_pools.pool_type
     WICKETKEEPER
 }
 
