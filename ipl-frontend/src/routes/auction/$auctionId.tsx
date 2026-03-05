@@ -7,7 +7,7 @@ import { useEffect } from "react"
 import { AxiosError } from "axios"
 
 import { auctionApi } from "@/lib/auctionApi"
-import { auctionEngineApi } from "@/lib/auctionEngineApi"
+import { auctionEngineApi, auctionPoolApi } from "@/lib/auctionEngineApi"
 import { biddingApi } from "@/lib/biddingApi"
 import { hammerApi, participantApi } from "@/lib/hammerApi"
 import { squadApi } from "@/lib/squadApi"
@@ -787,7 +787,7 @@ function BudgetOverview({
 
 // ─── ADMIN PANEL ─────────────────────────────────────────────────────────
 
-function AdminPanel({ auctionId }: { auctionId: string }) {
+function AdminPanel({ auctionId, onEnd }: { auctionId: string; onEnd: () => void }) {
   const queryClient = useQueryClient()
 
   const confirmEnd = useAuctionRoomStore(s => s.confirmEnd)
@@ -816,8 +816,12 @@ function AdminPanel({ auctionId }: { auctionId: string }) {
   })
   const { data: walletMap } = useWalletMap(auctionId, allSquads)
 
-  const endAuction = useMutation({ mutationFn: () => auctionApi.end(auctionId), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["auction", auctionId] }) })
+  const endAuction = useMutation({ mutationFn: () => auctionApi.end(auctionId), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["auction", auctionId] }); onEnd() } })
 
+  const activatePool = useMutation({
+    mutationFn: (poolType: string) => auctionPoolApi.activatePool(auctionId, poolType),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["engineState", auctionId] }),
+  })
   const nextPlayer = useMutation({
     mutationFn: () => auctionEngineApi.nextPlayer(auctionId),
     onSuccess: () => {
@@ -826,6 +830,15 @@ function AdminPanel({ auctionId }: { auctionId: string }) {
       queryClient.invalidateQueries({ queryKey: ["players", { getAll: true }] })
     },
   })
+  // Auto-activate pool if PENDING, then call nextPlayer
+  const handleNextPlayer = async () => {
+    const pool = engineState?.pools?.[0]
+    if (pool && (pool.status === "PENDING" || pool.status === "PAUSED")) {
+      await activatePool.mutateAsync(pool.poolType)
+    }
+    nextPlayer.mutate()
+  }
+  const nextPlayerBusy = nextPlayer.isPending || activatePool.isPending
   const manualHammer = useMutation({
     mutationFn: (data: { participantId: string; finalAmount: number }) =>
       hammerApi.manualHammer({ playerId: currentPlayer!.id, auctionId, ...data } as Parameters<typeof hammerApi.manualHammer>[0]),
@@ -878,9 +891,9 @@ function AdminPanel({ auctionId }: { auctionId: string }) {
         <div className="rounded-xl border border-stone-200 bg-white shrink-0 overflow-hidden">
           <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest px-4 pt-3.5 pb-2">Controls</p>
           <div className="px-3 pb-3 flex flex-col gap-2">
-            <button onClick={() => nextPlayer.mutate()} disabled={nextPlayer.isPending}
+            <button onClick={handleNextPlayer} disabled={nextPlayerBusy}
               className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-black text-sm transition-all shadow-sm">
-              ⏭ Next Player
+              {activatePool.isPending ? "Starting…" : nextPlayer.isPending ? "Loading…" : "⏭ Next Player"}
             </button>
             <button onClick={() => setShowManualHammer(true)}
               className="w-full py-2.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold text-sm transition-all">
@@ -1164,7 +1177,15 @@ function AddParticipantNavButton({ auctionId }: { auctionId: string }) {
         className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 transition-all">
         ＋ Add Participant
       </button>
-
+      <AddParticipantDialog
+        open={showAddParticipant}
+        onOpenChange={setShowAddParticipant}
+        auctionId={auctionId}
+        onAdded={() => {
+          queryClient.invalidateQueries({ queryKey: ["allSquads", auctionId] })
+          queryClient.invalidateQueries({ queryKey: ["participants", auctionId] })
+        }}
+      />
     </>
   )
 }
@@ -1272,7 +1293,7 @@ function AuctionRoomPage() {
         </div>
       </header>
 
-      {isAdmin ? <AdminPanel auctionId={auctionId} /> : <ParticipantView auctionId={auctionId} me={me} />}
+      {isAdmin ? <AdminPanel auctionId={auctionId} onEnd={() => navigate({ to: "/auction" })} /> : <ParticipantView auctionId={auctionId} me={me} />}
     </div>
   )
 }
