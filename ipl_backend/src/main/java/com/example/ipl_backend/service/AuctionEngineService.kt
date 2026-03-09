@@ -39,13 +39,6 @@ class AuctionEngineService(
 
     // ─── QUEUE ───────────────────────────────────────────────────────────────
 
-    /**
-     * Builds a stable ordered queue once:
-     * - All unauctioned players fetched
-     * - Grouped by base price tier, highest first
-     * - Shuffled ONCE within each tier at build time
-     * - Never reshuffled again until resetForNewAuction is called
-     */
     fun initQueue(auctionId: String) {
         val allPlayers: List<Player> = playerRepository.findAll()
             .filter { !it.isAuctioned }
@@ -72,12 +65,15 @@ class AuctionEngineService(
         auctionPoolRepository.findActivePool(auctionId)
             ?: throw InvalidAuctionStateException("No active pool — admin must activate the auction first")
 
-        // If there's a current player who was never hammered, mark them unsold
+        // ── Mark previous player as unsold if skipped ──────────────────────
+        // Uses markAsUnsoldIfNotAuctioned() which does SELECT FOR UPDATE + UPDATE
+        // atomically in ONE transaction. Never nest transaction calls — doing
+        // findById() + markAsUnsold() separately causes nested transactions in
+        // Exposed which silently fail (inner tx does not commit).
         val existingPlayer = currentPlayers[auctionId]
         if (existingPlayer != null) {
-            val playerState = playerRepository.findById(existingPlayer.id)
-            if (playerState != null && !playerState.isAuctioned) {
-                playerRepository.markAsUnsold(existingPlayer.id)
+            val wasMarked = playerRepository.markAsUnsoldIfNotAuctioned(existingPlayer.id)
+            if (wasMarked) {
                 auctionTimerService.cancelTimer(existingPlayer.id)
                 setLastResult(auctionId, LastResult(
                     playerName = existingPlayer.name,
@@ -125,9 +121,6 @@ class AuctionEngineService(
 
     // ─── UPCOMING PLAYERS ────────────────────────────────────────────────────
 
-    /**
-     * Returns next 5 from the stable queue — no shuffle on read, always consistent.
-     */
     fun getUpcomingPlayers(auctionId: String): List<Player> {
         val queue = playerQueues[auctionId] ?: return emptyList()
         return queue.take(5)

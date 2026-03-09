@@ -136,14 +136,8 @@ class PlayerRepository {
                 .map { it.toPlayer() }
         }
 
-    /**
-     * Next player across ALL specialisms ordered by base price DESC.
-     * Players sharing the same base price are shuffled randomly amongst themselves.
-     * e.g. All 2Cr players appear before 1.5Cr players, but order within 2Cr is random.
-     */
     fun findNextAvailablePlayerGlobal(auctionId: String): Player? =
         transaction {
-            // Fetch all unauctioned players ordered by base price DESC
             val allAvailable = Players.selectAll()
                 .where { Players.isAuctioned eq false }
                 .orderBy(Players.basePrice to SortOrder.DESC)
@@ -151,18 +145,11 @@ class PlayerRepository {
 
             if (allAvailable.isEmpty()) return@transaction null
 
-            // Get the highest base price
             val highestPrice = allAvailable.first().basePrice
-
-            // Get all players at that price tier and shuffle among them
             val topTier = allAvailable.filter { it.basePrice == highestPrice }
             topTier.shuffled().first()
         }
 
-    /**
-     * Upcoming players across ALL specialisms for the "Up Next" panel.
-     * Same logic: ordered by base price DESC, shuffled within same price tier.
-     */
     fun findUpcomingPlayersGlobal(excludeId: String?): List<Player> =
         transaction {
             val allAvailable = Players.selectAll()
@@ -175,7 +162,6 @@ class PlayerRepository {
 
             if (allAvailable.isEmpty()) return@transaction emptyList()
 
-            // Group by price tier and shuffle within each tier, then flatten
             allAvailable
                 .groupBy { it.basePrice }
                 .entries
@@ -183,8 +169,6 @@ class PlayerRepository {
                 .flatMap { (_, players) -> players.shuffled() }
                 .take(5)
         }
-
-    // ── Kept for backwards compatibility (pool-based callers) ──────────────
 
     fun findNextAvailablePlayerInPool(auctionId: String, specialism: String): Player? =
         findNextAvailablePlayerGlobal(auctionId)
@@ -241,12 +225,45 @@ class PlayerRepository {
         }
     }
 
+    /**
+     * Atomically checks if a player is not yet auctioned and marks them unsold.
+     * Does the SELECT FOR UPDATE + UPDATE in a single transaction to prevent
+     * race conditions. Returns true if the player was marked unsold, false if
+     * they were already auctioned (i.e. nothing to do).
+     *
+     * Use this instead of calling findById + markAsUnsold separately — separate
+     * calls require nesting transactions which causes silent failures in Exposed.
+     */
+    fun markAsUnsoldIfNotAuctioned(id: String): Boolean =
+        transaction {
+            val player = Players.selectAll()
+                .where { Players.id eq id }
+                .forUpdate()
+                .map { it.toPlayer() }
+                .singleOrNull()
+
+            if (player == null || player.isAuctioned) {
+                return@transaction false
+            }
+
+            val now = Instant.now().toEpochMilli()
+            Players.update({ Players.id eq id }) {
+                it[isSold]      = false
+                it[isAuctioned] = true
+                it[updatedAt]   = now
+            }
+            println("✅ markAsUnsoldIfNotAuctioned: marked ${player.name} (id=$id) as UNSOLD")
+            true
+        }
+
     fun findForUpdate(id: String): Player? =
-        Players.selectAll()
-            .where { Players.id eq id }
-            .forUpdate()
-            .map { it.toPlayer() }
-            .singleOrNull()
+        transaction {
+            Players.selectAll()
+                .where { Players.id eq id }
+                .forUpdate()
+                .map { it.toPlayer() }
+                .singleOrNull()
+        }
 
     fun updateStats(
         id: String,

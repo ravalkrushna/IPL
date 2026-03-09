@@ -3,6 +3,7 @@ package com.example.ipl_backend.controller
 import com.example.ipl_backend.dto.CreatePlayerRequest
 import com.example.ipl_backend.dto.ListPlayersRequest
 import com.example.ipl_backend.model.Player
+import com.example.ipl_backend.repository.PlayerRepository
 import com.example.ipl_backend.service.PlayerService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -11,7 +12,8 @@ import org.springframework.web.bind.annotation.*
 @RestController
 @RequestMapping("/api/v1/players")
 class PlayerController(
-    private val playerService: PlayerService
+    private val playerService: PlayerService,
+    private val playerRepository: PlayerRepository
 ) {
 
     @PostMapping("/create")
@@ -42,5 +44,17 @@ class PlayerController(
     @GetMapping("/unsold")
     fun unsoldPlayers(): ResponseEntity<List<Player>> {
         return ResponseEntity.ok(playerService.getUnsoldPlayers())
+    }
+
+    // In your PlayerController or a debug controller
+    @GetMapping("/debug/players/auctioned-state")
+    fun debugAuctionedState(): Map<String, Any> {
+        val all = playerRepository.findAll()
+        return mapOf(
+            "total" to all.size,
+            "isAuctioned_true" to all.count { it.isAuctioned },
+            "isSold_true" to all.count { it.isSold },
+            "unsold_auctioned_not_sold" to all.count { it.isAuctioned && !it.isSold }
+        )
     }
 }
