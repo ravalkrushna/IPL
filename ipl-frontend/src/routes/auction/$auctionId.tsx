@@ -63,7 +63,11 @@ const mobileCSS = `
     .ar-status-chip { display: none !important; }
     .ar-header-right { display: none !important; }
     .ar-squads-col { display: none !important; }
-
+.ar-root { height: auto !important; overflow-y: auto !important; min-height: 100vh; }
+.ar-body { flex-direction: column !important; overflow-y: visible !important; overflow-x: hidden !important; height: auto !important; }
+.ar-left-col { overflow-y: visible !important; overflow-x: hidden !important; flex: none !important; height: auto !important; }
+.ar-bid-history-card { flex: none !important; min-height: 300px !important; max-height: 400px !important; }
+.ar-bid-list { overflow-y: auto !important; flex: 1 !important; max-height: 350px !important; }
     .ar-mobile-bar {
       display: flex !important;
       align-items: center;
@@ -78,8 +82,8 @@ const mobileCSS = `
     .ar-mobile-bar-left  { display: flex; align-items: center; gap: 6px; }
     .ar-mobile-bar-right { display: flex; align-items: center; gap: 6px; }
 
-    .ar-body          { flex-direction: column !important; overflow-y: auto !important; overflow-x: hidden !important; }
-    .ar-left-col      { border-right: none !important; min-width: 0 !important; overflow: visible !important; flex: none !important; }
+    .ar-body { flex-direction: column !important; overflow-y: hidden !important; overflow-x: hidden !important; }
+    .ar-left-col { overflow-y: auto !important; overflow-x: hidden !important; }
     .ar-left-inner    { flex-direction: column !important; }
     .ar-upcoming-wrap { width: 100% !important; margin-top: 8px; }
 
@@ -363,15 +367,15 @@ function BidHistoryTable({ auctionId, mobileBudgetSlot }: {
   type SquadPlayer = { id: string; name: string; specialism?: string; soldPrice?: number }
   type Squad = { id?: string; name: string; participantId?: string; players?: SquadPlayer[] }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  type RawPlayer = { id: string; auctioned?: boolean; sold?: boolean;[key: string]: any }
+  type RawPlayer = { id: string; auctioned?: boolean; sold?: boolean; [key: string]: any }
 
   const allSales: { playerName: string; squadName: string; specialism?: string; soldPrice: number }[] = []
-    ; (allSquads as Squad[] ?? []).forEach((sq: Squad) => {
-      (sq.players ?? []).forEach((p: SquadPlayer) => {
-        if (p.soldPrice != null && p.soldPrice > 0)
-          allSales.push({ playerName: p.name, squadName: sq.name, specialism: p.specialism, soldPrice: p.soldPrice })
-      })
+  ;(allSquads as Squad[] ?? []).forEach((sq: Squad) => {
+    (sq.players ?? []).forEach((p: SquadPlayer) => {
+      if (p.soldPrice != null && p.soldPrice > 0)
+        allSales.push({ playerName: p.name, squadName: sq.name, specialism: p.specialism, soldPrice: p.soldPrice })
     })
+  })
   allSales.reverse()
 
   const allPlayers = (allPlayersData as RawPlayer[] | undefined) ?? []
@@ -380,8 +384,8 @@ function BidHistoryTable({ auctionId, mobileBudgetSlot }: {
   const soldPlayerIds = new Set(
     (allSquads as Squad[] ?? []).flatMap(sq => (sq.players ?? []).map(p => p.id))
   )
-  const soldCount = soldPlayerIds.size
-  const unsoldCount = allPlayers.filter(p => p.auctioned === true && !soldPlayerIds.has(p.id)).length
+  const soldCount      = soldPlayerIds.size
+  const unsoldCount    = allPlayers.filter(p => p.auctioned === true && !soldPlayerIds.has(p.id)).length
   const remainingCount = Math.max(0, totalPlayers - soldCount - unsoldCount)
 
   const SPEC_COLORS: Record<string, string> = {
@@ -399,12 +403,13 @@ function BidHistoryTable({ auctionId, mobileBudgetSlot }: {
 
   return (
     <div className="flex flex-col gap-2 h-full min-h-0 overflow-hidden">
+
       {/* ── Stat grid ── */}
       <div className="ar-stat-grid grid grid-cols-4 gap-2 shrink-0">
         {[
-          { label: "Sold", val: soldCount, sub: `of ${totalPlayers}`, pct: soldCount / Math.max(totalPlayers, 1), cls: "border-emerald-200 bg-emerald-50", txt: "text-emerald-600", bar: "bg-emerald-400", lbl: "text-emerald-400" },
-          { label: "Unsold", val: unsoldCount, sub: `of ${totalPlayers}`, pct: unsoldCount / Math.max(totalPlayers, 1), cls: "border-red-200 bg-red-50", txt: "text-red-500", bar: "bg-red-400", lbl: "text-red-400" },
-          { label: "Remaining", val: remainingCount, sub: `of ${totalPlayers}`, pct: remainingCount / Math.max(totalPlayers, 1), cls: "border-stone-200 bg-stone-50", txt: "text-stone-700", bar: "bg-stone-400", lbl: "text-stone-400" },
+          { label: "Sold",      val: soldCount,      sub: `of ${totalPlayers}`, pct: soldCount      / Math.max(totalPlayers, 1), cls: "border-emerald-200 bg-emerald-50", txt: "text-emerald-600", bar: "bg-emerald-400", lbl: "text-emerald-400" },
+          { label: "Unsold",    val: unsoldCount,    sub: `of ${totalPlayers}`, pct: unsoldCount    / Math.max(totalPlayers, 1), cls: "border-red-200 bg-red-50",          txt: "text-red-500",     bar: "bg-red-400",     lbl: "text-red-400"    },
+          { label: "Remaining", val: remainingCount, sub: `of ${totalPlayers}`, pct: remainingCount / Math.max(totalPlayers, 1), cls: "border-stone-200 bg-stone-50",      txt: "text-stone-700",   bar: "bg-stone-400",   lbl: "text-stone-400"  },
         ].map(({ label, val, sub, pct, cls, txt, bar, lbl }) => (
           <div key={label} className={`rounded-lg border px-3 py-2 ${cls}`}>
             <p className={`text-[9px] font-black uppercase tracking-widest ${lbl}`}>{label}</p>
@@ -429,7 +434,7 @@ function BidHistoryTable({ auctionId, mobileBudgetSlot }: {
         )}
       </div>
 
-      {/* ── Teams (mobile only) — injected between stat grid and bid history ── */}
+      {/* ── Teams (mobile only) ── */}
       {mobileBudgetSlot}
 
       {/* ── Bid History ── */}
@@ -444,7 +449,7 @@ function BidHistoryTable({ auctionId, mobileBudgetSlot }: {
             <p className="text-xs text-stone-300 italic">No players sold yet</p>
           </div>
         ) : (
-          <div className="divide-y divide-stone-50 overflow-y-auto flex-1">
+          <div className="ar-bid-list divide-y divide-stone-50 overflow-y-auto flex-1">
             {allSales.map((s, i) => {
               const color = SPEC_COLORS[normaliseSpecialism(s.specialism)] ?? "#94a3b8"
               return (
@@ -925,7 +930,7 @@ function AdminPanel({ auctionId, onEnd }: { auctionId: string; onEnd: () => void
         </div>
 
         {/* Stat cards + bid history */}
-        <div className="flex-1 px-4 pb-2 min-h-0">
+        <div className="flex-1 px-4 pb-4 min-h-0 overflow-hidden flex flex-col">
           <BidHistoryTable
             auctionId={auctionId}
             mobileBudgetSlot={
@@ -1067,8 +1072,8 @@ function ParticipantView({ auctionId }: { auctionId: string; me: { participantId
           )}
         </div>
 
-        <div className="flex-1 px-4 pb-4 min-h-0">
-          <div className="flex-1 px-4 pb-4 min-h-0">
+        <div className="flex-1 px-4 pb-4 min-h-0 overflow-hidden flex flex-col">
+          <div className="flex-1 px-4 pb-4 min-h-0 overflow-hidden flex flex-col">
             <BidHistoryTable
               auctionId={auctionId}
               mobileBudgetSlot={
@@ -1188,7 +1193,7 @@ function AuctionRoomPage() {
   return (
     <>
       <style>{mobileCSS}</style>
-      <div className="h-screen flex flex-col overflow-hidden" style={{ fontFamily: "'DM Sans', system-ui, sans-serif", background: "#f5f3ef" }}>
+      <div className="ar-root h-screen flex flex-col overflow-hidden" style={{ fontFamily: "'DM Sans', system-ui, sans-serif", background: "#f5f3ef" }}>
 
         {soldInfo && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 backdrop-blur-sm pointer-events-none">
