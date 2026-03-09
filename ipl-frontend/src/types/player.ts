@@ -10,5 +10,6 @@ export type Player = {
   t20Caps?: number
   battingStyle?: string
   bowlingStyle?: string
-  isAuctioned?: boolean   // ← add this
+  auctioned?: boolean   // ← was isAuctioned
+  sold?: boolean        // ← was isSold
 }

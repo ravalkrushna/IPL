@@ -39,6 +39,7 @@ const styles = `
     font-family: 'DM Sans', system-ui, sans-serif;
     min-height: 100vh;
     overflow-x: hidden;
+    width: 100%;
   }
 
   /* ── NAV ── */
@@ -167,9 +168,9 @@ const styles = `
     overflow: hidden;
     padding: 120px 40px 80px;
     text-align: center;
+    width: 100%;
   }
 
-  /* Animated shader-style background mesh */
   .hero-canvas-bg {
     position: absolute;
     inset: 0;
@@ -223,7 +224,6 @@ const styles = `
     100% { transform: translate(0px, 0px) scale(1); }
   }
 
-  /* Grain overlay for texture */
   .hero-grain {
     position: absolute;
     inset: 0;
@@ -240,6 +240,7 @@ const styles = `
     z-index: 2;
     max-width: 780px;
     margin: 0 auto;
+    width: 100%;
   }
 
   .hero-badge {
@@ -362,7 +363,6 @@ const styles = `
     box-shadow: 0 4px 16px rgba(0,0,0,0.1);
   }
 
-  /* hero scroll hint */
   .hero-scroll-hint {
     position: absolute;
     bottom: 32px; left: 50%;
@@ -401,7 +401,6 @@ const styles = `
     100% { transform: translateY(10px); opacity: 0; }
   }
 
-  /* hero stat band */
   .hero-stats-band {
     position: relative;
     z-index: 2;
@@ -555,14 +554,6 @@ const styles = `
     font-weight: 500;
   }
 
-  .hiw-connector {
-    position: absolute;
-    top: 36px; right: -10px;
-    width: 20px; height: 2px;
-    background: var(--border-dark);
-    display: none;
-  }
-
   /* ── CRICKET INFO ── */
   .cricket-grid {
     display: grid;
@@ -573,10 +564,8 @@ const styles = `
   }
 
   @media (max-width: 768px) {
-    .cricket-grid { grid-template-columns: 1fr; }
+    .cricket-grid { grid-template-columns: 1fr; gap: 32px; }
   }
-
-  .cricket-text-block {}
 
   .cricket-visual {
     background: white;
@@ -705,7 +694,7 @@ const styles = `
     font-weight: 500;
   }
 
-  /* ── TESTIMONIALS / JOY SECTION ── */
+  /* ── JOY / TESTIMONIALS ── */
   .joy-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -774,7 +763,7 @@ const styles = `
     font-weight: 600;
   }
 
-  /* ── AUCTION SPOTLIGHT ── */
+  /* ── SPOTLIGHT / CTA BAND ── */
   .spotlight-band {
     background: linear-gradient(135deg, #1e4d35 0%, #2d7a4f 50%, #1e4d35 100%);
     padding: 80px 40px;
@@ -949,14 +938,13 @@ const styles = `
     font-weight: 500;
   }
 
-  /* ── Divider strip ── */
   .gradient-divider {
     height: 1px;
     background: linear-gradient(90deg, transparent, var(--border-dark), transparent);
     margin: 0;
   }
 
-  /* player bid card floating decoration */
+  /* ── FLOATING PLAYER CARDS ── */
   .hero-floating-card {
     position: absolute;
     z-index: 2;
@@ -1011,14 +999,173 @@ const styles = `
     to   { transform: translateY(-12px); }
   }
 
-  /* ── Responsive nav ── */
+  /* ══════════════════════════════════════
+     MOBILE RESPONSIVE — max-width: 640px
+  ══════════════════════════════════════ */
   @media (max-width: 640px) {
+
+    /* NAV */
+    .home-nav {
+      padding: 0 16px;
+      height: 58px;
+    }
     .home-nav-links { display: none; }
-    .home-nav { padding: 0 20px; }
-    .hero-section { padding: 100px 24px 64px; }
-    .section { padding: 64px 24px; }
-    .fc-1, .fc-3 { display: none; }
-    .spotlight-inner { flex-direction: column; text-align: center; }
+    .home-nav-tagline { display: none; }
+    .btn-ghost-nav { padding: 0 14px; font-size: 12px; }
+    .btn-green-nav { padding: 0 14px; font-size: 12px; }
+
+    /* HERO — hide all floating cards, they cause overflow */
+    .hero-floating-card { display: none !important; }
+
+    .hero-section {
+      padding: 90px 20px 80px;
+      min-height: 100svh;
+    }
+
+    .hero-content {
+      width: 100%;
+      padding: 0;
+    }
+
+    .hero-badge {
+      font-size: 10px;
+      padding: 4px 12px;
+    }
+
+    .hero-title {
+      font-size: clamp(34px, 9vw, 48px);
+      letter-spacing: -1px;
+      word-break: break-word;
+      overflow-wrap: break-word;
+    }
+
+    .hero-sub {
+      font-size: 14px;
+      margin: 14px auto 28px;
+      padding: 0 4px;
+    }
+
+    /* Stack CTA buttons vertically, full width */
+    .hero-cta {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .btn-hero-primary,
+    .btn-hero-secondary {
+      width: 100%;
+      justify-content: center;
+      height: 48px;
+      font-size: 14px;
+    }
+
+    /* Stats: 2x2 grid card */
+    .hero-stats-band {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      margin-top: 36px;
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+    }
+
+    .hero-stat-item {
+      padding: 18px 12px;
+      border-right: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      border-top: none;
+    }
+
+    .hero-stat-item:nth-child(2n) { border-right: none; }
+    .hero-stat-item:nth-child(3),
+    .hero-stat-item:nth-child(4)  { border-bottom: none; }
+
+    .hero-stat-num   { font-size: 24px; }
+    .hero-stat-label { font-size: 9px; }
+
+    /* Scroll hint */
+    .hero-scroll-hint { bottom: 20px; }
+
+    /* SECTIONS */
+    .section          { padding: 56px 20px; }
+    .hiw-section      { padding: 56px 20px; }
+    .features-section { padding: 56px 20px; }
+
+    .section-title { letter-spacing: -0.5px; }
+
+    /* HOW IT WORKS — single column */
+    .hiw-grid {
+      grid-template-columns: 1fr;
+      gap: 14px;
+      margin-top: 36px;
+    }
+
+    /* CRICKET grid — stack */
+    .cricket-grid {
+      grid-template-columns: 1fr;
+      gap: 28px;
+      margin-top: 36px;
+    }
+
+    .cricket-visual { padding: 24px 20px; }
+
+    /* FEATURES — single column */
+    .features-grid {
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin-top: 36px;
+    }
+
+    /* JOY cards — single column */
+    .joy-grid {
+      grid-template-columns: 1fr;
+      gap: 14px;
+      margin-top: 36px;
+    }
+
+    /* SPOTLIGHT CTA band */
+    .spotlight-band { padding: 56px 20px; }
+
+    .spotlight-inner {
+      flex-direction: column;
+      text-align: center;
+      align-items: center;
+      gap: 32px;
+    }
+
+    .spotlight-text { min-width: unset; width: 100%; }
+
+    .spotlight-actions {
+      width: 100%;
+      flex-direction: column;
+    }
+
+    .btn-spotlight-primary,
+    .btn-spotlight-secondary {
+      width: 100%;
+      justify-content: center;
+      white-space: normal;
+    }
+
+    /* FOOTER */
+    .home-footer { padding: 32px 20px; }
+
+    .footer-inner {
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 16px;
+    }
+
+    .footer-links {
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px 20px;
+    }
   }
 `
 
@@ -1115,11 +1262,11 @@ const JOY_CARDS = [
 ]
 
 const CRICKET_STATS = [
-  { label: "🌍  Countries represented", value: "16+", color: "green" },
-  { label: "🎯  Playing roles available", value: "4 types", color: "" },
-  { label: "⚡  Avg. auction session", value: "~90 min", color: "amber" },
-  { label: "👥  Max participants", value: "Unlimited", color: "green" },
-  { label: "💰  Starting budget", value: "₹100 Cr", color: "" },
+  { label: "🌍  Countries represented", value: "16+",       color: "green" },
+  { label: "🎯  Playing roles available", value: "4 types",  color: "" },
+  { label: "⚡  Avg. auction session",    value: "~90 min",  color: "amber" },
+  { label: "👥  Max participants",        value: "Unlimited",color: "green" },
+  { label: "💰  Starting budget",         value: "₹100 Cr", color: "" },
 ]
 
 /* ─────────────── COMPONENT ─────────────── */
@@ -1153,7 +1300,6 @@ function RouteComponent() {
 
       {/* ══════ HERO ══════ */}
       <section className="hero-section">
-        {/* Shader-inspired animated mesh background */}
         <div className="hero-canvas-bg">
           <div className="hero-mesh-blob blob-1" />
           <div className="hero-mesh-blob blob-2" />
@@ -1162,7 +1308,7 @@ function RouteComponent() {
           <div className="hero-grain" />
         </div>
 
-        {/* Floating player cards */}
+        {/* Floating player cards — hidden on mobile via CSS */}
         <div className="hero-floating-card fc-1">
           <span className="hfc-flag">🇮🇳</span>
           <div className="hfc-left">
@@ -1199,7 +1345,6 @@ function RouteComponent() {
           <span className="hfc-bid">₹11 Cr</span>
         </div>
 
-        {/* Hero content */}
         <div className="hero-content">
           <div className="hero-badge">
             <span className="hero-badge-dot" />
@@ -1225,12 +1370,11 @@ function RouteComponent() {
             </a>
           </div>
 
-          {/* Stat band */}
           <div className="hero-stats-band">
             {[
               { num: "500+", label: "Players" },
               { num: "16",   label: "Nations" },
-              { num: "∞",   label: "Auctions" },
+              { num: "∞",    label: "Auctions" },
               { num: "100%", label: "Free to Play" },
             ].map(({ num, label }) => (
               <div key={label} className="hero-stat-item">
@@ -1323,7 +1467,10 @@ function RouteComponent() {
           </div>
 
           <div className="cricket-visual">
-            <p style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize: 16, color: "var(--ink)", marginBottom: 20, letterSpacing: "-0.2px" }}>
+            <p style={{
+              fontFamily: "'Playfair Display', serif", fontWeight: 700,
+              fontSize: 16, color: "var(--ink)", marginBottom: 20, letterSpacing: "-0.2px"
+            }}>
               BidXI at a Glance
             </p>
             {CRICKET_STATS.map(({ label, value, color }) => (
@@ -1413,7 +1560,10 @@ function RouteComponent() {
         <div className="footer-inner">
           <div className="footer-brand">
             <div className="home-nav-icon" style={{ width: 28, height: 28, fontSize: 14, borderRadius: 7 }}>🏏</div>
-            <span style={{ fontFamily: "'Playfair Display', serif", fontWeight: 900, fontSize: 16, color: "var(--ink)" }}>
+            <span style={{
+              fontFamily: "'Playfair Display', serif",
+              fontWeight: 900, fontSize: 16, color: "var(--ink)"
+            }}>
               BidXI
             </span>
           </div>

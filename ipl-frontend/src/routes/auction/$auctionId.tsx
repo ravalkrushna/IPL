@@ -1,10 +1,8 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react-refresh/only-export-components */
 import { createFileRoute, useParams, useNavigate } from "@tanstack/react-router"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { useEffect } from "react"
-import { AxiosError } from "axios"
+import { useEffect, useMemo } from "react"
 
 import { auctionApi } from "@/lib/auctionApi"
 import { auctionEngineApi, auctionPoolApi } from "@/lib/auctionEngineApi"
@@ -15,8 +13,6 @@ import { authApi } from "@/lib/auth"
 import { useAuctionRoomStore } from "@/store/auctionRoomStore"
 import { Player } from "@/types/player"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -54,13 +50,109 @@ function specialismStyle(sp?: string) {
   }
 }
 
+// ─── MOBILE CSS ───────────────────────────────────────────────────────────
+
+const mobileCSS = `
+  .ar-mobile-bar   { display: none; }
+  .ar-budget-mobile  { display: none; }
+  .ar-budget-desktop { display: block; }
+
+  @media (max-width: 640px) {
+    .ar-header { padding: 0 14px !important; height: 50px !important; }
+    .ar-title  { font-size: 14px !important; }
+    .ar-status-chip { display: none !important; }
+    .ar-header-right { display: none !important; }
+    .ar-squads-col { display: none !important; }
+
+    .ar-mobile-bar {
+      display: flex !important;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+      height: 42px;
+      background: #f3efe6;
+      border-bottom: 1px solid #e8e0d0;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .ar-mobile-bar-left  { display: flex; align-items: center; gap: 6px; }
+    .ar-mobile-bar-right { display: flex; align-items: center; gap: 6px; }
+
+    .ar-body          { flex-direction: column !important; overflow-y: auto !important; overflow-x: hidden !important; }
+    .ar-left-col      { border-right: none !important; min-width: 0 !important; overflow: visible !important; flex: none !important; }
+    .ar-left-inner    { flex-direction: column !important; }
+    .ar-upcoming-wrap { width: 100% !important; margin-top: 8px; }
+
+    .ar-ctrl-col {
+      width: 100% !important;
+      order: -1 !important;
+      border-right: none !important;
+      border-bottom: 1px solid #e8e0d0;
+      padding: 12px !important;
+      flex-direction: column !important;
+      gap: 8px !important;
+      overflow: visible !important;
+    }
+    .ar-ctrl-primary {
+      display: flex !important;
+      flex-direction: row !important;
+      gap: 8px !important;
+    }
+    .ar-ctrl-primary > button { flex: 1 !important; min-width: 0 !important; font-size: 12px !important; }
+
+    .ar-squads-col { width: 100% !important; border-top: 1px solid #e8e0d0; }
+
+    .ar-bid-col {
+      width: 100% !important;
+      border-right: none !important;
+      border-top: 1px solid #e8e0d0;
+      padding: 12px !important;
+      flex-direction: column !important;
+      gap: 8px !important;
+      overflow: visible !important;
+    }
+    .ar-bid-inner     { width: 100%; display: flex; flex-wrap: wrap; gap: 8px; }
+    .ar-bid-inner > * { flex: 1; min-width: 140px; }
+    .ar-bid-grid      { grid-template-columns: repeat(4, 1fr) !important; }
+
+    .ar-stat-grid { grid-template-columns: repeat(2, 1fr) !important; }
+
+    .ar-hero h2 { font-size: 1.2rem !important; }
+
+    .ar-ctrl-col .bg-stone-50 { max-width: 100% !important; overflow-x: hidden !important; }
+
+    .ar-mob-back-btn {
+      display: flex; align-items: center; gap: 4px;
+      padding: 5px 10px; border-radius: 8px;
+      border: 1px solid #e8e0d0; background: white;
+      font-size: 11px; font-weight: 700; color: #6b5e4e;
+      cursor: pointer; white-space: nowrap;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .ar-budget-mobile  { display: block !important; }
+    .ar-budget-desktop { display: none !important; }
+  }
+
+  @media (min-width: 641px) and (max-width: 900px) {
+    .ar-ctrl-col   { width: 200px !important; }
+    .ar-squads-col { width: 180px !important; }
+    .ar-bid-col    { width: 200px !important; }
+    .ar-header     { padding: 0 16px !important; }
+  }
+`
+
 // ─── WALLET MAP HOOK ─────────────────────────────────────────────────────
 
 type SquadForWallet = { participantId?: string }
 
 function useWalletMap(auctionId: string, squads: SquadForWallet[] | undefined) {
+  const participantIds = useMemo(
+    () => (squads ?? []).map(s => s.participantId).filter(Boolean).sort().join(","),
+    [squads]
+  )
   return useQuery({
-    queryKey: ["allWallets", auctionId, (squads ?? []).map(s => s.participantId).join(",")],
+    queryKey: ["allWallets", auctionId, participantIds],
     queryFn: async () => {
       const results = await Promise.all(
         (squads ?? [])
@@ -74,7 +166,9 @@ function useWalletMap(auctionId: string, squads: SquadForWallet[] | undefined) {
       return Object.fromEntries(results) as Record<string, number | null>
     },
     enabled: !!squads && squads.length > 0,
-    refetchInterval: 5000,
+    refetchInterval: 12000,
+    staleTime: 10000,
+    placeholderData: (prev) => prev,
   })
 }
 
@@ -96,9 +190,12 @@ function TimerRing({ seconds, total, biddingOpen, paused }: {
           style={{ transition: "stroke-dashoffset 0.9s linear, stroke 0.3s" }} />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        {paused ? <span className="text-base text-slate-400">⏸</span>
-          : biddingOpen ? (<><span className="text-[10px] font-black text-emerald-500 tracking-wider">LIVE</span><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse mt-0.5" /></>)
-            : seconds > 0 ? (<><span className="text-lg font-black tabular-nums leading-none" style={{ color }}>{seconds}</span><span className="text-[9px] text-slate-400 font-semibold tracking-widest">SEC</span></>)
+        {paused
+          ? <span className="text-base text-slate-400">⏸</span>
+          : biddingOpen
+            ? (<><span className="text-[10px] font-black text-emerald-500 tracking-wider">LIVE</span><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse mt-0.5" /></>)
+            : seconds > 0
+              ? (<><span className="text-lg font-black tabular-nums leading-none" style={{ color }}>{seconds}</span><span className="text-[9px] text-slate-400 font-semibold tracking-widest">SEC</span></>)
               : <span className="text-slate-300 text-xs">—</span>}
       </div>
     </div>
@@ -113,7 +210,7 @@ function PlayerHeroCard({ player, seconds, total, biddingOpen, paused, battingSt
 }) {
   const st = specialismStyle(player.specialism)
   return (
-    <div className="rounded-xl overflow-hidden border border-stone-200 shadow-sm h-full flex flex-col"
+    <div className="ar-hero rounded-xl overflow-hidden border border-stone-200 shadow-sm h-full flex flex-col"
       style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #334155 100%)" }}>
       <div className="px-5 pt-5 pb-3 flex-1">
         <div className="flex items-start justify-between gap-3">
@@ -159,7 +256,7 @@ function PlayerHeroCard({ player, seconds, total, biddingOpen, paused, battingSt
         ].map(({ label, value, color }) => (
           <div key={label} className={`flex flex-col items-center py-3.5 ${value > 0 ? "opacity-100" : "opacity-35"}`}>
             <span className={`text-xl font-black tabular-nums ${value > 0 ? color : "text-slate-500"}`}>{value > 0 ? value : "—"}</span>
-            <span className="text-[10px] text-stone-400 font-semibold tracking-widest mt.0.5">{label}</span>
+            <span className="text-[10px] text-stone-400 font-semibold tracking-widest">{label}</span>
           </div>
         ))}
       </div>
@@ -170,29 +267,22 @@ function PlayerHeroCard({ player, seconds, total, biddingOpen, paused, battingSt
 // ─── UPCOMING PLAYERS PANEL ──────────────────────────────────────────────
 
 function UpcomingPlayers({ upcomingPlayers, currentPlayerId }: {
-  upcomingPlayers: Player[]
-  currentPlayerId?: string
+  upcomingPlayers: Player[]; currentPlayerId?: string
 }) {
   const needsFallback = upcomingPlayers.length === 0
-
   const { data: allPlayers } = useQuery({
     queryKey: ["players", { getAll: true }],
     queryFn: () => import("@/lib/playerApi").then(m => m.playerApi.list({ getAll: true })),
-    refetchInterval: 15000,
+    refetchInterval: 8000,
+    staleTime: 0,
     enabled: needsFallback,
+    placeholderData: (prev) => prev,
   })
-
   const display = needsFallback
-    ? (allPlayers ?? [] as Player[])
-      .filter((p: Player) => !p.isAuctioned && p.id !== currentPlayerId)
-      .sort((a: Player, b: Player) => Number(b.basePrice) - Number(a.basePrice))
-      .slice(0, 5)
-    : upcomingPlayers
-      .filter(p => p.id !== currentPlayerId)
-      .slice(0, 5)
-
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ? (allPlayers ?? [] as Player[]).filter((p: any) => !p.auctioned && p.id !== currentPlayerId).sort((a: Player, b: Player) => Number(b.basePrice) - Number(a.basePrice)).slice(0, 5)
+    : upcomingPlayers.filter(p => p.id !== currentPlayerId).slice(0, 5)
   if (display.length === 0) return null
-
   return (
     <div className="rounded-xl border border-stone-200 bg-white shrink-0">
       <div className="px-4 pt-3.5 pb-2 border-b border-stone-100">
@@ -220,16 +310,10 @@ function UpcomingPlayers({ upcomingPlayers, currentPlayerId }: {
 function RadialChart({ segments }: { segments: { label: string; value: number; color: string }[] }) {
   const total = segments.reduce((s, seg) => s + seg.value, 0)
   if (total === 0) return null
-  const r = 30
-  const circ = 2 * Math.PI * r
-  let offset = 0
+  const r = 30; const circ = 2 * Math.PI * r; let offset = 0
   const arcs = segments.map(seg => {
-    const pct = seg.value / total
-    const dash = pct * circ
-    const gap = circ - dash
-    const arc = { ...seg, dash, gap, offset }
-    offset += dash
-    return arc
+    const pct = seg.value / total; const dash = pct * circ; const gap = circ - dash
+    const arc = { ...seg, dash, gap, offset }; offset += dash; return arc
   })
   return (
     <div className="flex items-center gap-2">
@@ -254,87 +338,85 @@ function RadialChart({ segments }: { segments: { label: string; value: number; c
   )
 }
 
-// ─── BID HISTORY TABLE ───────────────────────────────────────────────────
+// ─── BID HISTORY TABLE ────────────────────────────────────────────────────
 
-function BidHistoryTable({ auctionId, auctionedCount }: { auctionId: string; auctionedCount?: number }) {
+function BidHistoryTable({ auctionId, mobileBudgetSlot }: {
+  auctionId: string
+  mobileBudgetSlot?: React.ReactNode
+}) {
   const { data: allSquads } = useQuery({
     queryKey: ["allSquads", auctionId],
     queryFn: () => squadApi.allSquads(auctionId),
-    refetchInterval: 5000,
+    refetchInterval: 8000,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
   })
 
   const { data: allPlayersData } = useQuery({
     queryKey: ["players", { getAll: true }],
     queryFn: () => import("@/lib/playerApi").then(m => m.playerApi.list({ getAll: true })),
-    refetchInterval: 10000,
+    refetchInterval: 3000,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
   })
 
   type SquadPlayer = { id: string; name: string; specialism?: string; soldPrice?: number }
   type Squad = { id?: string; name: string; participantId?: string; players?: SquadPlayer[] }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type RawPlayer = { id: string; auctioned?: boolean; sold?: boolean;[key: string]: any }
 
   const allSales: { playerName: string; squadName: string; specialism?: string; soldPrice: number }[] = []
-  ;(allSquads as Squad[] ?? []).forEach((sq: Squad) => {
-    (sq.players ?? []).forEach((p: SquadPlayer) => {
-      if (p.soldPrice != null && p.soldPrice > 0) {
-        allSales.push({ playerName: p.name, squadName: sq.name, specialism: p.specialism, soldPrice: p.soldPrice })
-      }
+    ; (allSquads as Squad[] ?? []).forEach((sq: Squad) => {
+      (sq.players ?? []).forEach((p: SquadPlayer) => {
+        if (p.soldPrice != null && p.soldPrice > 0)
+          allSales.push({ playerName: p.name, squadName: sq.name, specialism: p.specialism, soldPrice: p.soldPrice })
+      })
     })
-  })
-  allSales.sort((a, b) => b.soldPrice - a.soldPrice)
+  allSales.reverse()
 
-  const totalPlayers = (allPlayersData as Player[] | undefined)?.length ?? 0
-  const soldCount = allSales.length
-  const unsoldCount = auctionedCount != null ? auctionedCount - soldCount : 0
-  const remainingCount = totalPlayers > 0 ? totalPlayers - (auctionedCount ?? 0) : 0
+  const allPlayers = (allPlayersData as RawPlayer[] | undefined) ?? []
+  const totalPlayers = allPlayers.length
+
+  const soldPlayerIds = new Set(
+    (allSquads as Squad[] ?? []).flatMap(sq => (sq.players ?? []).map(p => p.id))
+  )
+  const soldCount = soldPlayerIds.size
+  const unsoldCount = allPlayers.filter(p => p.auctioned === true && !soldPlayerIds.has(p.id)).length
+  const remainingCount = Math.max(0, totalPlayers - soldCount - unsoldCount)
 
   const SPEC_COLORS: Record<string, string> = {
-    BATSMAN: "#38bdf8", BOWLER: "#fb7185", ALLROUNDER: "#a78bfa", WICKETKEEPER: "#fbbf24"
+    BATSMAN: "#38bdf8", BOWLER: "#fb7185", ALLROUNDER: "#a78bfa", WICKETKEEPER: "#fbbf24",
   }
+
   const specialismCount: Record<string, number> = {}
   allSales.forEach(s => {
     const sp = normaliseSpecialism(s.specialism) || "Unknown"
     specialismCount[sp] = (specialismCount[sp] ?? 0) + 1
   })
   const radialSegments = Object.entries(specialismCount).map(([label, value]) => ({
-    label, value, color: SPEC_COLORS[label] ?? "#94a3b8"
+    label, value, color: SPEC_COLORS[label] ?? "#94a3b8",
   }))
 
   return (
     <div className="flex flex-col gap-2 h-full min-h-0 overflow-hidden">
-      <div className="grid grid-cols-4 gap-2 shrink-0">
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
-          <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Sold</p>
-          <p className="text-lg font-black text-emerald-600 tabular-nums leading-tight">{soldCount}</p>
-          <p className="text-[9px] text-emerald-400 font-semibold">of {totalPlayers}</p>
-          {totalPlayers > 0 && (
-            <div className="mt-1 h-0.5 rounded-full bg-emerald-100 overflow-hidden">
-              <div className="h-full rounded-full bg-emerald-400 transition-all duration-500"
-                style={{ width: `${Math.min((soldCount / totalPlayers) * 100, 100)}%` }} />
-            </div>
-          )}
-        </div>
-        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2">
-          <p className="text-[9px] font-black text-red-400 uppercase tracking-widest">Unsold</p>
-          <p className="text-lg font-black text-red-500 tabular-nums leading-tight">{unsoldCount}</p>
-          <p className="text-[9px] text-red-400 font-semibold">of {totalPlayers}</p>
-          {totalPlayers > 0 && (
-            <div className="mt-1 h-0.5 rounded-full bg-red-100 overflow-hidden">
-              <div className="h-full rounded-full bg-red-400 transition-all duration-500"
-                style={{ width: `${Math.min((unsoldCount / totalPlayers) * 100, 100)}%` }} />
-            </div>
-          )}
-        </div>
-        <div className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2">
-          <p className="text-[9px] font-semibold text-stone-400 uppercase tracking-widest">Remaining</p>
-          <p className="text-lg font-black text-stone-700 tabular-nums leading-tight">{remainingCount}</p>
-          <p className="text-[9px] text-stone-400 font-semibold">of {totalPlayers}</p>
-          {totalPlayers > 0 && (
-            <div className="mt-1 h-0.5 rounded-full bg-stone-100 overflow-hidden">
-              <div className="h-full rounded-full bg-stone-400 transition-all duration-500"
-                style={{ width: `${Math.min((remainingCount / totalPlayers) * 100, 100)}%` }} />
-            </div>
-          )}
-        </div>
+      {/* ── Stat grid ── */}
+      <div className="ar-stat-grid grid grid-cols-4 gap-2 shrink-0">
+        {[
+          { label: "Sold", val: soldCount, sub: `of ${totalPlayers}`, pct: soldCount / Math.max(totalPlayers, 1), cls: "border-emerald-200 bg-emerald-50", txt: "text-emerald-600", bar: "bg-emerald-400", lbl: "text-emerald-400" },
+          { label: "Unsold", val: unsoldCount, sub: `of ${totalPlayers}`, pct: unsoldCount / Math.max(totalPlayers, 1), cls: "border-red-200 bg-red-50", txt: "text-red-500", bar: "bg-red-400", lbl: "text-red-400" },
+          { label: "Remaining", val: remainingCount, sub: `of ${totalPlayers}`, pct: remainingCount / Math.max(totalPlayers, 1), cls: "border-stone-200 bg-stone-50", txt: "text-stone-700", bar: "bg-stone-400", lbl: "text-stone-400" },
+        ].map(({ label, val, sub, pct, cls, txt, bar, lbl }) => (
+          <div key={label} className={`rounded-lg border px-3 py-2 ${cls}`}>
+            <p className={`text-[9px] font-black uppercase tracking-widest ${lbl}`}>{label}</p>
+            <p className={`text-lg font-black tabular-nums leading-tight ${txt}`}>{val}</p>
+            <p className={`text-[9px] font-semibold ${lbl}`}>{sub}</p>
+            {totalPlayers > 0 && (
+              <div className="mt-1 h-0.5 rounded-full bg-white/60 overflow-hidden">
+                <div className={`h-full rounded-full transition-all duration-500 ${bar}`} style={{ width: `${Math.min(pct * 100, 100)}%` }} />
+              </div>
+            )}
+          </div>
+        ))}
         {radialSegments.length > 0 ? (
           <div className="rounded-lg border border-stone-200 bg-white px-3 py-2">
             <p className="text-[9px] font-semibold text-stone-400 uppercase tracking-widest mb-1">By Role</p>
@@ -346,6 +428,11 @@ function BidHistoryTable({ auctionId, auctionedCount }: { auctionId: string; auc
           </div>
         )}
       </div>
+
+      {/* ── Teams (mobile only) — injected between stat grid and bid history ── */}
+      {mobileBudgetSlot}
+
+      {/* ── Bid History ── */}
       <div className="rounded-xl border border-stone-200 bg-white flex flex-col flex-1 min-h-0">
         <div className="px-4 pt-3.5 pb-2 border-b border-stone-100 flex items-center justify-between shrink-0">
           <span className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest">Bid History</span>
@@ -382,16 +469,13 @@ function BidHistoryTable({ auctionId, auctionedCount }: { auctionId: string; auc
 
 function SquadCard({ squad, isMe, expanded, onToggle, remainingBudget }: {
   squad: { id?: string; name: string; participantId?: string; players?: { id: string; name: string; specialism?: string; soldPrice?: number }[] }
-  isMe: boolean; expanded: boolean; onToggle: () => void
-  remainingBudget?: number | null
+  isMe: boolean; expanded: boolean; onToggle: () => void; remainingBudget?: number | null
 }) {
   const players = squad.players ?? []
   const spent = players.reduce((s, p) => s + (p.soldPrice ?? 0), 0)
   return (
     <div onClick={onToggle}
-      className={`rounded-2xl border transition-all duration-200 overflow-hidden cursor-pointer
-        ${isMe ? "border-emerald-300 bg-emerald-50 shadow-[0_2px_12px_rgba(16,185,129,0.15)]"
-          : "border-stone-200 bg-white hover:border-stone-300 hover:shadow-sm"}`}>
+      className={`rounded-2xl border transition-all duration-200 overflow-hidden cursor-pointer ${isMe ? "border-emerald-300 bg-emerald-50 shadow-[0_2px_12px_rgba(16,185,129,0.15)]" : "border-stone-200 bg-white hover:border-stone-300 hover:shadow-sm"}`}>
       <div className="px-3.5 py-3 flex items-center justify-between gap-2 bg-white">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className={`w-2 h-2 rounded-full shrink-0 ${isMe ? "bg-emerald-500" : "bg-slate-300"}`} />
@@ -399,29 +483,14 @@ function SquadCard({ squad, isMe, expanded, onToggle, remainingBudget }: {
           {isMe && <span className="text-[9px] font-black bg-emerald-500 text-white px-1.5 py-0.5 rounded-full shrink-0">YOU</span>}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <span className={`text-xs font-bold tabular-nums ${players.length >= MAX_SQUAD_SIZE ? "text-red-500" : isMe ? "text-emerald-600" : "text-slate-400"}`}>
-            {players.length}/{MAX_SQUAD_SIZE}
-          </span>
-          {players.length >= MAX_SQUAD_SIZE && (
-            <span className="text-[9px] font-black bg-red-100 text-red-500 border border-red-200 px-1.5 py-0.5 rounded-full shrink-0">FULL</span>
-          )}
-          <svg className={`w-3 h-3 text-stone-400 transition-transform ${expanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
+          <span className={`text-xs font-bold tabular-nums ${players.length >= MAX_SQUAD_SIZE ? "text-red-500" : isMe ? "text-emerald-600" : "text-slate-400"}`}>{players.length}/{MAX_SQUAD_SIZE}</span>
+          {players.length >= MAX_SQUAD_SIZE && <span className="text-[9px] font-black bg-red-100 text-red-500 border border-red-200 px-1.5 py-0.5 rounded-full shrink-0">FULL</span>}
+          <svg className={`w-3 h-3 text-stone-400 transition-transform ${expanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
         </div>
       </div>
       <div className="px-3.5 pb-2.5 flex items-center justify-between gap-2">
-        <span className="text-[11px] text-stone-400">
-          Spent: <span className={`font-semibold ${isMe ? "text-emerald-600" : "text-slate-600"}`}>{fmt(spent)}</span>
-        </span>
-        {remainingBudget != null && (
-          <span className="text-[11px] text-stone-400">
-            Left:{" "}
-            <span className={`font-semibold tabular-nums ${remainingBudget < 10_000_000 ? "text-red-500" : remainingBudget < 50_000_000 ? "text-amber-500" : "text-indigo-600"}`}>
-              {fmt(remainingBudget)}
-            </span>
-          </span>
-        )}
+        <span className="text-[11px] text-stone-400">Spent: <span className={`font-semibold ${isMe ? "text-emerald-600" : "text-slate-600"}`}>{fmt(spent)}</span></span>
+        {remainingBudget != null && <span className="text-[11px] text-stone-400">Left: <span className={`font-semibold tabular-nums ${remainingBudget < 10_000_000 ? "text-red-500" : remainingBudget < 50_000_000 ? "text-amber-500" : "text-indigo-600"}`}>{fmt(remainingBudget)}</span></span>}
       </div>
       {expanded && (
         <div className="border-t border-stone-100">
@@ -450,9 +519,7 @@ function SquadCard({ squad, isMe, expanded, onToggle, remainingBudget }: {
 
 // ─── HAMMER DIALOG ───────────────────────────────────────────────────────
 
-function ManualHammerDialog({
-  open, onOpenChange, currentPlayer, participants, participantsLoading, allSquads, onHammer, isPending,
-}: {
+function ManualHammerDialog({ open, onOpenChange, currentPlayer, participants, participantsLoading, allSquads, onHammer, isPending }: {
   open: boolean; onOpenChange: (v: boolean) => void; currentPlayer: Player | null
   participants: { id: string; name: string; walletBalance?: number }[] | undefined
   participantsLoading: boolean
@@ -467,40 +534,21 @@ function ManualHammerDialog({
   const setRawInput = useAuctionRoomStore(s => s.setHammerRawInput)
   const inputError = useAuctionRoomStore(s => s.hammerInputError)
   const setInputError = useAuctionRoomStore(s => s.setHammerInputError)
-  useEffect(() => {
-    if (open) {
-      setSelectedParticipantId("")
-      setAmount(null)
-      setRawInput("")
-      setInputError("")
-    }
-  }, [open])
+  useEffect(() => { if (open) { setSelectedParticipantId(""); setAmount(null); setRawInput(""); setInputError("") } }, [open])
 
-  // Input is always in Crore — e.g. 0.25 = ₹25L
   const handleRawInput = (val: string) => {
-    setRawInput(val)
-    setInputError("")
+    setRawInput(val); setInputError("")
     if (!val.trim()) { setAmount(null); return }
     const num = parseFloat(val)
-    if (!isNaN(num) && num > 0) {
-      setAmount(Math.round(num * 10_000_000))
-    } else {
-      setAmount(null)
-      setInputError("Enter a valid number")
-    }
+    if (!isNaN(num) && num > 0) setAmount(Math.round(num * 10_000_000))
+    else { setAmount(null); setInputError("Enter a valid number") }
   }
-
-  const handleQuickAmount = (value: number) => {
-    setAmount(value)
-    setRawInput(String(value / 10_000_000))
-    setInputError("")
-  }
+  const handleQuickAmount = (value: number) => { setAmount(value); setRawInput(String(value / 10_000_000)); setInputError("") }
 
   const basePrice = Number(currentPlayer?.basePrice ?? 0)
   const belowBase = Number(amount) > 0 && Number(amount) < basePrice
   const selectedSquad = (allSquads ?? []).find(s => s.participantId === selectedParticipantId)
   const selectedSquadFull = (selectedSquad?.players?.length ?? 0) >= MAX_SQUAD_SIZE
-
   const canSubmit = !isPending && !!currentPlayer && Number(amount) > 0 && !belowBase && !!selectedParticipantId && !inputError && !selectedSquadFull
 
   const QUICK_AMOUNTS = [
@@ -516,7 +564,6 @@ function ManualHammerDialog({
         <DialogHeader>
           <div className="flex items-center justify-between">
             <DialogTitle className="text-lg font-black">🔨 Hammer</DialogTitle>
-            {/* Player inline in header */}
             <div className="text-right mr-6">
               <p className="font-bold text-stone-700 text-sm">{currentPlayer?.name ?? "—"}</p>
               <p className="text-xs text-slate-400">Base: <span className="font-bold text-amber-600">{fmt(basePrice)}</span></p>
@@ -524,8 +571,6 @@ function ManualHammerDialog({
           </div>
         </DialogHeader>
         <div className="space-y-4 mt-2">
-
-          {/* Quick select — full width */}
           <div>
             <p className="text-xs font-semibold text-stone-400 mb-2 uppercase tracking-wider">Quick Select</p>
             <div className="grid grid-cols-4 gap-1.5">
@@ -537,36 +582,21 @@ function ManualHammerDialog({
               ))}
             </div>
           </div>
-
-          {/* ── Two columns: Amount (left) + Participant (right) ── */}
           <div className="grid grid-cols-2 gap-4 items-start">
-
-            {/* Left: Custom Amount */}
             <div>
               <p className="text-xs font-semibold text-stone-400 mb-1.5 uppercase tracking-wider">Custom Amount (Crore)</p>
               <div className="relative">
-                <Input
-                  placeholder="e.g. 0.25 or 1.5"
-                  value={rawInput}
-                  onChange={(e) => handleRawInput(e.target.value)}
-                  className={`bg-stone-50 pr-10 ${inputError ? "border-red-300 focus-visible:ring-red-300" : "border-stone-200"}`}
-                />
+                <Input placeholder="e.g. 0.25 or 1.5" value={rawInput} onChange={(e) => handleRawInput(e.target.value)}
+                  className={`bg-stone-50 pr-10 ${inputError ? "border-red-300 focus-visible:ring-red-300" : "border-stone-200"}`} />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-black text-stone-400">Cr</span>
               </div>
               <div className="mt-1.5 min-h-5">
-                {inputError
-                  ? <p className="text-xs text-red-500 font-medium">{inputError}</p>
-                  : Number(amount) > 0
-                    ? <p className="text-sm font-black text-amber-500">= {fmt(Number(amount))}</p>
-                    : <p className="text-xs text-stone-300">0.25 Cr = ₹25L</p>
-                }
-                {belowBase && (
-                  <p className="text-xs text-red-500 font-semibold mt-0.5">⚠️ Below base</p>
-                )}
+                {inputError ? <p className="text-xs text-red-500 font-medium">{inputError}</p>
+                  : Number(amount) > 0 ? <p className="text-sm font-black text-amber-500">= {fmt(Number(amount))}</p>
+                    : <p className="text-xs text-stone-300">0.25 Cr = ₹25L</p>}
+                {belowBase && <p className="text-xs text-red-500 font-semibold mt-0.5">⚠️ Below base</p>}
               </div>
             </div>
-
-            {/* Right: Participant */}
             <div>
               <p className="text-xs font-semibold text-stone-400 mb-1.5 uppercase tracking-wider">Participant</p>
               {participantsLoading
@@ -585,9 +615,7 @@ function ManualHammerDialog({
                               <span className={`font-semibold ${full ? "text-slate-300" : ""}`}>{p.name}</span>
                               {full
                                 ? <span className="text-[9px] font-black text-red-400 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-full">FULL</span>
-                                : p.walletBalance != null
-                                  ? <span className="text-xs text-slate-400">{fmt(p.walletBalance)}</span>
-                                  : null}
+                                : p.walletBalance != null ? <span className="text-xs text-slate-400">{fmt(p.walletBalance)}</span> : null}
                             </div>
                           </SelectItem>
                         )
@@ -595,13 +623,9 @@ function ManualHammerDialog({
                     </SelectContent>
                   </Select>
               }
-              {selectedSquadFull && (
-                <p className="text-xs text-red-500 font-semibold mt-1">⚠️ Squad full ({MAX_SQUAD_SIZE}/{MAX_SQUAD_SIZE})</p>
-              )}
+              {selectedSquadFull && <p className="text-xs text-red-500 font-semibold mt-1">⚠️ Squad full ({MAX_SQUAD_SIZE}/{MAX_SQUAD_SIZE})</p>}
             </div>
           </div>
-
-          {/* Actions */}
           <div className="flex gap-2 pt-1">
             <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-black" disabled={!canSubmit}
@@ -620,21 +644,26 @@ function ManualHammerDialog({
 function AddParticipantDialog({ open, onOpenChange, auctionId, onAdded }: {
   open: boolean; onOpenChange: (v: boolean) => void; auctionId: string; onAdded: () => void
 }) {
-  const search = useAuctionRoomStore(s => s.addSearch)
-  const setSearch = useAuctionRoomStore(s => s.setAddSearch)
-  const newName = useAuctionRoomStore(s => s.addNewName)
-  const setNewName = useAuctionRoomStore(s => s.setAddNewName)
-  const showNewForm = useAuctionRoomStore(s => s.addShowNewForm)
-  const setShowNewForm = useAuctionRoomStore(s => s.setAddShowNewForm)
-
+  const search = useAuctionRoomStore(s => s.addSearch); const setSearch = useAuctionRoomStore(s => s.setAddSearch)
+  const newName = useAuctionRoomStore(s => s.addNewName); const setNewName = useAuctionRoomStore(s => s.setAddNewName)
+  const showNewForm = useAuctionRoomStore(s => s.addShowNewForm); const setShowNewForm = useAuctionRoomStore(s => s.setAddShowNewForm)
   useEffect(() => { if (open) { setSearch(""); setNewName(""); setShowNewForm(false) } }, [open])
 
-  const { data: allParticipants, isLoading } = useQuery({ queryKey: ["allParticipants"], queryFn: () => participantApi.getAll(), enabled: open })
-  const { data: auctionSquads } = useQuery({ queryKey: ["allSquads", auctionId], queryFn: () => import("@/lib/squadApi").then(m => m.squadApi.allSquads(auctionId)), enabled: open })
-
+  const { data: allParticipants, isLoading } = useQuery({
+    queryKey: ["allParticipants"],
+    queryFn: () => participantApi.getAll(),
+    enabled: open,
+    staleTime: 30000,
+  })
+  const { data: auctionSquads } = useQuery({
+    queryKey: ["allSquads", auctionId],
+    queryFn: () => import("@/lib/squadApi").then(m => m.squadApi.allSquads(auctionId)),
+    enabled: open,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  })
   const alreadyInAuction = new Set((auctionSquads ?? []).map((s: { participantId?: string }) => s.participantId).filter(Boolean))
   const filtered = (allParticipants ?? []).filter(p => p.name.toLowerCase().includes(search.toLowerCase()))
-
   const addMutation = useMutation({
     mutationFn: (data: { participantId?: string; newParticipantName?: string }) => participantApi.addToAuction(auctionId, data),
     onSuccess: () => { onAdded(); onOpenChange(false) },
@@ -650,8 +679,10 @@ function AddParticipantDialog({ open, onOpenChange, auctionId, onAdded }: {
             <Input placeholder="Search by name…" value={search} onChange={e => setSearch(e.target.value)} className="bg-slate-50 border-slate-200" />
           </div>
           <div className="max-h-56 overflow-y-auto rounded-lg border border-stone-100 divide-y divide-stone-50">
-            {isLoading ? <p className="text-xs text-slate-400 italic text-center py-4">Loading…</p>
-              : filtered.length === 0 ? <p className="text-xs text-slate-400 italic text-center py-4">No participants found</p>
+            {isLoading
+              ? <p className="text-xs text-slate-400 italic text-center py-4">Loading…</p>
+              : filtered.length === 0
+                ? <p className="text-xs text-slate-400 italic text-center py-4">No participants found</p>
                 : filtered.map(p => {
                   const inAuction = alreadyInAuction.has(p.id)
                   return (
@@ -662,8 +693,7 @@ function AddParticipantDialog({ open, onOpenChange, auctionId, onAdded }: {
                         : <button disabled={addMutation.isPending} onClick={() => addMutation.mutate({ participantId: p.id })}
                           className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition-all disabled:opacity-40">
                           Add →
-                        </button>
-                      }
+                        </button>}
                     </div>
                   )
                 })
@@ -695,18 +725,15 @@ function AddParticipantDialog({ open, onOpenChange, auctionId, onAdded }: {
   )
 }
 
-// ─── BUDGET OVERVIEW (merged with squad list) ────────────────────────────
+// ─── BUDGET OVERVIEW ─────────────────────────────────────────────────────
 
-function BudgetOverview({
-  allSquads, walletMap, expandedSquad, setExpandedSquad,
-}: {
+function BudgetOverview({ allSquads, walletMap, expandedSquad, setExpandedSquad }: {
   allSquads: { id?: string; name: string; participantId?: string; players?: { id: string; name: string; specialism?: string; soldPrice?: number }[] }[] | undefined
   walletMap: Record<string, number | null> | undefined
   expandedSquad: string | null
   setExpandedSquad: (id: string | null) => void
 }) {
-  const TEAM_COLORS = ["#6366f1","#10b981","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#f97316","#ec4899"]
-
+  const TEAM_COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#f97316", "#ec4899"]
   const rows = (allSquads ?? []).map((s, i) => {
     const spent = (s.players ?? []).reduce((acc, p) => acc + (p.soldPrice ?? 0), 0)
     const remaining = s.participantId ? (walletMap?.[s.participantId] ?? null) : null
@@ -714,11 +741,9 @@ function BudgetOverview({
     const key = s.id ?? s.name
     return { key, name: s.name, spent, remaining: remaining ?? 0, total: total || 1_000_000_000, players: s.players ?? [], color: TEAM_COLORS[i % TEAM_COLORS.length] }
   }).sort((a, b) => b.spent - a.spent)
-
   if (rows.length === 0) return null
-
   return (
-    <div className="rounded-xl border border-stone-200 bg-white shrink-0 shadow-sm overflow-hidden">
+    <div className="ar-budget rounded-xl border border-stone-200 bg-white shrink-0 shadow-sm overflow-hidden">
       <div className="flex items-center justify-between px-4 pt-3.5 pb-2">
         <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest">Teams</p>
         <span className="text-[10px] text-stone-300 font-semibold">{rows.length} teams · {rows.reduce((a, r) => a + r.players.length, 0)} players</span>
@@ -731,7 +756,6 @@ function BudgetOverview({
           const isExpanded = expandedSquad === row.key
           return (
             <div key={row.key}>
-              {/* Row header — clickable to expand */}
               <button className="w-full text-left px-4 py-2.5 hover:bg-stone-50 transition-colors" onClick={() => setExpandedSquad(isExpanded ? null : row.key)}>
                 <div className="flex items-center justify-between mb-1.5 gap-2">
                   <div className="flex items-center gap-1.5 min-w-0">
@@ -754,7 +778,6 @@ function BudgetOverview({
                   <span className="text-[9px] font-semibold" style={{ color: row.color, opacity: 0.7 }}>{row.remaining > 0 ? `${fmt(row.remaining)} left` : "—"}</span>
                 </div>
               </button>
-              {/* Expanded player list */}
               {isExpanded && (
                 <div className="bg-stone-50 border-t border-stone-100 px-4 py-2 space-y-1 max-h-48 overflow-y-auto">
                   {row.players.length === 0
@@ -765,7 +788,9 @@ function BudgetOverview({
                         <div key={p.id} className="flex items-center justify-between gap-2 py-0.5">
                           <div className="flex items-center gap-1.5 min-w-0">
                             <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full border ${st.bg} ${st.text} ${st.border} shrink-0`}>
-                              {normaliseSpecialism(p.specialism) === "WICKETKEEPER" ? "WK" : normaliseSpecialism(p.specialism) === "ALLROUNDER" ? "AR" : normaliseSpecialism(p.specialism) === "BOWLER" ? "BWL" : "BAT"}
+                              {normaliseSpecialism(p.specialism) === "WICKETKEEPER" ? "WK"
+                                : normaliseSpecialism(p.specialism) === "ALLROUNDER" ? "AR"
+                                  : normaliseSpecialism(p.specialism) === "BOWLER" ? "BWL" : "BAT"}
                             </span>
                             <span className="text-xs text-stone-600 font-semibold truncate">{p.name}</span>
                           </div>
@@ -784,40 +809,63 @@ function BudgetOverview({
   )
 }
 
+// ─── ADD PARTICIPANT NAV BUTTON ──────────────────────────────────────────
+
+function AddParticipantNavButton({ auctionId }: { auctionId: string }) {
+  const queryClient = useQueryClient()
+  const setShowAddParticipant = useAuctionRoomStore(s => s.setShowAddParticipant)
+  const showAddParticipant = useAuctionRoomStore(s => s.showAddParticipant)
+  return (
+    <>
+      <button onClick={() => setShowAddParticipant(true)}
+        className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 transition-all">
+        ＋ Add Participant
+      </button>
+      <AddParticipantDialog open={showAddParticipant} onOpenChange={setShowAddParticipant} auctionId={auctionId}
+        onAdded={() => {
+          queryClient.invalidateQueries({ queryKey: ["allSquads", auctionId] })
+          queryClient.invalidateQueries({ queryKey: ["participants", auctionId] })
+        }} />
+    </>
+  )
+}
 
 // ─── ADMIN PANEL ─────────────────────────────────────────────────────────
 
 function AdminPanel({ auctionId, onEnd }: { auctionId: string; onEnd: () => void }) {
   const queryClient = useQueryClient()
+  const confirmEnd = useAuctionRoomStore(s => s.confirmEnd); const setConfirmEnd = useAuctionRoomStore(s => s.setConfirmEnd)
+  const showManualHammer = useAuctionRoomStore(s => s.showManualHammer); const setShowManualHammer = useAuctionRoomStore(s => s.setShowManualHammer)
+  const expandedSquad = useAuctionRoomStore(s => s.expandedSquad); const setExpandedSquad = useAuctionRoomStore(s => s.setExpandedSquad)
 
-  const confirmEnd = useAuctionRoomStore(s => s.confirmEnd)
-  const setConfirmEnd = useAuctionRoomStore(s => s.setConfirmEnd)
-  const showManualHammer = useAuctionRoomStore(s => s.showManualHammer)
-  const setShowManualHammer = useAuctionRoomStore(s => s.setShowManualHammer)
-  const expandedSquad = useAuctionRoomStore(s => s.expandedSquad)
-  const setExpandedSquad = useAuctionRoomStore(s => s.setExpandedSquad)
   const { data: engineState } = useQuery({
     queryKey: ["engineState", auctionId],
     queryFn: () => auctionEngineApi.state(auctionId),
-    refetchInterval: 1500,
+    refetchInterval: 2500,
+    staleTime: 2000,
   })
-
   const currentPlayer = engineState?.currentPlayer ?? null
-  const allPool = engineState?.pools?.[0] ?? null
-  const poolStatus = allPool?.status ?? null
   const poolExhausted = engineState?.poolExhausted ?? false
 
-  const { data: auction } = useQuery({ queryKey: ["auction", auctionId], queryFn: () => auctionApi.getById(auctionId), refetchInterval: 5000 })
-  const { data: allSquads } = useQuery({ queryKey: ["allSquads", auctionId], queryFn: () => squadApi.allSquads(auctionId), refetchInterval: 3000 })
+  const { data: allSquads } = useQuery({
+    queryKey: ["allSquads", auctionId],
+    queryFn: () => squadApi.allSquads(auctionId),
+    refetchInterval: 8000,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  })
   const { data: participants, isLoading: participantsLoading } = useQuery({
     queryKey: ["participants", auctionId],
     queryFn: () => hammerApi.getParticipants(auctionId),
-    refetchInterval: 3000,
+    refetchInterval: 10000,
+    staleTime: 8000,
   })
   const { data: walletMap } = useWalletMap(auctionId, allSquads)
 
-  const endAuction = useMutation({ mutationFn: () => auctionApi.end(auctionId), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["auction", auctionId] }); onEnd() } })
-
+  const endAuction = useMutation({
+    mutationFn: () => auctionApi.end(auctionId),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["auction", auctionId] }); onEnd() },
+  })
   const activatePool = useMutation({
     mutationFn: (poolType: string) => auctionPoolApi.activatePool(auctionId, poolType),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["engineState", auctionId] }),
@@ -830,15 +878,13 @@ function AdminPanel({ auctionId, onEnd }: { auctionId: string; onEnd: () => void
       queryClient.invalidateQueries({ queryKey: ["players", { getAll: true }] })
     },
   })
-  // Auto-activate pool if PENDING, then call nextPlayer
   const handleNextPlayer = async () => {
     const pool = engineState?.pools?.[0]
-    if (pool && (pool.status === "PENDING" || pool.status === "PAUSED")) {
-      await activatePool.mutateAsync(pool.poolType)
-    }
+    if (pool && (pool.status === "PENDING" || pool.status === "PAUSED")) await activatePool.mutateAsync(pool.poolType)
     nextPlayer.mutate()
   }
   const nextPlayerBusy = nextPlayer.isPending || activatePool.isPending
+
   const manualHammer = useMutation({
     mutationFn: (data: { participantId: string; finalAmount: number }) =>
       hammerApi.manualHammer({ playerId: currentPlayer!.id, auctionId, ...data } as Parameters<typeof hammerApi.manualHammer>[0]),
@@ -853,11 +899,11 @@ function AdminPanel({ auctionId, onEnd }: { auctionId: string; onEnd: () => void
   })
 
   return (
-    <div className="flex-1 flex gap-0 overflow-hidden min-h-0 bg-[#f5f3ef]">
+    <div className="ar-body flex-1 flex gap-0 overflow-hidden min-h-0 bg-[#f5f3ef]">
 
-      {/* ── Left: Player Info + Data ── */}
-      <div className="flex-1 flex flex-col min-w-0 border-r border-stone-200 overflow-hidden">
-        <div className="flex gap-3 p-4 pb-2 shrink-0">
+      {/* ── LEFT COLUMN ── */}
+      <div className="ar-left-col flex-1 flex flex-col min-w-0 border-r border-stone-200 overflow-hidden">
+        <div className="ar-left-inner flex gap-3 p-4 pb-2 shrink-0">
           <div className="flex-1 min-w-0 flex flex-col">
             {poolExhausted && (
               <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 flex items-center gap-2 mb-2 shrink-0">
@@ -867,44 +913,54 @@ function AdminPanel({ auctionId, onEnd }: { auctionId: string; onEnd: () => void
             {currentPlayer
               ? <div className="flex-1"><PlayerHeroCard player={currentPlayer} seconds={0} total={0} biddingOpen={false} battingStyle={currentPlayer.battingStyle} bowlingStyle={currentPlayer.bowlingStyle} /></div>
               : <div className="rounded-xl border border-dashed border-stone-200 bg-stone-50 flex items-center justify-center flex-1 min-h-32">
-                <div className="text-center">
-                  <div className="text-3xl mb-1">🏏</div>
-                  <p className="text-xs font-semibold text-stone-400">Press Next Player to begin</p>
-                </div>
+                <div className="text-center"><div className="text-3xl mb-1">🏏</div><p className="text-xs font-semibold text-stone-400">Press Next Player to begin</p></div>
               </div>
             }
           </div>
           {currentPlayer && (
-            <div className="w-64 shrink-0 flex flex-col">
+            <div className="ar-upcoming-wrap w-64 shrink-0 flex flex-col">
               <UpcomingPlayers upcomingPlayers={engineState?.upcomingPlayers ?? []} currentPlayerId={currentPlayer?.id} />
             </div>
           )}
         </div>
-        <div className="flex-1 px-4 pb-4 min-h-0">
-          <BidHistoryTable auctionId={auctionId} auctionedCount={allPool?.auctionedCount} />
+
+        {/* Stat cards + bid history */}
+        <div className="flex-1 px-4 pb-2 min-h-0">
+          <BidHistoryTable
+            auctionId={auctionId}
+            mobileBudgetSlot={
+              <div className="ar-budget-mobile">
+                <BudgetOverview
+                  allSquads={allSquads}
+                  walletMap={walletMap}
+                  expandedSquad={expandedSquad}
+                  setExpandedSquad={setExpandedSquad}
+                />
+              </div>
+            }
+          />
         </div>
+
       </div>
 
-      {/* ── Centre: Admin Controls ── */}
-      <div className="w-72 shrink-0 flex flex-col p-4 gap-3 border-r border-stone-200 overflow-y-auto">
-        {/* ── Controls: Next Player + Hammer + End Auction merged ── */}
+      {/* ── RIGHT COLUMN ── */}
+      <div className="ar-ctrl-col w-72 shrink-0 flex flex-col p-4 gap-3 border-r border-stone-200 overflow-y-auto overflow-x-hidden">
         <div className="rounded-xl border border-stone-200 bg-white shrink-0 overflow-hidden">
           <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest px-4 pt-3.5 pb-2">Controls</p>
           <div className="px-3 pb-3 flex flex-col gap-2">
-            <button onClick={handleNextPlayer} disabled={nextPlayerBusy}
-              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-black text-sm transition-all shadow-sm">
-              {activatePool.isPending ? "Starting…" : nextPlayer.isPending ? "Loading…" : "⏭ Next Player"}
-            </button>
-            <button onClick={() => setShowManualHammer(true)}
-              className="w-full py-2.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold text-sm transition-all">
-              🔨 Hammer
-            </button>
+            <div className="ar-ctrl-primary">
+              <button onClick={handleNextPlayer} disabled={nextPlayerBusy}
+                className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-black text-sm transition-all shadow-sm">
+                {activatePool.isPending ? "Starting…" : nextPlayer.isPending ? "Loading…" : "⏭ Next Player"}
+              </button>
+              <button onClick={() => setShowManualHammer(true)}
+                className="w-full py-2.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold text-sm transition-all">
+                🔨 Hammer
+              </button>
+            </div>
             <div className="border-t border-stone-100 pt-2">
               {!confirmEnd
-                ? <button onClick={() => setConfirmEnd(true)}
-                  className="w-full py-2 rounded-lg bg-stone-50 hover:bg-red-50 border border-stone-200 hover:border-red-200 text-stone-400 hover:text-red-500 font-bold text-sm transition-all">
-                  🏁 End Auction
-                </button>
+                ? <button onClick={() => setConfirmEnd(true)} className="w-full py-2 rounded-lg bg-stone-50 hover:bg-red-50 border border-stone-200 hover:border-red-200 text-stone-400 hover:text-red-500 font-bold text-sm transition-all">🏁 End Auction</button>
                 : <div className="space-y-1.5">
                   <p className="text-xs text-red-500 text-center font-semibold">Cannot be undone.</p>
                   <div className="flex gap-2">
@@ -917,276 +973,151 @@ function AdminPanel({ auctionId, onEnd }: { auctionId: string; onEnd: () => void
           </div>
         </div>
 
-        <BudgetOverview allSquads={allSquads} walletMap={walletMap} expandedSquad={expandedSquad} setExpandedSquad={setExpandedSquad} />
+        {/* Teams — desktop only (hidden on mobile) */}
+        <div className="ar-budget-desktop">
+          <BudgetOverview
+            allSquads={allSquads}
+            walletMap={walletMap}
+            expandedSquad={expandedSquad}
+            setExpandedSquad={setExpandedSquad}
+          />
+        </div>
       </div>
-
 
       <ManualHammerDialog open={showManualHammer} onOpenChange={setShowManualHammer}
         currentPlayer={currentPlayer} participants={participants} participantsLoading={participantsLoading}
-        allSquads={allSquads}
-        onHammer={(data) => manualHammer.mutate(data)} isPending={manualHammer.isPending} />
-
+        allSquads={allSquads} onHammer={(data) => manualHammer.mutate(data)} isPending={manualHammer.isPending} />
     </div>
   )
 }
 
 // ─── PARTICIPANT VIEW ────────────────────────────────────────────────────
 
-function ParticipantView({ auctionId, me }: { auctionId: string; me: { participantId: string; role: string; name: string } }) {
-  const queryClient = useQueryClient()
-
+function ParticipantView({ auctionId }: { auctionId: string; me: { participantId: string; role: string; name: string } }) {
   const expandedSquad = useAuctionRoomStore(s => s.expandedSquad)
   const setExpandedSquad = useAuctionRoomStore(s => s.setExpandedSquad)
-  const showSquadDialog = useAuctionRoomStore(s => s.showSquadDialog)
-  const setShowSquadDialog = useAuctionRoomStore(s => s.setShowSquadDialog)
-  const squadNameInput = useAuctionRoomStore(s => s.squadNameInput)
-  const setSquadNameInput = useAuctionRoomStore(s => s.setSquadNameInput)
-  const myBalance = useAuctionRoomStore(s => s.myBalance)
-  const setMyBalance = useAuctionRoomStore(s => s.setMyBalance)
 
   const { data: engineState } = useQuery({
     queryKey: ["engineState", auctionId],
     queryFn: () => auctionEngineApi.state(auctionId),
-    refetchInterval: 1500,
+    refetchInterval: 2500,
+    staleTime: 2000,
   })
-
   const currentPlayer = engineState?.currentPlayer ?? null
   const biddingOpen = engineState?.biddingOpen ?? false
   const analysisSeconds = engineState?.analysisSeconds ?? 0
   const analysisTotalSecs = engineState?.analysisTotalSecs ?? 0
 
-  const { data: auction } = useQuery({ queryKey: ["auction", auctionId], queryFn: () => auctionApi.getById(auctionId), refetchInterval: 5000 })
-  const { data: squad, error: squadError, refetch: refetchSquad } = useQuery({
-    queryKey: ["mySquad", auctionId, me.participantId],
-    queryFn: () => squadApi.mySquad(auctionId, me.participantId),
-    enabled: !!me.participantId,
-    retry: false,
+  const { data: auction } = useQuery({
+    queryKey: ["auction", auctionId],
+    queryFn: () => auctionApi.getById(auctionId),
+    refetchInterval: 10000,
+    staleTime: 8000,
   })
-  const { data: allSquads } = useQuery({ queryKey: ["allSquads", auctionId], queryFn: () => squadApi.allSquads(auctionId), refetchInterval: 5000 })
-  const { data: highestBid } = useQuery({
-    queryKey: ["highestBid", currentPlayer?.id],
-    queryFn: () => biddingApi.highestBid(auctionId, currentPlayer!.id),
-    enabled: !!currentPlayer?.id,
-    refetchInterval: 1500,
+
+  const { data: allSquads } = useQuery({
+    queryKey: ["allSquads", auctionId],
+    queryFn: () => squadApi.allSquads(auctionId),
+    refetchInterval: 8000,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
   })
-  const { data: walletData } = useQuery({
-    queryKey: ["wallet", me.participantId, auctionId],
-    queryFn: () => biddingApi.getWallet(me.participantId, auctionId),
-    enabled: !!me.participantId,
-    refetchInterval: 5000,
-  })
+
   const { data: walletMap } = useWalletMap(auctionId, allSquads)
 
-  useEffect(() => { if (walletData?.balance !== undefined) setMyBalance(Number(walletData.balance)) }, [walletData?.balance])
-
-  const createSquad = useMutation({ mutationFn: squadApi.create, onSuccess: () => refetchSquad() })
-  const placeBid = useMutation({
-    mutationFn: biddingApi.placeBid,
-    onError: (err) => alert(err instanceof AxiosError ? err.response?.data?.message ?? "Bid failed" : "Bid failed"),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["highestBid", currentPlayer?.id] })
-      queryClient.invalidateQueries({ queryKey: ["players", { getAll: true }] })
-    },
-  })
-
   const isPaused = auction?.status === "PAUSED"
-  const squadMissing = squadError instanceof AxiosError && squadError.response?.status === 404
-  const squadPlayers = (squad as { players?: { id: string; name: string; specialism?: string; soldPrice?: number }[] } | undefined)?.players ?? []
-  const currentBid = highestBid?.amount ?? Number(currentPlayer?.basePrice ?? 0)
-  const squadFull = squadPlayers.length >= MAX_SQUAD_SIZE
-  const canBid = auction?.status === "LIVE" && biddingOpen && !!squad && !!me.participantId && !squadFull
 
   const sortedSquads = [...(allSquads ?? [])].sort((a: { name: string; players?: unknown[] }, b: { name: string; players?: unknown[] }) => {
-    if (a.name === (squad as { name?: string } | undefined)?.name) return -1
-    if (b.name === (squad as { name?: string } | undefined)?.name) return 1
     return (b.players?.length ?? 0) - (a.players?.length ?? 0)
   })
 
-  const allPool = engineState?.pools?.[0] ?? null
-  const auctionedCount = allPool?.auctionedCount
-
-  const BID_INCREMENTS = [
-    { label: "+5L", amount: 500_000 }, { label: "+10L", amount: 1_000_000 },
-    { label: "+25L", amount: 2_500_000 }, { label: "+40L", amount: 4_000_000 },
-    { label: "+80L", amount: 8_000_000 }, { label: "+1Cr", amount: 10_000_000 },
-    { label: "+5Cr", amount: 50_000_000 }, { label: "+10Cr", amount: 100_000_000 },
-  ]
-
   return (
-    <>
-      {squadMissing && (
-        <Dialog open>
-          <DialogContent className="bg-white border-stone-200 text-slate-800 shadow-2xl">
-            <DialogHeader><DialogTitle className="text-xl text-slate-800">🏏 Name Your Squad</DialogTitle></DialogHeader>
-            <p className="text-sm text-slate-500 mb-3">Choose a name to enter the auction.</p>
-            <Input placeholder="e.g. Mumbai Indians" value={squadNameInput} onChange={e => setSquadNameInput(e.target.value)} className="bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-300" />
-            <Button disabled={!squadNameInput.trim() || createSquad.isPending} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold mt-3"
-              onClick={() => createSquad.mutate({ auctionId, participantId: me.participantId, name: squadNameInput })}>
-              Enter Auction →
-            </Button>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      <Dialog open={showSquadDialog} onOpenChange={setShowSquadDialog}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col bg-white border-stone-200 text-slate-800 shadow-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-slate-800">
-              🏏 {(squad as { name?: string } | undefined)?.name ?? "My Squad"}
-              <span className="text-slate-400 text-sm font-normal ml-2">{squadPlayers.length} players</span>
-            </DialogTitle>
-          </DialogHeader>
-          {squadPlayers.length > 0
-            ? <div className="overflow-y-auto flex-1 mt-2">
-              <Table>
-                <TableHeader><TableRow className="border-slate-100">{["Player", "Role", "Sold For"].map(h => <TableHead key={h} className="text-slate-400">{h}</TableHead>)}</TableRow></TableHeader>
-                <TableBody>
-                  {squadPlayers.map((p: { id: string; name: string; specialism?: string; soldPrice?: number }) => (
-                    <TableRow key={p.id} className="border-slate-50">
-                      <TableCell className="font-semibold text-sm text-slate-700">{p.name}</TableCell>
-                      <TableCell>{p.specialism && <Badge variant="secondary" className="text-xs">{p.specialism}</Badge>}</TableCell>
-                      <TableCell className="font-bold text-emerald-600">{p.soldPrice ? fmt(p.soldPrice) : "—"}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+    <div className="ar-body flex-1 flex gap-0 overflow-hidden min-h-0 bg-[#f5f3ef]">
+      {/* ── LEFT COLUMN ── */}
+      <div className="ar-left-col flex-1 flex flex-col min-w-0 border-r border-stone-200 overflow-hidden">
+        <div className="ar-left-inner flex gap-3 p-4 pb-2 shrink-0">
+          <div className="flex-1 min-w-0 flex flex-col">
+            {currentPlayer
+              ? <div className="flex-1">
+                <PlayerHeroCard
+                  player={currentPlayer}
+                  seconds={analysisSeconds}
+                  total={analysisTotalSecs}
+                  biddingOpen={biddingOpen}
+                  paused={isPaused}
+                  battingStyle={currentPlayer.battingStyle}
+                  bowlingStyle={currentPlayer.bowlingStyle}
+                />
+              </div>
+              : <div className="rounded-xl border border-dashed border-stone-200 bg-stone-50 flex items-center justify-center flex-1 min-h-32">
+                <div className="text-center">
+                  <div className="text-3xl mb-1 animate-pulse">🏏</div>
+                  <p className="text-xs text-slate-400 font-medium">Waiting for next player…</p>
+                </div>
+              </div>
+            }
+          </div>
+          {currentPlayer && (
+            <div className="ar-upcoming-wrap w-64 shrink-0 flex flex-col">
+              <UpcomingPlayers
+                upcomingPlayers={engineState?.upcomingPlayers ?? []}
+                currentPlayerId={currentPlayer?.id}
+              />
             </div>
-            : <div className="flex flex-col items-center justify-center py-12"><div className="text-5xl mb-3">🛒</div><p className="text-slate-500">No players yet</p></div>
-          }
-        </DialogContent>
-      </Dialog>
+          )}
+        </div>
 
-      <div className="flex-1 flex gap-0 overflow-hidden min-h-0 bg-[#f5f3ef]">
-        <div className="flex-1 flex flex-col min-w-0 border-r border-stone-200 overflow-hidden">
-          <div className="flex gap-3 p-4 pb-2 shrink-0">
-            <div className="flex-1 min-w-0 flex flex-col">
-              {currentPlayer
-                ? <div className="flex-1"><PlayerHeroCard player={currentPlayer} seconds={analysisSeconds} total={analysisTotalSecs} biddingOpen={biddingOpen} paused={isPaused} battingStyle={currentPlayer.battingStyle} bowlingStyle={currentPlayer.bowlingStyle} /></div>
-                : <div className="rounded-xl border border-dashed border-stone-200 bg-stone-50 flex items-center justify-center flex-1 min-h-32">
-                  <div className="text-center"><div className="text-3xl mb-1 animate-pulse">🏏</div><p className="text-xs text-slate-400 font-medium">Waiting for next player…</p></div>
+        <div className="flex-1 px-4 pb-4 min-h-0">
+          <div className="flex-1 px-4 pb-4 min-h-0">
+            <BidHistoryTable
+              auctionId={auctionId}
+              mobileBudgetSlot={
+                <div className="ar-budget-mobile">
+                  <BudgetOverview
+                    allSquads={allSquads}
+                    walletMap={walletMap}
+                    expandedSquad={expandedSquad}
+                    setExpandedSquad={setExpandedSquad}
+                  />
                 </div>
               }
-            </div>
-            {currentPlayer && (
-              <div className="w-64 shrink-0 flex flex-col">
-                <UpcomingPlayers upcomingPlayers={engineState?.upcomingPlayers ?? []} currentPlayerId={currentPlayer?.id} />
-              </div>
-            )}
-          </div>
-          <div className="flex-1 px-4 pb-4 min-h-0">
-            <BidHistoryTable auctionId={auctionId} auctionedCount={auctionedCount} />
-          </div>
-        </div>
-
-        <div className="w-64 shrink-0 flex flex-col p-5 gap-4 border-r border-slate-200/60 overflow-hidden">
-          <div className="rounded-2xl border border-emerald-200 bg-linear-to-br from-emerald-50 to-white p-4 shrink-0 shadow-sm">
-            <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Your Balance</p>
-            <p className="text-3xl font-black tabular-nums text-emerald-600">{myBalance != null ? fmt(myBalance) : "—"}</p>
-            <p className="text-[10px] text-emerald-300 mt-1 font-semibold">remaining budget</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 text-center shrink-0 shadow-sm">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Current Bid</p>
-            <p className="text-4xl font-black tabular-nums text-slate-800">{fmt(currentBid)}</p>
-            {highestBid?.participantName
-              ? <div className="mt-2 inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1.5"><span>🏆</span><span className="text-sm font-bold text-emerald-700">{highestBid.participantName}</span></div>
-              : <p className="mt-2 text-xs text-slate-300 italic">No bids</p>
-            }
-          </div>
-          {squadFull && (
-            <div className="rounded-2xl bg-red-50 border border-red-200 px-4 py-3 text-center shrink-0">
-              <p className="text-sm font-bold text-red-600">🚫 Squad Full</p>
-              <p className="text-xs text-red-400 mt-0.5">{MAX_SQUAD_SIZE}/{MAX_SQUAD_SIZE} players reached</p>
-            </div>
-          )}
-          {!biddingOpen && currentPlayer && !isPaused && !squadFull && (
-            <div className="rounded-2xl bg-indigo-50 border border-indigo-200 px-4 py-3 text-center shrink-0">
-              <p className="text-sm font-bold text-indigo-700">🔍 Analysis Phase</p>
-              <p className="text-xs text-indigo-400 mt-0.5">Bidding opens after timer</p>
-            </div>
-          )}
-          {isPaused && (
-            <div className="rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 text-center shrink-0">
-              <p className="text-sm font-bold text-amber-700">⏸ Paused</p>
-            </div>
-          )}
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shrink-0 shadow-sm">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Place Bid</p>
-            <div className="grid grid-cols-2 gap-2">
-              {BID_INCREMENTS.map(({ label, amount }) => (
-                <button key={label} disabled={!canBid || placeBid.isPending}
-                  onClick={() => placeBid.mutate({
-                    auctionId, playerId: currentPlayer!.id, participantId: me.participantId,
-                    amount: (queryClient.getQueryData<{ amount: number }>(["highestBid", currentPlayer?.id])?.amount ?? Number(currentPlayer?.basePrice ?? 0)) + amount,
-                  })}
-                  className={`flex items-center justify-center py-2.5 rounded-xl font-black text-sm transition-all ${label === "+10Cr" ? "col-span-2" : ""} ${canBid ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-stone-50 text-stone-300 cursor-not-allowed border border-stone-100"}`}>
-                  {label}
-                </button>
-              ))}
-            </div>
-            {!canBid && (
-              <p className="text-[11px] text-slate-300 text-center mt-3 italic">
-                {!squad ? "Create a squad to bid"
-                  : squadFull ? `Squad full (${MAX_SQUAD_SIZE}/${MAX_SQUAD_SIZE} players)`
-                  : isPaused ? "Auction paused"
-                  : !biddingOpen ? "Analysis phase…"
-                  : "Bidding unavailable"}
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className="w-56 shrink-0 flex flex-col bg-stone-50">
-          <div className="px-4 pt-4 pb-3 flex items-center justify-between shrink-0 border-b border-slate-200/60">
-            <div>
-              <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest">All Squads</p>
-              <p className="text-xs text-stone-600 mt-0.5 font-semibold">{sortedSquads.length} participants</p>
-            </div>
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          </div>
-          <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2 min-h-0">
-            {sortedSquads.length === 0
-              ? <div className="flex items-center justify-center h-full"><p className="text-xs text-stone-300 italic">No squads yet</p></div>
-              : sortedSquads.map((s: { id?: string; name: string; players?: unknown[]; participantId?: string }) => {
-                const key = s.id ?? s.name
-                const remaining = s.participantId ? (walletMap?.[s.participantId] ?? null) : null
-                return (
-                  <SquadCard key={key} squad={s as Parameters<typeof SquadCard>[0]["squad"]}
-                    isMe={s.name === (squad as { name?: string } | undefined)?.name}
-                    expanded={expandedSquad === key}
-                    onToggle={() => setExpandedSquad(expandedSquad === key ? null : key)}
-                    remainingBudget={remaining} />
-                )
-              })
-            }
+            />
           </div>
         </div>
       </div>
-    </>
-  )
-}
 
-// ─── ADD PARTICIPANT NAV BUTTON ──────────────────────────────────────────
-
-function AddParticipantNavButton({ auctionId }: { auctionId: string }) {
-  const queryClient = useQueryClient()
-  const setShowAddParticipant = useAuctionRoomStore(s => s.setShowAddParticipant)
-  const showAddParticipant = useAuctionRoomStore(s => s.showAddParticipant)
-  return (
-    <>
-      <button onClick={() => setShowAddParticipant(true)}
-        className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 transition-all">
-        ＋ Add Participant
-      </button>
-      <AddParticipantDialog
-        open={showAddParticipant}
-        onOpenChange={setShowAddParticipant}
-        auctionId={auctionId}
-        onAdded={() => {
-          queryClient.invalidateQueries({ queryKey: ["allSquads", auctionId] })
-          queryClient.invalidateQueries({ queryKey: ["participants", auctionId] })
-        }}
-      />
-    </>
+      {/* ── RIGHT COLUMN — All Squads ── */}
+      <div className="ar-squads-col w-64 shrink-0 flex flex-col bg-stone-50 border-l border-stone-200">
+        <div className="px-4 pt-4 pb-3 flex items-center justify-between shrink-0 border-b border-slate-200/60">
+          <div>
+            <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest">All Squads</p>
+            <p className="text-xs text-stone-600 mt-0.5 font-semibold">{sortedSquads.length} participants</p>
+          </div>
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+        </div>
+        <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2 min-h-0">
+          {sortedSquads.length === 0
+            ? <div className="flex items-center justify-center h-full">
+              <p className="text-xs text-stone-300 italic">No squads yet</p>
+            </div>
+            : sortedSquads.map((s: { id?: string; name: string; players?: unknown[]; participantId?: string }) => {
+              const key = s.id ?? s.name
+              const remaining = s.participantId ? (walletMap?.[s.participantId] ?? null) : null
+              return (
+                <SquadCard
+                  key={key}
+                  squad={s as Parameters<typeof SquadCard>[0]["squad"]}
+                  isMe={false}
+                  expanded={expandedSquad === key}
+                  onToggle={() => setExpandedSquad(expandedSquad === key ? null : key)}
+                  remainingBudget={remaining}
+                />
+              )
+            })
+          }
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -1201,9 +1132,19 @@ function AuctionRoomPage() {
   const setLastSeenResultTimestamp = useAuctionRoomStore(s => s.setLastSeenResultTimestamp)
   const soldInfo = useAuctionRoomStore(s => s.soldInfo)
 
-  const { data: me } = useQuery({ queryKey: ["me"], queryFn: authApi.me })
-  const { data: auction } = useQuery({ queryKey: ["auction", auctionId], queryFn: () => auctionApi.getById(auctionId), refetchInterval: 5000 })
-  const { data: engineState } = useQuery({ queryKey: ["engineState", auctionId], queryFn: () => auctionEngineApi.state(auctionId), refetchInterval: 1500 })
+  const { data: me } = useQuery({ queryKey: ["me"], queryFn: authApi.me, staleTime: 60000 })
+  const { data: auction } = useQuery({
+    queryKey: ["auction", auctionId],
+    queryFn: () => auctionApi.getById(auctionId),
+    refetchInterval: 10000,
+    staleTime: 8000,
+  })
+  const { data: engineState } = useQuery({
+    queryKey: ["engineState", auctionId],
+    queryFn: () => auctionEngineApi.state(auctionId),
+    refetchInterval: 2500,
+    staleTime: 2000,
+  })
 
   useEffect(() => {
     const result = engineState?.lastResult
@@ -1227,73 +1168,77 @@ function AuctionRoomPage() {
   if (!auction || !me) {
     return (
       <div className="flex items-center justify-center h-screen bg-stone-100">
-        <div className="text-center space-y-3"><div className="text-5xl animate-pulse">🏏</div><p className="text-stone-500 text-sm font-medium">Loading auction room…</p></div>
+        <div className="text-center space-y-3">
+          <div className="text-5xl animate-pulse">🏏</div>
+          <p className="text-stone-500 text-sm font-medium">Loading auction room…</p>
+        </div>
       </div>
     )
   }
 
-  return (
-    <div className="h-screen flex flex-col overflow-hidden" style={{ fontFamily: "'DM Sans', system-ui, sans-serif", background: "#f5f3ef" }}>
+  const statusChip = (() => {
+    const pool = engineState?.pools?.[0]
+    const status = pool?.status
+    if (status === "ACTIVE") return <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" /><span className="text-xs font-bold text-emerald-700">Running</span></div>
+    if (status === "COMPLETED") return <div className="flex items-center gap-1.5 bg-stone-100 border border-stone-200 rounded-full px-2.5 py-1"><span className="text-xs">✓</span><span className="text-xs font-bold text-slate-500">Completed</span></div>
+    if (engineState?.poolExhausted) return <div className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 rounded-lg px-2.5 py-1"><span className="text-xs">🏁</span><span className="text-xs font-bold text-indigo-600">All auctioned</span></div>
+    return <div className="flex items-center gap-1.5 bg-stone-50 border border-stone-200 rounded-full px-2.5 py-1"><span className="text-xs font-bold text-slate-400">Ready</span></div>
+  })()
 
-      {soldInfo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 backdrop-blur-sm pointer-events-none">
-          <div className={`text-center p-10 rounded-3xl border-2 max-w-sm w-full mx-4 shadow-2xl animate-in zoom-in-95 duration-300 ${soldInfo.unsold ? "bg-red-50 border-red-200" : "bg-emerald-50 border-emerald-200"}`}>
-            <div className="text-7xl mb-4">{soldInfo.unsold ? "🚫" : "🎉"}</div>
-            <p className={`text-3xl font-black ${soldInfo.unsold ? "text-red-600" : "text-emerald-700"}`}>{soldInfo.unsold ? "Unsold" : "Sold!"}</p>
-            <p className="text-xl font-bold mt-2 text-stone-600">{soldInfo.playerName}</p>
-            {!soldInfo.unsold && soldInfo.amount != null && (
-              <div className="mt-5 bg-white rounded-2xl border border-emerald-100 p-4 shadow-sm">
-                <p className="text-sm text-stone-400">to</p>
-                <p className="font-black text-xl text-emerald-600">{soldInfo.squadName}</p>
-                <p className="text-3xl font-black tabular-nums mt-1 text-stone-800">{fmt(soldInfo.amount)}</p>
-              </div>
-            )}
+  return (
+    <>
+      <style>{mobileCSS}</style>
+      <div className="h-screen flex flex-col overflow-hidden" style={{ fontFamily: "'DM Sans', system-ui, sans-serif", background: "#f5f3ef" }}>
+
+        {soldInfo && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 backdrop-blur-sm pointer-events-none">
+            <div className={`text-center p-10 rounded-3xl border-2 max-w-sm w-full mx-4 shadow-2xl animate-in zoom-in-95 duration-300 ${soldInfo.unsold ? "bg-red-50 border-red-200" : "bg-emerald-50 border-emerald-200"}`}>
+              <div className="text-7xl mb-4">{soldInfo.unsold ? "🚫" : "🎉"}</div>
+              <p className={`text-3xl font-black ${soldInfo.unsold ? "text-red-600" : "text-emerald-700"}`}>{soldInfo.unsold ? "Unsold" : "Sold!"}</p>
+              <p className="text-xl font-bold mt-2 text-stone-600">{soldInfo.playerName}</p>
+              {!soldInfo.unsold && soldInfo.amount != null && (
+                <div className="mt-5 bg-white rounded-2xl border border-emerald-100 p-4 shadow-sm">
+                  <p className="text-sm text-stone-400">to</p>
+                  <p className="font-black text-xl text-emerald-600">{soldInfo.squadName}</p>
+                  <p className="text-3xl font-black tabular-nums mt-1 text-stone-800">{fmt(soldInfo.amount)}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <header className="ar-header shrink-0 flex items-center justify-between px-5 py-3.5 border-b border-stone-200 bg-white shadow-sm">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-linear-to-br from-emerald-700 to-emerald-900 flex items-center justify-center text-base shadow-sm shrink-0">🏏</div>
+            <h1 className="ar-title font-black text-base leading-tight tracking-tight text-stone-800 truncate">{auction.name}</h1>
+            <div className="ar-status-chip shrink-0">{statusChip}</div>
+          </div>
+          <div className="ar-header-right flex items-center gap-2">
+            {isAdmin && <AddParticipantNavButton auctionId={auctionId} />}
+            <button onClick={() => navigate({ to: "/auction" })}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border border-stone-200 bg-white text-stone-500 hover:bg-stone-50 hover:text-stone-700 transition-all">
+              ← Back to Lobby
+            </button>
+          </div>
+        </header>
+
+        <div className="ar-mobile-bar">
+          <div className="ar-mobile-bar-left">
+            {statusChip}
+            {isAdmin && <AddParticipantNavButton auctionId={auctionId} />}
+          </div>
+          <div className="ar-mobile-bar-right">
+            <button onClick={() => navigate({ to: "/auction" })} className="ar-mob-back-btn">
+              ← Lobby
+            </button>
           </div>
         </div>
-      )}
 
-      <header className="shrink-0 flex items-center justify-between px-5 py-3.5 border-b border-stone-200 bg-white shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-linear-to-br from-emerald-700 to-emerald-900 flex items-center justify-center text-base shadow-sm">🏏</div>
-          <h1 className="font-black text-base leading-tight tracking-tight text-stone-800">{auction.name}</h1>
-          {/* Auction running status — moved from admin panel card */}
-          {(() => {
-            const pool = engineState?.pools?.[0]
-            const status = pool?.status
-            if (status === "ACTIVE") return (
-              <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                <span className="text-xs font-bold text-emerald-700">Running</span>
-              </div>
-            )
-            if (status === "COMPLETED") return (
-              <div className="flex items-center gap-1.5 bg-stone-100 border border-stone-200 rounded-full px-2.5 py-1">
-                <span className="text-xs">✓</span>
-                <span className="text-xs font-bold text-slate-500">Completed</span>
-              </div>
-            )
-            if (engineState?.poolExhausted) return (
-              <div className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 rounded-lg px-2.5 py-1">
-                <span className="text-xs">🏁</span>
-                <span className="text-xs font-bold text-indigo-600">All auctioned</span>
-              </div>
-            )
-            return (
-              <div className="flex items-center gap-1.5 bg-stone-50 border border-stone-200 rounded-full px-2.5 py-1">
-                <span className="text-xs font-bold text-slate-400">Ready</span>
-              </div>
-            )
-          })()}
-        </div>
-        <div className="flex items-center gap-2">
-          {isAdmin && <AddParticipantNavButton auctionId={auctionId} />}
-          <button onClick={() => navigate({ to: "/auction" })} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border border-stone-200 bg-white text-stone-500 hover:bg-stone-50 hover:text-stone-700 transition-all">
-            ← Back to Lobby
-          </button>
-        </div>
-      </header>
-
-      {isAdmin ? <AdminPanel auctionId={auctionId} onEnd={() => navigate({ to: "/auction" })} /> : <ParticipantView auctionId={auctionId} me={me} />}
-    </div>
+        {isAdmin
+          ? <AdminPanel auctionId={auctionId} onEnd={() => navigate({ to: "/auction" })} />
+          : <ParticipantView auctionId={auctionId} me={me} />
+        }
+      </div>
+    </>
   )
 }
