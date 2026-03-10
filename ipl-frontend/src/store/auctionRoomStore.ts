@@ -55,6 +55,10 @@ interface AuctionRoomState {
   confirmEnd: boolean
   setConfirmEnd: (v: boolean) => void
 
+  // ── Unsold confirm modal ──
+  showUnsoldConfirm: boolean
+  setShowUnsoldConfirm: (v: boolean) => void
+
   // ── Participant view: squad dialog ──
   showSquadDialog: boolean
   setShowSquadDialog: (v: boolean) => void
@@ -107,6 +111,10 @@ export const useAuctionRoomStore = create<AuctionRoomState>((set) => ({
   // ── Session / end auction ──
   confirmEnd: false,
   setConfirmEnd: (v) => set({ confirmEnd: v }),
+
+  // ── Unsold confirm modal ──
+  showUnsoldConfirm: false,
+  setShowUnsoldConfirm: (v) => set({ showUnsoldConfirm: v }),
 
   // ── Participant view: squad dialog ──
   showSquadDialog: false,

@@ -522,6 +522,108 @@ function SquadCard({ squad, isMe, expanded, onToggle, remainingBudget }: {
   )
 }
 
+// ─── UNSOLD CONFIRM MODAL ─────────────────────────────────────────────────
+
+function UnsoldConfirmModal({ open, playerName, basePrice, onConfirm, onCancel }: {
+  open: boolean; playerName: string; basePrice: number; onConfirm: () => void; onCancel: () => void
+}) {
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 z-60 flex items-center justify-center">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-stone-900/50 backdrop-blur-sm"
+        style={{ animation: "unsoldFadeIn 0.18s ease" }}
+        onClick={onCancel}
+      />
+
+      {/* Modal */}
+      <div
+        className="relative z-10 w-full max-w-sm mx-4 rounded-3xl overflow-hidden shadow-2xl"
+        style={{
+          animation: "unsoldSlideUp 0.22s cubic-bezier(0.34,1.56,0.64,1)",
+          background: "linear-gradient(160deg, #1c1917 0%, #292524 60%, #1c1917 100%)",
+          border: "1px solid rgba(251,191,36,0.25)",
+        }}
+      >
+        {/* Amber-to-red top glow strip */}
+        <div style={{ height: "3px", background: "linear-gradient(90deg, transparent, #f59e0b, #ef4444, #f59e0b, transparent)" }} />
+
+        <div className="px-7 pt-8 pb-7 text-center">
+          {/* Pulsing icon */}
+          <div className="relative inline-flex items-center justify-center mb-5">
+            <div
+              className="absolute w-20 h-20 rounded-full"
+              style={{
+                background: "radial-gradient(circle, rgba(239,68,68,0.25) 0%, transparent 70%)",
+                animation: "unsoldPulse 2s ease-in-out infinite",
+              }}
+            />
+            <div
+              className="relative w-16 h-16 rounded-2xl flex items-center justify-center text-4xl"
+              style={{
+                background: "linear-gradient(135deg, #292524, #3a3330)",
+                border: "1px solid rgba(239,68,68,0.3)",
+              }}
+            >
+              🏏
+            </div>
+          </div>
+
+          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-400 mb-2">Going Unsold</p>
+          <h2 className="text-2xl font-black text-white leading-tight mb-1">{playerName}</h2>
+          <p className="text-sm text-stone-400">
+            Base price: <span className="font-black text-amber-400">{fmt(basePrice)}</span>
+          </p>
+          <p className="text-xs text-stone-500 mt-3 leading-relaxed">
+            No bids placed. Marking as{" "}
+            <span className="text-red-400 font-bold">unsold</span> and moving to the next player.
+          </p>
+
+          {/* Divider */}
+          <div className="my-5 flex items-center gap-3">
+            <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.08))" }} />
+            <span className="text-[10px] text-stone-600 font-semibold tracking-widest">CONFIRM?</span>
+            <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg, rgba(255,255,255,0.08), transparent)" }} />
+          </div>
+
+          {/* Buttons */}
+          <div className="flex gap-3">
+            <button
+              onClick={onCancel}
+              className="flex-1 py-3 rounded-2xl text-sm font-bold transition-all"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                color: "#a8a29e",
+                border: "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              ← Cancel
+            </button>
+            <button
+              onClick={onConfirm}
+              className="flex-1 py-3 rounded-2xl text-sm font-black text-white transition-all"
+              style={{
+                background: "linear-gradient(135deg, #dc2626, #b91c1c)",
+                border: "1px solid rgba(239,68,68,0.4)",
+                boxShadow: "0 4px 20px rgba(239,68,68,0.35)",
+              }}
+            >
+              Mark Unsold →
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes unsoldFadeIn  { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes unsoldSlideUp { from { opacity: 0; transform: translateY(24px) scale(0.94) } to { opacity: 1; transform: translateY(0) scale(1) } }
+        @keyframes unsoldPulse   { 0%,100% { transform: scale(1); opacity: 0.7 } 50% { transform: scale(1.2); opacity: 1 } }
+      `}</style>
+    </div>
+  )
+}
+
 // ─── HAMMER DIALOG ───────────────────────────────────────────────────────
 
 function ManualHammerDialog({ open, onOpenChange, currentPlayer, participants, participantsLoading, allSquads, onHammer, isPending }: {
@@ -843,6 +945,10 @@ function AdminPanel({ auctionId, onEnd }: { auctionId: string; onEnd: () => void
   const showManualHammer = useAuctionRoomStore(s => s.showManualHammer); const setShowManualHammer = useAuctionRoomStore(s => s.setShowManualHammer)
   const expandedSquad = useAuctionRoomStore(s => s.expandedSquad); const setExpandedSquad = useAuctionRoomStore(s => s.setExpandedSquad)
 
+  // ── Unsold confirm modal (Zustand, no useState) ──
+  const showUnsoldConfirm = useAuctionRoomStore(s => s.showUnsoldConfirm)
+  const setShowUnsoldConfirm = useAuctionRoomStore(s => s.setShowUnsoldConfirm)
+
   const { data: engineState } = useQuery({
     queryKey: ["engineState", auctionId],
     queryFn: () => auctionEngineApi.state(auctionId),
@@ -883,11 +989,23 @@ function AdminPanel({ auctionId, onEnd }: { auctionId: string; onEnd: () => void
       queryClient.invalidateQueries({ queryKey: ["players", { getAll: true }] })
     },
   })
-  const handleNextPlayer = async () => {
+
+  // ── Core next-player action (used by both direct and confirmed paths) ──
+  const doNextPlayer = async () => {
     const pool = engineState?.pools?.[0]
     if (pool && (pool.status === "PENDING" || pool.status === "PAUSED")) await activatePool.mutateAsync(pool.poolType)
     nextPlayer.mutate()
   }
+
+  // ── Guard: if a player is up with no bids, show unsold confirmation first ──
+  const handleNextPlayer = async () => {
+    if (currentPlayer && !engineState?.biddingOpen) {
+      setShowUnsoldConfirm(true)
+      return
+    }
+    await doNextPlayer()
+  }
+
   const nextPlayerBusy = nextPlayer.isPending || activatePool.isPending
 
   const manualHammer = useMutation({
@@ -992,6 +1110,17 @@ function AdminPanel({ auctionId, onEnd }: { auctionId: string; onEnd: () => void
       <ManualHammerDialog open={showManualHammer} onOpenChange={setShowManualHammer}
         currentPlayer={currentPlayer} participants={participants} participantsLoading={participantsLoading}
         allSquads={allSquads} onHammer={(data) => manualHammer.mutate(data)} isPending={manualHammer.isPending} />
+
+      <UnsoldConfirmModal
+        open={showUnsoldConfirm}
+        playerName={currentPlayer?.name ?? ""}
+        basePrice={Number(currentPlayer?.basePrice ?? 0)}
+        onCancel={() => setShowUnsoldConfirm(false)}
+        onConfirm={async () => {
+          setShowUnsoldConfirm(false)
+          await doNextPlayer()
+        }}
+      />
     </div>
   )
 }
