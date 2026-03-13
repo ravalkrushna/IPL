@@ -208,4 +208,21 @@ class SquadRepository(
                 }
                 .count() > 0
         }
+
+
+    fun findAllPlayerIds(): Set<String> =
+            transaction {
+                    SquadPlayers.selectAll()
+                        .map { it[SquadPlayers.playerId] }
+                        .toSet()
+            }
+
+    fun findAuctionIdsByPlayerId(playerId: String): List<String> =
+          transaction {
+                    (SquadPlayers innerJoin Squads)
+                        .select(Squads.auctionId)
+                        .where { SquadPlayers.playerId eq playerId }
+                        .map { it[Squads.auctionId] }
+                        .distinct()
+          }
 }

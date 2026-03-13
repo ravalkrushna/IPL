@@ -17,7 +17,8 @@ import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as Auth_layoutRouteImport } from './routes/auth/__layout'
 import { Route as AuctionProfileRouteImport } from './routes/auction/profile'
 import { Route as AuctionPlayersRouteImport } from './routes/auction/players'
-import { Route as AuctionAuctionIdRouteImport } from './routes/auction/$auctionId'
+import { Route as AuctionAuctionIdIndexRouteImport } from './routes/auction/$auctionId/index'
+import { Route as AuctionAuctionIdFantasyRouteImport } from './routes/auction/$auctionId/fantasy'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -59,15 +60,19 @@ const AuctionPlayersRoute = AuctionPlayersRouteImport.update({
   path: '/auction/players',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuctionAuctionIdRoute = AuctionAuctionIdRouteImport.update({
-  id: '/auction/$auctionId',
-  path: '/auction/$auctionId',
+const AuctionAuctionIdIndexRoute = AuctionAuctionIdIndexRouteImport.update({
+  id: '/auction/$auctionId/',
+  path: '/auction/$auctionId/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuctionAuctionIdFantasyRoute = AuctionAuctionIdFantasyRouteImport.update({
+  id: '/auction/$auctionId/fantasy',
+  path: '/auction/$auctionId/fantasy',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/auction/$auctionId': typeof AuctionAuctionIdRoute
   '/auction/players': typeof AuctionPlayersRoute
   '/auction/profile': typeof AuctionProfileRoute
   '/auth': typeof Auth_layoutRoute
@@ -75,10 +80,11 @@ export interface FileRoutesByFullPath {
   '/auth/signup': typeof AuthSignupRoute
   '/auth/verify-otp': typeof AuthVerifyOtpRoute
   '/auction/': typeof AuctionIndexRoute
+  '/auction/$auctionId/fantasy': typeof AuctionAuctionIdFantasyRoute
+  '/auction/$auctionId/': typeof AuctionAuctionIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/auction/$auctionId': typeof AuctionAuctionIdRoute
   '/auction/players': typeof AuctionPlayersRoute
   '/auction/profile': typeof AuctionProfileRoute
   '/auth': typeof Auth_layoutRoute
@@ -86,11 +92,12 @@ export interface FileRoutesByTo {
   '/auth/signup': typeof AuthSignupRoute
   '/auth/verify-otp': typeof AuthVerifyOtpRoute
   '/auction': typeof AuctionIndexRoute
+  '/auction/$auctionId/fantasy': typeof AuctionAuctionIdFantasyRoute
+  '/auction/$auctionId': typeof AuctionAuctionIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/auction/$auctionId': typeof AuctionAuctionIdRoute
   '/auction/players': typeof AuctionPlayersRoute
   '/auction/profile': typeof AuctionProfileRoute
   '/auth/__layout': typeof Auth_layoutRoute
@@ -98,12 +105,13 @@ export interface FileRoutesById {
   '/auth/signup': typeof AuthSignupRoute
   '/auth/verify-otp': typeof AuthVerifyOtpRoute
   '/auction/': typeof AuctionIndexRoute
+  '/auction/$auctionId/fantasy': typeof AuctionAuctionIdFantasyRoute
+  '/auction/$auctionId/': typeof AuctionAuctionIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/auction/$auctionId'
     | '/auction/players'
     | '/auction/profile'
     | '/auth'
@@ -111,10 +119,11 @@ export interface FileRouteTypes {
     | '/auth/signup'
     | '/auth/verify-otp'
     | '/auction/'
+    | '/auction/$auctionId/fantasy'
+    | '/auction/$auctionId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/auction/$auctionId'
     | '/auction/players'
     | '/auction/profile'
     | '/auth'
@@ -122,10 +131,11 @@ export interface FileRouteTypes {
     | '/auth/signup'
     | '/auth/verify-otp'
     | '/auction'
+    | '/auction/$auctionId/fantasy'
+    | '/auction/$auctionId'
   id:
     | '__root__'
     | '/'
-    | '/auction/$auctionId'
     | '/auction/players'
     | '/auction/profile'
     | '/auth/__layout'
@@ -133,11 +143,12 @@ export interface FileRouteTypes {
     | '/auth/signup'
     | '/auth/verify-otp'
     | '/auction/'
+    | '/auction/$auctionId/fantasy'
+    | '/auction/$auctionId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AuctionAuctionIdRoute: typeof AuctionAuctionIdRoute
   AuctionPlayersRoute: typeof AuctionPlayersRoute
   AuctionProfileRoute: typeof AuctionProfileRoute
   Auth_layoutRoute: typeof Auth_layoutRoute
@@ -145,6 +156,8 @@ export interface RootRouteChildren {
   AuthSignupRoute: typeof AuthSignupRoute
   AuthVerifyOtpRoute: typeof AuthVerifyOtpRoute
   AuctionIndexRoute: typeof AuctionIndexRoute
+  AuctionAuctionIdFantasyRoute: typeof AuctionAuctionIdFantasyRoute
+  AuctionAuctionIdIndexRoute: typeof AuctionAuctionIdIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -205,11 +218,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuctionPlayersRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/auction/$auctionId': {
-      id: '/auction/$auctionId'
+    '/auction/$auctionId/': {
+      id: '/auction/$auctionId/'
       path: '/auction/$auctionId'
-      fullPath: '/auction/$auctionId'
-      preLoaderRoute: typeof AuctionAuctionIdRouteImport
+      fullPath: '/auction/$auctionId/'
+      preLoaderRoute: typeof AuctionAuctionIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auction/$auctionId/fantasy': {
+      id: '/auction/$auctionId/fantasy'
+      path: '/auction/$auctionId/fantasy'
+      fullPath: '/auction/$auctionId/fantasy'
+      preLoaderRoute: typeof AuctionAuctionIdFantasyRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -217,7 +237,6 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AuctionAuctionIdRoute: AuctionAuctionIdRoute,
   AuctionPlayersRoute: AuctionPlayersRoute,
   AuctionProfileRoute: AuctionProfileRoute,
   Auth_layoutRoute: Auth_layoutRoute,
@@ -225,6 +244,8 @@ const rootRouteChildren: RootRouteChildren = {
   AuthSignupRoute: AuthSignupRoute,
   AuthVerifyOtpRoute: AuthVerifyOtpRoute,
   AuctionIndexRoute: AuctionIndexRoute,
+  AuctionAuctionIdFantasyRoute: AuctionAuctionIdFantasyRoute,
+  AuctionAuctionIdIndexRoute: AuctionAuctionIdIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

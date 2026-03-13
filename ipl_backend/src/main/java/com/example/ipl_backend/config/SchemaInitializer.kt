@@ -13,6 +13,7 @@ class SchemaInitializer {
     fun init() {
         transaction {
             SchemaUtils.createMissingTablesAndColumns(
+                // ── Existing ──────────────────────────────────────────────
                 Users,
                 Participants,
                 Auctions,
@@ -23,7 +24,14 @@ class SchemaInitializer {
                 Bids,
                 Otps,
                 AuctionPools,
-                BidLogs
+                BidLogs,
+
+                // ── Fantasy system (NEW) ───────────────────────────────────
+                IplMatches,
+                PlayerMatchPerformances,
+                PlayerFantasyTotals,
+                PlayerNameAliases,
+                UpcomingMatches
             )
         }
     }

@@ -66,10 +66,6 @@ class AuctionEngineService(
             ?: throw InvalidAuctionStateException("No active pool — admin must activate the auction first")
 
         // ── Mark previous player as unsold if skipped ──────────────────────
-        // Uses markAsUnsoldIfNotAuctioned() which does SELECT FOR UPDATE + UPDATE
-        // atomically in ONE transaction. Never nest transaction calls — doing
-        // findById() + markAsUnsold() separately causes nested transactions in
-        // Exposed which silently fail (inner tx does not commit).
         val existingPlayer = currentPlayers[auctionId]
         if (existingPlayer != null) {
             val wasMarked = playerRepository.markAsUnsoldIfNotAuctioned(existingPlayer.id)
@@ -92,31 +88,30 @@ class AuctionEngineService(
 
         val queue = playerQueues[auctionId]!!
 
-        // Skip any players already auctioned (handles server restarts gracefully)
+        // Always fetch fresh from DB so all fields (battingStyle, bowlingStyle,
+        // testCaps, odiCaps, t20Caps, basePrice etc.) are up to date
         while (queue.isNotEmpty()) {
-            val candidate = queue.first()
+            val candidate = queue.removeFirst()
             val fresh = playerRepository.findById(candidate.id)
+
+            // Skip if deleted or already auctioned
             if (fresh == null || fresh.isAuctioned) {
-                queue.removeFirst()
                 continue
             }
-            break
-        }
 
-        if (queue.isEmpty()) {
-            println("🏁 Queue exhausted — auction complete")
-            poolExhausted[auctionId] = true
-            currentPlayers.remove(auctionId)
+            // Valid player found — use fresh DB copy, not stale queue entry
+            poolExhausted[auctionId] = false
+            currentPlayers[auctionId] = fresh
             biddingOpen[auctionId] = false
+            println("🎯 Next player → ${fresh.name} (${fresh.specialism}, base=${fresh.basePrice}) in auction=$auctionId")
             return
         }
 
-        val nextPlayer = queue.removeFirst()
-        poolExhausted[auctionId] = false
-        currentPlayers[auctionId] = nextPlayer
-        biddingOpen[auctionId]    = false
-
-        println("🎯 Next player → ${nextPlayer.name} (${nextPlayer.specialism}, base=${nextPlayer.basePrice}) in auction=$auctionId")
+        // Queue exhausted
+        println("🏁 Queue exhausted — auction complete")
+        poolExhausted[auctionId] = true
+        currentPlayers.remove(auctionId)
+        biddingOpen[auctionId] = false
     }
 
     // ─── UPCOMING PLAYERS ────────────────────────────────────────────────────

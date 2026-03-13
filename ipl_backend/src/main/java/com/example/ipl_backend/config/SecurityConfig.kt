@@ -41,6 +41,10 @@ class SecurityConfig {
                     // SSE stream — public so projector view works without login
                     .requestMatchers("/api/v1/auctions/*/stream").permitAll()
                     .requestMatchers("/api/v1/auctions/*/stream/count").permitAll()
+                    // Admin fantasy endpoints
+                    .requestMatchers("/admin/fantasy/**").permitAll()
+                    .requestMatchers("/api/v1/fantasy/**").permitAll()
+                    .requestMatchers("/api/v1/admin/players/**").permitAll()
                     // Everything else requires authentication
                     .anyRequest().authenticated()
             }

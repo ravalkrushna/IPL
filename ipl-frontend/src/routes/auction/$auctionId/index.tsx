@@ -10,6 +10,7 @@ import { biddingApi } from "@/lib/biddingApi"
 import { hammerApi, participantApi } from "@/lib/hammerApi"
 import { squadApi } from "@/lib/squadApi"
 import { authApi } from "@/lib/auth"
+import { fantasyApi } from "@/lib/fantasyApi"
 import { useAuctionRoomStore } from "@/store/auctionRoomStore"
 import { Player } from "@/types/player"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -17,11 +18,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
-export const Route = createFileRoute("/auction/$auctionId")({
+export const Route = createFileRoute("/auction/$auctionId/")({
   component: AuctionRoomPage,
 })
 
-const MAX_SQUAD_SIZE = 16
+const MAX_SQUAD_SIZE = 25
 
 // ─── HELPERS ───────────────────────────────────────────────────────────────
 
@@ -213,6 +214,42 @@ function PlayerHeroCard({ player, seconds, total, biddingOpen, paused, battingSt
   battingStyle?: string; bowlingStyle?: string
 }) {
   const st = specialismStyle(player.specialism)
+
+  const { data: career } = useQuery({
+    queryKey: ["iplCareer", player.id],
+    queryFn: () => fantasyApi.career(player.id),
+    staleTime: 300000,
+    enabled: !!player.id,
+  })
+
+  const hasCareer = career && career.matchesPlayed > 0
+  const sp = normaliseSpecialism(player.specialism)
+
+  // Pick the 3 most relevant stats based on specialism
+  const careerStats = hasCareer ? (() => {
+    if (sp === "BOWLER") return [
+      { label: "MATCHES", value: career.matchesPlayed, color: "text-sky-300" },
+      { label: "WICKETS", value: career.totalWickets, color: "text-rose-300" },
+      { label: "ECONOMY", value: career.bowlingEconomy.toFixed(1), color: "text-amber-300" },
+    ]
+    if (sp === "ALLROUNDER") return [
+      { label: "MATCHES", value: career.matchesPlayed, color: "text-sky-300" },
+      { label: "RUNS", value: career.totalRuns, color: "text-violet-300" },
+      { label: "WICKETS", value: career.totalWickets, color: "text-rose-300" },
+    ]
+    if (sp === "WICKETKEEPER") return [
+      { label: "MATCHES", value: career.matchesPlayed, color: "text-sky-300" },
+      { label: "RUNS", value: career.totalRuns, color: "text-violet-300" },
+      { label: "DISMISSALS", value: career.totalCatches + career.totalStumpings, color: "text-amber-300" },
+    ]
+    // BATSMAN default
+    return [
+      { label: "MATCHES", value: career.matchesPlayed, color: "text-sky-300" },
+      { label: "RUNS", value: career.totalRuns, color: "text-violet-300" },
+      { label: "SR", value: career.strikeRate.toFixed(1), color: "text-emerald-300" },
+    ]
+  })() : null
+
   return (
     <div className="ar-hero rounded-xl overflow-hidden border border-stone-200 shadow-sm h-full flex flex-col"
       style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #334155 100%)" }}>
@@ -224,6 +261,9 @@ function PlayerHeroCard({ player, seconds, total, biddingOpen, paused, battingSt
             <div className="flex gap-2 mt-2 flex-wrap">
               {player.specialism && (
                 <span className={`text-xs px-2.5 py-1 rounded-full font-bold border ${st.bg} ${st.text} ${st.border}`}>{player.specialism}</span>
+              )}
+              {player.iplTeam && (
+                <span className="text-xs px-2.5 py-1 rounded-full font-bold border bg-white/10 text-stone-300 border-white/10">{player.iplTeam}</span>
               )}
             </div>
           </div>
@@ -251,18 +291,50 @@ function PlayerHeroCard({ player, seconds, total, biddingOpen, paused, battingSt
             )}
           </div>
         )}
-      </div>
-      <div className="border-t border-white/10 grid grid-cols-3 divide-x divide-white/10 mt-auto">
-        {[
-          { label: "TEST", value: player.testCaps ?? 0, color: "text-sky-300" },
-          { label: "ODI", value: player.odiCaps ?? 0, color: "text-violet-300" },
-          { label: "T20", value: player.t20Caps ?? 0, color: "text-amber-300" },
-        ].map(({ label, value, color }) => (
-          <div key={label} className={`flex flex-col items-center py-3.5 ${value > 0 ? "opacity-100" : "opacity-35"}`}>
-            <span className={`text-xl font-black tabular-nums ${value > 0 ? color : "text-slate-500"}`}>{value > 0 ? value : "—"}</span>
-            <span className="text-[10px] text-stone-400 font-semibold tracking-widest">{label}</span>
+
+        {/* IPL Career mini-stats row — shown only if career data available */}
+        {hasCareer && (
+          <div className="mt-3 grid grid-cols-4 gap-1.5">
+            <div className="bg-white/5 rounded-xl px-2 py-1.5 text-center">
+              <p className="text-[9px] font-semibold text-stone-400 uppercase tracking-widest">4s</p>
+              <p className="text-xs font-black text-white tabular-nums">{career.totalFours}</p>
+            </div>
+            <div className="bg-white/5 rounded-xl px-2 py-1.5 text-center">
+              <p className="text-[9px] font-semibold text-stone-400 uppercase tracking-widest">6s</p>
+              <p className="text-xs font-black text-white tabular-nums">{career.totalSixes}</p>
+            </div>
+            <div className="bg-white/5 rounded-xl px-2 py-1.5 text-center">
+              <p className="text-[9px] font-semibold text-stone-400 uppercase tracking-widest">HS</p>
+              <p className="text-xs font-black text-emerald-400 tabular-nums">{career.highScore}</p>
+            </div>
+            <div className="bg-white/5 rounded-xl px-2 py-1.5 text-center">
+              <p className="text-[9px] font-semibold text-stone-400 uppercase tracking-widest">FPts</p>
+              <p className="text-xs font-black text-amber-400 tabular-nums">{career.fantasyPoints}</p>
+            </div>
           </div>
-        ))}
+        )}
+      </div>
+
+      {/* Bottom stats bar — IPL career if available, caps fallback */}
+      <div className="border-t border-white/10 grid grid-cols-3 divide-x divide-white/10 mt-auto">
+        {careerStats
+          ? careerStats.map(({ label, value, color }) => (
+            <div key={label} className="flex flex-col items-center py-3.5">
+              <span className={`text-xl font-black tabular-nums ${color}`}>{value}</span>
+              <span className="text-[10px] text-stone-400 font-semibold tracking-widest">{label}</span>
+            </div>
+          ))
+          : [
+            { label: "TEST", value: player.testCaps ?? 0, color: "text-sky-300" },
+            { label: "ODI", value: player.odiCaps ?? 0, color: "text-violet-300" },
+            { label: "T20", value: player.t20Caps ?? 0, color: "text-amber-300" },
+          ].map(({ label, value, color }) => (
+            <div key={label} className={`flex flex-col items-center py-3.5 ${value > 0 ? "opacity-100" : "opacity-35"}`}>
+              <span className={`text-xl font-black tabular-nums ${value > 0 ? color : "text-slate-500"}`}>{value > 0 ? value : "—"}</span>
+              <span className="text-[10px] text-stone-400 font-semibold tracking-widest">{label}</span>
+            </div>
+          ))
+        }
       </div>
     </div>
   )
@@ -367,15 +439,15 @@ function BidHistoryTable({ auctionId, mobileBudgetSlot }: {
   type SquadPlayer = { id: string; name: string; specialism?: string; soldPrice?: number }
   type Squad = { id?: string; name: string; participantId?: string; players?: SquadPlayer[] }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  type RawPlayer = { id: string; auctioned?: boolean; sold?: boolean; [key: string]: any }
+  type RawPlayer = { id: string; auctioned?: boolean; sold?: boolean;[key: string]: any }
 
   const allSales: { playerName: string; squadName: string; specialism?: string; soldPrice: number }[] = []
-  ;(allSquads as Squad[] ?? []).forEach((sq: Squad) => {
-    (sq.players ?? []).forEach((p: SquadPlayer) => {
-      if (p.soldPrice != null && p.soldPrice > 0)
-        allSales.push({ playerName: p.name, squadName: sq.name, specialism: p.specialism, soldPrice: p.soldPrice })
+    ; (allSquads as Squad[] ?? []).forEach((sq: Squad) => {
+      (sq.players ?? []).forEach((p: SquadPlayer) => {
+        if (p.soldPrice != null && p.soldPrice > 0)
+          allSales.push({ playerName: p.name, squadName: sq.name, specialism: p.specialism, soldPrice: p.soldPrice })
+      })
     })
-  })
   allSales.reverse()
 
   const allPlayers = (allPlayersData as RawPlayer[] | undefined) ?? []
@@ -384,8 +456,8 @@ function BidHistoryTable({ auctionId, mobileBudgetSlot }: {
   const soldPlayerIds = new Set(
     (allSquads as Squad[] ?? []).flatMap(sq => (sq.players ?? []).map(p => p.id))
   )
-  const soldCount      = soldPlayerIds.size
-  const unsoldCount    = allPlayers.filter(p => p.auctioned === true && !soldPlayerIds.has(p.id)).length
+  const soldCount = soldPlayerIds.size
+  const unsoldCount = allPlayers.filter(p => p.auctioned === true && !soldPlayerIds.has(p.id)).length
   const remainingCount = Math.max(0, totalPlayers - soldCount - unsoldCount)
 
   const SPEC_COLORS: Record<string, string> = {
@@ -407,9 +479,9 @@ function BidHistoryTable({ auctionId, mobileBudgetSlot }: {
       {/* ── Stat grid ── */}
       <div className="ar-stat-grid grid grid-cols-4 gap-2 shrink-0">
         {[
-          { label: "Sold",      val: soldCount,      sub: `of ${totalPlayers}`, pct: soldCount      / Math.max(totalPlayers, 1), cls: "border-emerald-200 bg-emerald-50", txt: "text-emerald-600", bar: "bg-emerald-400", lbl: "text-emerald-400" },
-          { label: "Unsold",    val: unsoldCount,    sub: `of ${totalPlayers}`, pct: unsoldCount    / Math.max(totalPlayers, 1), cls: "border-red-200 bg-red-50",          txt: "text-red-500",     bar: "bg-red-400",     lbl: "text-red-400"    },
-          { label: "Remaining", val: remainingCount, sub: `of ${totalPlayers}`, pct: remainingCount / Math.max(totalPlayers, 1), cls: "border-stone-200 bg-stone-50",      txt: "text-stone-700",   bar: "bg-stone-400",   lbl: "text-stone-400"  },
+          { label: "Sold", val: soldCount, sub: `of ${totalPlayers}`, pct: soldCount / Math.max(totalPlayers, 1), cls: "border-emerald-200 bg-emerald-50", txt: "text-emerald-600", bar: "bg-emerald-400", lbl: "text-emerald-400" },
+          { label: "Unsold", val: unsoldCount, sub: `of ${totalPlayers}`, pct: unsoldCount / Math.max(totalPlayers, 1), cls: "border-red-200 bg-red-50", txt: "text-red-500", bar: "bg-red-400", lbl: "text-red-400" },
+          { label: "Remaining", val: remainingCount, sub: `of ${totalPlayers}`, pct: remainingCount / Math.max(totalPlayers, 1), cls: "border-stone-200 bg-stone-50", txt: "text-stone-700", bar: "bg-stone-400", lbl: "text-stone-400" },
         ].map(({ label, val, sub, pct, cls, txt, bar, lbl }) => (
           <div key={label} className={`rounded-lg border px-3 py-2 ${cls}`}>
             <p className={`text-[9px] font-black uppercase tracking-widest ${lbl}`}>{label}</p>
@@ -530,14 +602,11 @@ function UnsoldConfirmModal({ open, playerName, basePrice, onConfirm, onCancel }
   if (!open) return null
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center">
-      {/* Backdrop */}
       <div
         className="absolute inset-0 bg-stone-900/50 backdrop-blur-sm"
         style={{ animation: "unsoldFadeIn 0.18s ease" }}
         onClick={onCancel}
       />
-
-      {/* Modal */}
       <div
         className="relative z-10 w-full max-w-sm mx-4 rounded-3xl overflow-hidden shadow-2xl"
         style={{
@@ -546,75 +615,27 @@ function UnsoldConfirmModal({ open, playerName, basePrice, onConfirm, onCancel }
           border: "1px solid rgba(251,191,36,0.25)",
         }}
       >
-        {/* Amber-to-red top glow strip */}
         <div style={{ height: "3px", background: "linear-gradient(90deg, transparent, #f59e0b, #ef4444, #f59e0b, transparent)" }} />
-
         <div className="px-7 pt-8 pb-7 text-center">
-          {/* Pulsing icon */}
           <div className="relative inline-flex items-center justify-center mb-5">
-            <div
-              className="absolute w-20 h-20 rounded-full"
-              style={{
-                background: "radial-gradient(circle, rgba(239,68,68,0.25) 0%, transparent 70%)",
-                animation: "unsoldPulse 2s ease-in-out infinite",
-              }}
-            />
-            <div
-              className="relative w-16 h-16 rounded-2xl flex items-center justify-center text-4xl"
-              style={{
-                background: "linear-gradient(135deg, #292524, #3a3330)",
-                border: "1px solid rgba(239,68,68,0.3)",
-              }}
-            >
-              🏏
-            </div>
+            <div className="absolute w-20 h-20 rounded-full" style={{ background: "radial-gradient(circle, rgba(239,68,68,0.25) 0%, transparent 70%)", animation: "unsoldPulse 2s ease-in-out infinite" }} />
+            <div className="relative w-16 h-16 rounded-2xl flex items-center justify-center text-4xl" style={{ background: "linear-gradient(135deg, #292524, #3a3330)", border: "1px solid rgba(239,68,68,0.3)" }}>🏏</div>
           </div>
-
           <p className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-400 mb-2">Going Unsold</p>
           <h2 className="text-2xl font-black text-white leading-tight mb-1">{playerName}</h2>
-          <p className="text-sm text-stone-400">
-            Base price: <span className="font-black text-amber-400">{fmt(basePrice)}</span>
-          </p>
-          <p className="text-xs text-stone-500 mt-3 leading-relaxed">
-            No bids placed. Marking as{" "}
-            <span className="text-red-400 font-bold">unsold</span> and moving to the next player.
-          </p>
-
-          {/* Divider */}
+          <p className="text-sm text-stone-400">Base price: <span className="font-black text-amber-400">{fmt(basePrice)}</span></p>
+          <p className="text-xs text-stone-500 mt-3 leading-relaxed">No bids placed. Marking as <span className="text-red-400 font-bold">unsold</span> and moving to the next player.</p>
           <div className="my-5 flex items-center gap-3">
             <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.08))" }} />
             <span className="text-[10px] text-stone-600 font-semibold tracking-widest">CONFIRM?</span>
             <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg, rgba(255,255,255,0.08), transparent)" }} />
           </div>
-
-          {/* Buttons */}
           <div className="flex gap-3">
-            <button
-              onClick={onCancel}
-              className="flex-1 py-3 rounded-2xl text-sm font-bold transition-all"
-              style={{
-                background: "rgba(255,255,255,0.06)",
-                color: "#a8a29e",
-                border: "1px solid rgba(255,255,255,0.08)",
-              }}
-            >
-              ← Cancel
-            </button>
-            <button
-              onClick={onConfirm}
-              className="flex-1 py-3 rounded-2xl text-sm font-black text-white transition-all"
-              style={{
-                background: "linear-gradient(135deg, #dc2626, #b91c1c)",
-                border: "1px solid rgba(239,68,68,0.4)",
-                boxShadow: "0 4px 20px rgba(239,68,68,0.35)",
-              }}
-            >
-              Mark Unsold →
-            </button>
+            <button onClick={onCancel} className="flex-1 py-3 rounded-2xl text-sm font-bold transition-all" style={{ background: "rgba(255,255,255,0.06)", color: "#a8a29e", border: "1px solid rgba(255,255,255,0.08)" }}>← Cancel</button>
+            <button onClick={onConfirm} className="flex-1 py-3 rounded-2xl text-sm font-black text-white transition-all" style={{ background: "linear-gradient(135deg, #dc2626, #b91c1c)", border: "1px solid rgba(239,68,68,0.4)", boxShadow: "0 4px 20px rgba(239,68,68,0.35)" }}>Mark Unsold →</button>
           </div>
         </div>
       </div>
-
       <style>{`
         @keyframes unsoldFadeIn  { from { opacity: 0 } to { opacity: 1 } }
         @keyframes unsoldSlideUp { from { opacity: 0; transform: translateY(24px) scale(0.94) } to { opacity: 1; transform: translateY(0) scale(1) } }
@@ -944,8 +965,6 @@ function AdminPanel({ auctionId, onEnd }: { auctionId: string; onEnd: () => void
   const confirmEnd = useAuctionRoomStore(s => s.confirmEnd); const setConfirmEnd = useAuctionRoomStore(s => s.setConfirmEnd)
   const showManualHammer = useAuctionRoomStore(s => s.showManualHammer); const setShowManualHammer = useAuctionRoomStore(s => s.setShowManualHammer)
   const expandedSquad = useAuctionRoomStore(s => s.expandedSquad); const setExpandedSquad = useAuctionRoomStore(s => s.setExpandedSquad)
-
-  // ── Unsold confirm modal (Zustand, no useState) ──
   const showUnsoldConfirm = useAuctionRoomStore(s => s.showUnsoldConfirm)
   const setShowUnsoldConfirm = useAuctionRoomStore(s => s.setShowUnsoldConfirm)
 
@@ -990,14 +1009,12 @@ function AdminPanel({ auctionId, onEnd }: { auctionId: string; onEnd: () => void
     },
   })
 
-  // ── Core next-player action (used by both direct and confirmed paths) ──
   const doNextPlayer = async () => {
     const pool = engineState?.pools?.[0]
     if (pool && (pool.status === "PENDING" || pool.status === "PAUSED")) await activatePool.mutateAsync(pool.poolType)
     nextPlayer.mutate()
   }
 
-  // ── Guard: if a player is up with no bids, show unsold confirmation first ──
   const handleNextPlayer = async () => {
     if (currentPlayer && !engineState?.biddingOpen) {
       setShowUnsoldConfirm(true)
@@ -1023,8 +1040,6 @@ function AdminPanel({ auctionId, onEnd }: { auctionId: string; onEnd: () => void
 
   return (
     <div className="ar-body flex-1 flex gap-0 overflow-hidden min-h-0 bg-[#f5f3ef]">
-
-      {/* ── LEFT COLUMN ── */}
       <div className="ar-left-col flex-1 flex flex-col min-w-0 border-r border-stone-200 overflow-hidden">
         <div className="ar-left-inner flex gap-3 p-4 pb-2 shrink-0">
           <div className="flex-1 min-w-0 flex flex-col">
@@ -1046,27 +1061,18 @@ function AdminPanel({ auctionId, onEnd }: { auctionId: string; onEnd: () => void
             </div>
           )}
         </div>
-
-        {/* Stat cards + bid history */}
         <div className="flex-1 px-4 pb-4 min-h-0 overflow-hidden flex flex-col">
           <BidHistoryTable
             auctionId={auctionId}
             mobileBudgetSlot={
               <div className="ar-budget-mobile">
-                <BudgetOverview
-                  allSquads={allSquads}
-                  walletMap={walletMap}
-                  expandedSquad={expandedSquad}
-                  setExpandedSquad={setExpandedSquad}
-                />
+                <BudgetOverview allSquads={allSquads} walletMap={walletMap} expandedSquad={expandedSquad} setExpandedSquad={setExpandedSquad} />
               </div>
             }
           />
         </div>
-
       </div>
 
-      {/* ── RIGHT COLUMN ── */}
       <div className="ar-ctrl-col w-72 shrink-0 flex flex-col p-4 gap-3 border-r border-stone-200 overflow-y-auto overflow-x-hidden">
         <div className="rounded-xl border border-stone-200 bg-white shrink-0 overflow-hidden">
           <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest px-4 pt-3.5 pb-2">Controls</p>
@@ -1095,15 +1101,8 @@ function AdminPanel({ auctionId, onEnd }: { auctionId: string; onEnd: () => void
             </div>
           </div>
         </div>
-
-        {/* Teams — desktop only (hidden on mobile) */}
         <div className="ar-budget-desktop">
-          <BudgetOverview
-            allSquads={allSquads}
-            walletMap={walletMap}
-            expandedSquad={expandedSquad}
-            setExpandedSquad={setExpandedSquad}
-          />
+          <BudgetOverview allSquads={allSquads} walletMap={walletMap} expandedSquad={expandedSquad} setExpandedSquad={setExpandedSquad} />
         </div>
       </div>
 
@@ -1158,7 +1157,6 @@ function ParticipantView({ auctionId }: { auctionId: string; me: { participantId
   })
 
   const { data: walletMap } = useWalletMap(auctionId, allSquads)
-
   const isPaused = auction?.status === "PAUSED"
 
   const sortedSquads = [...(allSquads ?? [])].sort((a: { name: string; players?: unknown[] }, b: { name: string; players?: unknown[] }) => {
@@ -1167,7 +1165,6 @@ function ParticipantView({ auctionId }: { auctionId: string; me: { participantId
 
   return (
     <div className="ar-body flex-1 flex gap-0 overflow-hidden min-h-0 bg-[#f5f3ef]">
-      {/* ── LEFT COLUMN ── */}
       <div className="ar-left-col flex-1 flex flex-col min-w-0 border-r border-stone-200 overflow-hidden">
         <div className="ar-left-inner flex gap-3 p-4 pb-2 shrink-0">
           <div className="flex-1 min-w-0 flex flex-col">
@@ -1193,10 +1190,7 @@ function ParticipantView({ auctionId }: { auctionId: string; me: { participantId
           </div>
           {currentPlayer && (
             <div className="ar-upcoming-wrap w-64 shrink-0 flex flex-col">
-              <UpcomingPlayers
-                upcomingPlayers={engineState?.upcomingPlayers ?? []}
-                currentPlayerId={currentPlayer?.id}
-              />
+              <UpcomingPlayers upcomingPlayers={engineState?.upcomingPlayers ?? []} currentPlayerId={currentPlayer?.id} />
             </div>
           )}
         </div>
@@ -1207,12 +1201,7 @@ function ParticipantView({ auctionId }: { auctionId: string; me: { participantId
               auctionId={auctionId}
               mobileBudgetSlot={
                 <div className="ar-budget-mobile">
-                  <BudgetOverview
-                    allSquads={allSquads}
-                    walletMap={walletMap}
-                    expandedSquad={expandedSquad}
-                    setExpandedSquad={setExpandedSquad}
-                  />
+                  <BudgetOverview allSquads={allSquads} walletMap={walletMap} expandedSquad={expandedSquad} setExpandedSquad={setExpandedSquad} />
                 </div>
               }
             />
@@ -1220,7 +1209,6 @@ function ParticipantView({ auctionId }: { auctionId: string; me: { participantId
         </div>
       </div>
 
-      {/* ── RIGHT COLUMN — All Squads ── */}
       <div className="ar-squads-col w-64 shrink-0 flex flex-col bg-stone-50 border-l border-stone-200">
         <div className="px-4 pt-4 pb-3 flex items-center justify-between shrink-0 border-b border-slate-200/60">
           <div>
@@ -1258,7 +1246,7 @@ function ParticipantView({ auctionId }: { auctionId: string; me: { participantId
 // ─── ROOT PAGE ────────────────────────────────────────────────────────────
 
 function AuctionRoomPage() {
-  const { auctionId } = useParams({ from: "/auction/$auctionId" })
+  const { auctionId } = useParams({ from: "/auction/$auctionId/" })
   const navigate = useNavigate()
 
   const setSoldInfo = useAuctionRoomStore(s => s.setSoldInfo)
@@ -1349,6 +1337,11 @@ function AuctionRoomPage() {
           </div>
           <div className="ar-header-right flex items-center gap-2">
             {isAdmin && <AddParticipantNavButton auctionId={auctionId} />}
+            <button
+              onClick={() => navigate({ to: "/auction/$auctionId/fantasy", params: { auctionId } })}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-all">
+              🏆 Fantasy
+            </button>
             <button onClick={() => navigate({ to: "/auction" })}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border border-stone-200 bg-white text-stone-500 hover:bg-stone-50 hover:text-stone-700 transition-all">
               ← Back to Lobby
@@ -1362,6 +1355,12 @@ function AuctionRoomPage() {
             {isAdmin && <AddParticipantNavButton auctionId={auctionId} />}
           </div>
           <div className="ar-mobile-bar-right">
+            <button
+              onClick={() => navigate({ to: "/auction/$auctionId/fantasy", params: { auctionId } })}
+              className="ar-mob-back-btn"
+              style={{ borderColor: "#fcd34d", color: "#92400e", background: "#fffbeb" }}>
+              🏆 Fantasy
+            </button>
             <button onClick={() => navigate({ to: "/auction" })} className="ar-mob-back-btn">
               ← Lobby
             </button>

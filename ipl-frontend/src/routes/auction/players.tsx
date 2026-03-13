@@ -2,6 +2,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { z } from "zod"
+import { useRef } from "react"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   Table,
   TableBody,
@@ -13,15 +15,25 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { usePlayers } from "@/hooks/usePlayers"
+import { api } from "@/lib/api"
 
 export const Route = createFileRoute("/auction/players")({
   validateSearch: z.object({
-    page: z.number().catch(1),
+    page:   z.number().catch(1),
     search: z.string().catch(""),
   }),
   component: PlayersPoolPage,
 })
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+type UploadResult = {
+  inserted: number
+  updated: number
+  skipped: number
+  errors: string[]
+}
+
+// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Plus+Jakarta+Sans:wght@600;700;800;900&family=DM+Sans:wght@400;500;600;700;800&display=swap');
   :root {
@@ -39,9 +51,6 @@ const styles = `
     --amber:         #b06b00;
     --amber-light:   #fef8ed;
     --amber-border:  #f0d88a;
-    --sky:           #1a5fa8;
-    --sky-light:     #eff5fd;
-    --sky-border:    #b8d0ee;
     --rose:          #c0392b;
     --rose-light:    #fdf2f0;
     --rose-border:   #f5c4b8;
@@ -56,10 +65,6 @@ const styles = `
     color: var(--ink);
     box-sizing: border-box;
   }
-
-  /* ══════════════════════════════════════════
-     NAV
-  ══════════════════════════════════════════ */
   .pp-nav {
     position: sticky; top: 0; z-index: 50;
     display: flex; align-items: center; justify-content: space-between;
@@ -95,15 +100,7 @@ const styles = `
     white-space: nowrap; flex-shrink: 0;
   }
   .btn-back:hover { border-color: var(--border-dark); color: var(--ink); transform: translateY(-1px); }
-
-  /* ══════════════════════════════════════════
-     BODY
-  ══════════════════════════════════════════ */
   .pp-body { padding: 32px 32px 64px; }
-
-  /* ══════════════════════════════════════════
-     PAGE HEADER
-  ══════════════════════════════════════════ */
   .pp-header {
     display: flex; align-items: flex-start; justify-content: space-between;
     margin-bottom: 24px; flex-wrap: nowrap; gap: 12px;
@@ -121,12 +118,8 @@ const styles = `
     font-size: 28px; font-weight: 900; color: var(--ink);
     margin: 0 0 4px; letter-spacing: -0.5px; line-height: 1.1;
   }
-.pp-sub { font-size: 13px; color: var(--ink-faint); margin: 0; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-.pp-header > div:first-child { min-width: 0; }
-  /* ══════════════════════════════════════════
-     STAT PILLS
-  ══════════════════════════════════════════ */
+  .pp-sub { font-size: 13px; color: var(--ink-faint); margin: 0; font-weight: 500; }
+  .pp-header > div:first-child { min-width: 0; }
   .pp-stats { display: flex; gap: 10px; flex-wrap: wrap; flex-shrink: 0; }
   .pp-stat-pill {
     display: flex; align-items: center; gap: 8px;
@@ -140,10 +133,6 @@ const styles = `
     font-family: 'Plus Jakarta Sans', sans-serif;
     font-size: 14px; font-weight: 800; letter-spacing: -0.3px;
   }
-
-  /* ══════════════════════════════════════════
-     TOOLBAR
-  ══════════════════════════════════════════ */
   .pp-toolbar {
     display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
     background: white; border: 1px solid var(--border);
@@ -166,9 +155,108 @@ const styles = `
   }
   .pp-toolbar-search input::placeholder, .pp-search-input::placeholder { color: var(--ink-faint); }
 
-  /* ══════════════════════════════════════════
-     TABLE SHELL
-  ══════════════════════════════════════════ */
+  /* ── Upload button ── */
+  .btn-upload {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 0 16px; height: 36px; border-radius: 9px;
+    font-size: 12px; font-weight: 700; font-family: 'DM Sans', sans-serif;
+    background: var(--green); color: white; border: none;
+    cursor: pointer; transition: all 0.15s; white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(45,122,79,0.25);
+    flex-shrink: 0;
+  }
+  .btn-upload:hover:not(:disabled) {
+    background: #256b43; transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(45,122,79,0.35);
+  }
+  .btn-upload:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+  /* ── Uploading overlay ── */
+  .pp-uploading-overlay {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(26,20,16,0.45);
+    backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    animation: pp-fade-in 0.2s ease;
+  }
+  .pp-uploading-card {
+    background: white; border-radius: 18px;
+    padding: 32px 40px;
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    min-width: 260px;
+  }
+  .pp-uploading-spinner {
+    width: 44px; height: 44px;
+    border: 3px solid var(--border);
+    border-top-color: var(--green);
+    border-radius: 50%;
+    animation: pp-spin 0.8s linear infinite;
+  }
+  @keyframes pp-spin { to { transform: rotate(360deg); } }
+  .pp-uploading-label {
+    font-size: 15px; font-weight: 700; color: var(--ink);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+  .pp-uploading-sub {
+    font-size: 12px; color: var(--ink-faint); font-weight: 500; margin-top: -8px;
+  }
+
+  /* ── Result banner ── */
+  .pp-upload-result {
+    display: flex; align-items: flex-start; gap: 14px;
+    border-radius: 14px; padding: 16px 20px; margin-bottom: 18px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    animation: pp-slide-in 0.3s cubic-bezier(0.16,1,0.3,1);
+    border: 1.5px solid transparent;
+  }
+  @keyframes pp-slide-in {
+    from { opacity: 0; transform: translateY(-10px) scale(0.98); }
+    to   { opacity: 1; transform: none; }
+  }
+  .pp-upload-result.success { background: var(--green-light); border-color: var(--green-border); }
+  .pp-upload-result.error   { background: var(--rose-light);  border-color: var(--rose-border); }
+  .pp-upload-result-icon { font-size: 24px; flex-shrink: 0; line-height: 1; margin-top: 1px; }
+  .pp-upload-result-body { flex: 1; min-width: 0; }
+  .pp-upload-result-title {
+    font-size: 14px; font-weight: 800; color: var(--ink); margin-bottom: 8px;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+  .pp-upload-result-stats { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pp-upload-stat-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: white; border: 1px solid var(--border);
+    border-radius: 7px; padding: 3px 10px;
+    font-size: 12px; font-weight: 600; color: var(--ink-muted);
+  }
+  .pp-upload-stat-chip strong {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 13px; font-weight: 800; color: var(--ink);
+  }
+  .pp-upload-result-errors { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+  .pp-upload-result-errors li {
+    font-size: 12px; color: var(--rose); font-weight: 600;
+    list-style: none; display: flex; align-items: center; gap: 6px;
+  }
+  .pp-upload-result-errors li::before { content: '⚠️'; font-size: 11px; }
+  .pp-upload-error-msg { font-size: 13px; color: var(--rose); font-weight: 600; }
+  .pp-upload-dismiss {
+    background: none; border: none; cursor: pointer;
+    font-size: 18px; color: var(--ink-faint); padding: 2px; line-height: 1;
+    flex-shrink: 0; border-radius: 6px; transition: all 0.12s;
+  }
+  .pp-upload-dismiss:hover { color: var(--ink); background: rgba(0,0,0,0.06); }
+
+  .pp-csv-hint {
+    font-size: 11px; color: var(--ink-faint); font-weight: 500;
+    margin-bottom: 16px; padding: 10px 14px;
+    background: var(--parchment); border: 1px solid var(--border);
+    border-radius: 8px; display: flex; align-items: flex-start; gap: 8px;
+  }
+  .pp-csv-hint code {
+    font-family: monospace; font-size: 10px; color: var(--ink-muted);
+    background: var(--parchment-mid); padding: 1px 5px; border-radius: 4px;
+  }
   .pp-table-shell {
     background: white; border: 1px solid var(--border);
     border-radius: 14px; overflow: hidden; margin-bottom: 20px;
@@ -190,22 +278,19 @@ const styles = `
     font-size: 13px; color: var(--ink-muted); vertical-align: middle;
   }
   .pp-cell-name { font-weight: 700 !important; color: var(--ink) !important; font-size: 13px !important; }
-  .pp-cell-country { color: var(--ink-faint) !important; font-size: 13px !important; font-weight: 500 !important; }
+  .pp-cell-iplteam { color: var(--ink-muted) !important; font-size: 12px !important; font-weight: 600 !important; }
   .pp-cell-price {
     font-family: 'Plus Jakarta Sans', sans-serif !important;
     font-size: 13px !important; font-weight: 800 !important;
     color: var(--green) !important; text-align: right !important;
     letter-spacing: -0.2px !important; font-variant-numeric: tabular-nums;
   }
-
-  /* ── Role badge ── */
   .pp-badge-role {
     background: var(--parchment-mid) !important; border: 1px solid var(--border) !important;
     color: var(--ink-muted) !important; font-size: 10px !important; font-weight: 700 !important;
     letter-spacing: 0.4px !important; padding: 2px 8px !important; border-radius: 6px !important;
     text-transform: uppercase; font-family: 'DM Sans', sans-serif;
   }
-  /* ── Status badges ── */
   .pp-badge-sold {
     background: var(--green-light) !important; border: 1px solid var(--green-border) !important;
     color: var(--green) !important; font-size: 10px !important; font-weight: 800 !important;
@@ -218,8 +303,6 @@ const styles = `
     letter-spacing: 0.5px !important; padding: 2px 8px !important; border-radius: 6px !important;
     text-transform: uppercase; font-family: 'DM Sans', sans-serif;
   }
-
-  /* ── Skeleton ── */
   .pp-skel {
     border-radius: 5px;
     background: linear-gradient(90deg, var(--parchment) 25%, var(--border) 50%, var(--parchment) 75%);
@@ -229,8 +312,6 @@ const styles = `
     0%   { background-position: 100% 0; }
     100% { background-position: -100% 0; }
   }
-
-  /* ── Empty state ── */
   .pp-empty-inner {
     display: flex; flex-direction: column; align-items: center;
     justify-content: center; padding: 64px 20px; color: var(--ink-faint); gap: 10px;
@@ -238,8 +319,6 @@ const styles = `
   .pp-empty-icon { font-size: 36px; opacity: 0.35; }
   .pp-empty-text { font-size: 14px; font-weight: 600; color: var(--ink-faint); }
   .pp-empty-hint { font-size: 12px; color: var(--ink-faint); opacity: 0.7; }
-
-  /* ── Pagination ── */
   .pp-pager { display: flex; justify-content: center; align-items: center; gap: 12px; }
   .pp-pager-btn {
     height: 36px; padding: 0 18px; border-radius: 9px;
@@ -264,85 +343,44 @@ const styles = `
     font-size: 11px !important; font-weight: 700 !important;
     width: 40px; text-align: center !important;
   }
-
-  /* ══════════════════════════════════════════
-     MOBILE  ≤ 600px
-  ══════════════════════════════════════════ */
+  @keyframes pp-fade-in { from { opacity: 0; } to { opacity: 1; } }
   @media (max-width: 600px) {
-    /* Nav */
     .pp-nav { padding: 0 14px !important; height: 52px !important; }
     .pp-nav-icon { width: 30px !important; height: 30px !important; font-size: 14px !important; }
     .pp-nav-title { font-size: 14px !important; }
     .pp-nav-sub { display: none !important; }
-
-    /* Body */
     .pp-body { padding: 16px 12px 48px !important; }
-
-    /* Header */
-    .pp-header { margin-bottom: 14px !important; gap: 8px !important; flex-wrap: nowrap !important; align-items: flex-start !important; }
+    .pp-header { margin-bottom: 14px !important; gap: 8px !important; }
     .pp-title { font-size: 20px !important; }
     .pp-sub { font-size: 12px !important; }
     .pp-eyebrow { font-size: 9px !important; margin-bottom: 4px !important; }
     .pp-stat-pill { padding: 6px 10px !important; gap: 6px !important; }
     .pp-stat-label { font-size: 10px !important; }
     .pp-stat-value { font-size: 12px !important; }
-
-    /* Toolbar */
     .pp-toolbar { padding: 10px 12px !important; gap: 8px !important; margin-bottom: 12px !important; }
-    .pp-toolbar-search { min-width: 0 !important; flex: 1 !important; max-width: 100% !important; }
+    .pp-toolbar-search { min-width: 0 !important; flex: 1 !important; }
     .pp-toolbar-perpage { display: none !important; }
-
-    /* Table shell */
     .pp-table-shell { border-radius: 10px !important; }
     .pp-table-shell thead th { padding: 9px 10px !important; font-size: 9px !important; }
     .pp-table-shell tbody td { padding: 10px 10px !important; }
-
-    /* Hide Country, Role, Status columns on mobile */
-    .pp-col-country,
-    .pp-col-role,
-    .pp-col-status { display: none !important; }
-
-    /* Name cell */
+    .pp-col-role, .pp-col-iplteam, .pp-col-status { display: none !important; }
     .pp-cell-name { font-size: 12px !important; }
-    .pp-mobile-sub {
-      display: flex !important;
-      align-items: center;
-      gap: 5px;
-      margin-top: 2px;
-    }
-    .pp-mobile-role-dot {
-      display: inline-block !important;
-      width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
-    }
-    .pp-mobile-country-text {
-      display: inline !important;
-      font-size: 11px;
-      color: var(--ink-faint);
-      font-weight: 500;
-    }
+    .pp-mobile-sub { display: flex !important; align-items: center; gap: 5px; margin-top: 2px; }
+    .pp-mobile-role-dot { display: inline-block !important; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
     .pp-mobile-sold-chip {
-      display: inline-flex !important;
-      align-items: center;
+      display: inline-flex !important; align-items: center;
       font-size: 9px; font-weight: 800; letter-spacing: 0.4px;
       padding: 1px 6px; border-radius: 4px;
       background: var(--green-light); border: 1px solid var(--green-border);
       color: var(--green); text-transform: uppercase;
     }
-
-    /* Price cell */
     .pp-cell-price { font-size: 12px !important; }
-
-    /* # cell */
     .pp-cell-num { width: 28px !important; font-size: 10px !important; padding: 10px 6px !important; }
-
-    /* Pagination */
     .pp-pager-btn { height: 32px !important; padding: 0 12px !important; font-size: 12px !important; }
     .pp-pager-label { font-size: 12px !important; min-width: 56px !important; }
+    .btn-upload span.btn-upload-label { display: none !important; }
+    .pp-uploading-card { padding: 24px 28px !important; min-width: 200px !important; }
   }
-
-  /* ══════════════════════════════════════════
-     TABLET  601–900px
-  ══════════════════════════════════════════ */
   @media (min-width: 601px) and (max-width: 900px) {
     .pp-nav { padding: 0 20px !important; }
     .pp-body { padding: 20px 20px 48px !important; }
@@ -350,14 +388,12 @@ const styles = `
     .pp-table-shell thead th { padding: 10px 14px !important; }
     .pp-table-shell tbody td { padding: 11px 14px !important; }
   }
-
-  /* ── Desktop: hide mobile-only sub-line elements ── */
   .pp-mobile-sub       { display: none; }
   .pp-mobile-role-dot  { display: none; }
-  .pp-mobile-country-text { display: none; }
   .pp-mobile-sold-chip { display: none; }
 `
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
 const ROLE_COLORS: Record<string, string> = {
   BATSMAN: "#38bdf8",
   BOWLER: "#fb7185",
@@ -380,24 +416,57 @@ function fmt(amount: number) {
   return `₹${amount.toLocaleString()}`
 }
 
+// ── Component ─────────────────────────────────────────────────────────────────
 function PlayersPoolPage() {
   const { page, search } = Route.useSearch()
-  const navigate = Route.useNavigate()
-  const globalNavigate = useNavigate()
+  const navigate         = Route.useNavigate()
+  const globalNavigate   = useNavigate()
+  const queryClient      = useQueryClient()
+  const fileInputRef     = useRef<HTMLInputElement>(null)
   const size = 10
+
+  const uploadMutation = useMutation({
+    mutationFn: (file: File) => {
+      const formData = new FormData()
+      formData.append("file", file)
+      return api
+        .post<UploadResult>("/admin/players/upload-csv", formData)
+        .then((r) => r.data)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["players"] })
+    },
+  })
 
   const { data: allPlayers, isLoading } = usePlayers(search ? { search } : {})
 
-  const filtered = allPlayers ?? []
-  const startRow = (page - 1) * size + 1
-  const paginated = filtered.slice((page - 1) * size, page * size)
+  const filtered   = allPlayers ?? []
+  const startRow   = (page - 1) * size + 1
+  const paginated  = filtered.slice((page - 1) * size, page * size)
   const totalShown = paginated.length
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!fileInputRef.current) return
+    fileInputRef.current.value = ""
+    if (!file) return
+    uploadMutation.mutate(file)
+  }
 
   return (
     <div className="pp-root">
       <style>{styles}</style>
 
-      {/* ── NAV ── */}
+      {uploadMutation.isPending && (
+        <div className="pp-uploading-overlay">
+          <div className="pp-uploading-card">
+            <div className="pp-uploading-spinner" />
+            <div className="pp-uploading-label">Uploading file…</div>
+            <div className="pp-uploading-sub">Please wait, processing your CSV</div>
+          </div>
+        </div>
+      )}
+
       <nav className="pp-nav">
         <div className="pp-nav-brand">
           <div className="pp-nav-icon">🏏</div>
@@ -411,10 +480,8 @@ function PlayersPoolPage() {
         </button>
       </nav>
 
-      {/* ── Body ── */}
       <div className="pp-body">
 
-        {/* ── Page Header ── */}
         <div className="pp-header">
           <div>
             <div className="pp-eyebrow">Players Pool</div>
@@ -435,7 +502,59 @@ function PlayersPoolPage() {
           </div>
         </div>
 
-        {/* ── Toolbar ── */}
+        <div className="pp-csv-hint">
+          <span>📋</span>
+          <span>
+            CSV / Excel columns: <code>name</code>, <code>specialism</code>, <code>iplTeam</code>,{" "}
+            <code>age</code>, <code>basePrice</code>, <code>battingStyle</code>,{" "}
+            <code>bowlingStyle</code>, <code>testCaps</code>, <code>odiCaps</code>, <code>t20Caps</code>{" "}
+            — only <code>name</code> is required. Existing players are overwritten.
+          </span>
+        </div>
+
+        {uploadMutation.isSuccess && uploadMutation.data && (
+          <div className="pp-upload-result success">
+            <span className="pp-upload-result-icon">✅</span>
+            <div className="pp-upload-result-body">
+              <div className="pp-upload-result-title">Upload successful!</div>
+              <div className="pp-upload-result-stats">
+                <span className="pp-upload-stat-chip">
+                  🆕 <strong>{uploadMutation.data.inserted}</strong> inserted
+                </span>
+                <span className="pp-upload-stat-chip">
+                  ✏️ <strong>{uploadMutation.data.updated}</strong> updated
+                </span>
+                <span className="pp-upload-stat-chip">
+                  ⏭️ <strong>{uploadMutation.data.skipped}</strong> skipped
+                </span>
+              </div>
+              {uploadMutation.data.errors.length > 0 && (
+                <ul className="pp-upload-result-errors">
+                  {uploadMutation.data.errors.map((err, i) => (
+                    <li key={i}>{err}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <button className="pp-upload-dismiss" onClick={() => uploadMutation.reset()}>✕</button>
+          </div>
+        )}
+
+        {uploadMutation.isError && (
+          <div className="pp-upload-result error">
+            <span className="pp-upload-result-icon">❌</span>
+            <div className="pp-upload-result-body">
+              <div className="pp-upload-result-title">Upload failed</div>
+              <div className="pp-upload-error-msg">
+                {(uploadMutation.error as any)?.response?.data?.message
+                  ?? (uploadMutation.error as any)?.message
+                  ?? "Something went wrong"}
+              </div>
+            </div>
+            <button className="pp-upload-dismiss" onClick={() => uploadMutation.reset()}>✕</button>
+          </div>
+        )}
+
         <div className="pp-toolbar">
           <div className="pp-toolbar-search">
             <Input
@@ -448,27 +567,45 @@ function PlayersPoolPage() {
             />
           </div>
           <div style={{ flex: 1 }} />
-          <span className="pp-toolbar-perpage" style={{ fontSize: 11, color: "var(--ink-faint)", fontWeight: 600 }}>
+          <span
+            className="pp-toolbar-perpage"
+            style={{ fontSize: 11, color: "var(--ink-faint)", fontWeight: 600 }}
+          >
             {size} per page
           </span>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            style={{ display: "none" }}
+            onChange={handleFileChange}
+          />
+
+          <button
+            className="btn-upload"
+            disabled={uploadMutation.isPending}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <span style={{ fontSize: 14 }}>📤</span>
+            <span className="btn-upload-label">Upload CSV / Excel</span>
+          </button>
         </div>
 
-        {/* ── Table ── */}
         <div className="pp-table-shell">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead style={{ width: 48, textAlign: "center" }}>#</TableHead>
                 <TableHead>Player</TableHead>
-                <TableHead className="pp-col-country">Country</TableHead>
                 <TableHead className="pp-col-role">Role</TableHead>
+                <TableHead className="pp-col-iplteam">IPL Team</TableHead>
                 <TableHead style={{ textAlign: "right" }}>Base Price</TableHead>
                 <TableHead className="pp-col-status">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
 
-              {/* Skeleton rows */}
               {isLoading && Array.from({ length: 10 }).map((_, i) => (
                 <TableRow key={i}>
                   <TableCell className="pp-cell-num">
@@ -477,11 +614,11 @@ function PlayersPoolPage() {
                   <TableCell>
                     <div className="pp-skel" style={{ height: 13, width: 160 }} />
                   </TableCell>
-                  <TableCell className="pp-col-country">
-                    <div className="pp-skel" style={{ height: 13, width: 90 }} />
-                  </TableCell>
                   <TableCell className="pp-col-role">
                     <div className="pp-skel" style={{ height: 22, width: 90, borderRadius: 6 }} />
+                  </TableCell>
+                  <TableCell className="pp-col-iplteam">
+                    <div className="pp-skel" style={{ height: 13, width: 90 }} />
                   </TableCell>
                   <TableCell style={{ textAlign: "right" }}>
                     <div className="pp-skel" style={{ height: 13, width: 70, marginLeft: "auto" }} />
@@ -492,36 +629,21 @@ function PlayersPoolPage() {
                 </TableRow>
               ))}
 
-              {/* Data rows */}
               {!isLoading && paginated.map((player: any, i: number) => (
                 <TableRow key={player.id}>
                   <TableCell className="pp-cell-num">{startRow + i}</TableCell>
-
                   <TableCell className="pp-cell-name">
                     {player.name}
                     <div className="pp-mobile-sub">
-                      <span
-                        className="pp-mobile-role-dot"
-                        style={{ background: roleColor(player.specialism) }}
-                      />
-                      {player.country && (
-                        <span className="pp-mobile-country-text">{player.country}</span>
-                      )}
-                      {player.isSold && (
-                        <span className="pp-mobile-sold-chip">Sold</span>
-                      )}
+                      <span className="pp-mobile-role-dot" style={{ background: roleColor(player.specialism) }} />
+                      {player.isSold && <span className="pp-mobile-sold-chip">Sold</span>}
                     </div>
-                  </TableCell>
-
-                  <TableCell className="pp-col-country pp-cell-country">
-                    {player.country ?? "—"}
                   </TableCell>
                   <TableCell className="pp-col-role">
                     <Badge className="pp-badge-role">{player.specialism ?? "—"}</Badge>
                   </TableCell>
-                  <TableCell className="pp-cell-price">
-                    {fmt(Number(player.basePrice))}
-                  </TableCell>
+                  <TableCell className="pp-col-iplteam pp-cell-iplteam">{player.iplTeam ?? "—"}</TableCell>
+                  <TableCell className="pp-cell-price">{fmt(Number(player.basePrice))}</TableCell>
                   <TableCell className="pp-col-status">
                     {player.isSold
                       ? <Badge className="pp-badge-sold">Sold</Badge>
@@ -531,7 +653,6 @@ function PlayersPoolPage() {
                 </TableRow>
               ))}
 
-              {/* Empty state */}
               {!isLoading && paginated.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={6} style={{ padding: 0 }}>
@@ -541,7 +662,7 @@ function PlayersPoolPage() {
                       <span className="pp-empty-hint">
                         {search
                           ? `No results for "${search}" — try a different name`
-                          : "No players match the current filter"}
+                          : "Upload a CSV or Excel file to add players to the pool"}
                       </span>
                     </div>
                   </TableCell>
@@ -552,14 +673,11 @@ function PlayersPoolPage() {
           </Table>
         </div>
 
-        {/* ── Pagination ── */}
         <div className="pp-pager">
           <button
             className="pp-pager-btn"
             disabled={page === 1}
-            onClick={() =>
-              navigate({ search: (prev) => ({ ...prev, page: prev.page - 1 }) })
-            }
+            onClick={() => navigate({ search: (prev) => ({ ...prev, page: prev.page - 1 }) })}
           >
             ← Previous
           </button>
@@ -567,9 +685,7 @@ function PlayersPoolPage() {
           <button
             className="pp-pager-btn"
             disabled={page * size >= filtered.length}
-            onClick={() =>
-              navigate({ search: (prev) => ({ ...prev, page: prev.page + 1 }) })
-            }
+            onClick={() => navigate({ search: (prev) => ({ ...prev, page: prev.page + 1 }) })}
           >
             Next →
           </button>

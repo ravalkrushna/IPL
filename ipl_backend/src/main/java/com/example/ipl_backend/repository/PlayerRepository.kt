@@ -26,6 +26,7 @@ class PlayerRepository {
             basePrice    = this[Players.basePrice],
             isSold       = this[Players.isSold],
             isAuctioned  = this[Players.isAuctioned],
+            iplTeam      = this[Players.iplTeam],   // ← NEW
             createdAt    = this[Players.createdAt],
             updatedAt    = this[Players.updatedAt]
         )
@@ -46,6 +47,7 @@ class PlayerRepository {
                 it[basePrice]    = player.basePrice
                 it[isSold]       = player.isSold
                 it[isAuctioned]  = false
+                it[iplTeam]      = player.iplTeam   // ← NEW
                 it[createdAt]    = player.createdAt
                 it[updatedAt]    = player.updatedAt
             }
@@ -225,15 +227,6 @@ class PlayerRepository {
         }
     }
 
-    /**
-     * Atomically checks if a player is not yet auctioned and marks them unsold.
-     * Does the SELECT FOR UPDATE + UPDATE in a single transaction to prevent
-     * race conditions. Returns true if the player was marked unsold, false if
-     * they were already auctioned (i.e. nothing to do).
-     *
-     * Use this instead of calling findById + markAsUnsold separately — separate
-     * calls require nesting transactions which causes silent failures in Exposed.
-     */
     fun markAsUnsoldIfNotAuctioned(id: String): Boolean =
         transaction {
             val player = Players.selectAll()
@@ -329,4 +322,19 @@ class PlayerRepository {
 
     fun findUpcomingPlayersInPool(specialism: String, excludeId: String?): List<Player> =
         findUpcomingPlayersGlobal(excludeId)
+
+    fun findByLastName(lastName: String): Player? =
+               transaction {
+                    Players.selectAll()
+                        .where { Players.name.lowerCase() like "%${lastName.lowercase()}" }
+                        .map { it.toPlayer() }
+                        .singleOrNull()  // returns null if multiple match (ambiguous)
+                }
+
+    fun findAllByLastName(lastName: String): List<Player> =
+        transaction {
+            Players.selectAll()
+                .where { Players.name.lowerCase() like "%${lastName.lowercase()}" }
+                .map { it.toPlayer() }
+        }
 }
