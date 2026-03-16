@@ -34,7 +34,7 @@ class FantasyCronService(
     // Scrapes yesterday's completed IPL 2026 match via CricAPI, calculates
     // fantasy points, persists them, then updates both Google Sheets tabs.
 
-    @Scheduled(cron = "0 0 12 * * *")
+    @Scheduled(cron = "0 30 6 * * *")
     fun syncMatchResults() {
         log.info("=== Fantasy cron job started ===")
 

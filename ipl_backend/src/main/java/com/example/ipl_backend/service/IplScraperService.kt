@@ -4,11 +4,13 @@ import com.example.ipl_backend.model.UpcomingMatch
 import com.example.ipl_backend.repository.UpcomingMatchRepository
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import org.springframework.web.client.RestTemplate
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.ZoneOffset
 
 // ── API Response Models ───────────────────────────────────────────────────────
@@ -29,7 +31,7 @@ data class CricApiMatch(
     val date: String = "",
     val dateTimeGMT: String = "",
     val teams: List<String> = emptyList(),
-    val score: List<CricApiScore>? = emptyList()   // nullable — upcoming matches have no score
+    val score: List<CricApiScore>? = emptyList()
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -96,7 +98,7 @@ data class CricApiWicket(
     val fielder: String = ""
 )
 
-// ── Scraped models (used by FantasyCronService) ───────────────────────────────
+// ── Scraped models ────────────────────────────────────────────────────────────
 
 data class ScrapedPlayerStats(
     val playerName: String,
@@ -136,8 +138,10 @@ class IplScraperService(
     private val log          = LoggerFactory.getLogger(javaClass)
     private val restTemplate = RestTemplate()
 
+    @Value("\${cricapi.key}")
+    private lateinit var apiKey: String
+
     companion object {
-        const val API_KEY  = "0671144c-cd6a-42cf-a814-038599fb1a4e"
         const val BASE_URL = "https://api.cricapi.com/v1"
         const val SEASON   = "2026"
     }
@@ -146,12 +150,22 @@ class IplScraperService(
 
     fun scrapeLatestMatch(): ScrapedMatch? {
         return try {
-            val yesterday = LocalDate.now().minusDays(1).toString()
-            log.info("Looking for IPL match on $yesterday")
+            val ist = ZoneId.of("Asia/Kolkata")
 
-            val match = findIplMatch(yesterday)
+            // Try yesterday first
+            val yesterday = LocalDate.now(ist).minusDays(1).toString()
+            log.info("Looking for IPL match on $yesterday")
+            var match = findIplMatch(yesterday)
+
+            // Fallback: try 2 days ago in case cron missed yesterday
             if (match == null) {
-                log.warn("No completed IPL match found for $yesterday")
+                val twoDaysAgo = LocalDate.now(ist).minusDays(2).toString()
+                log.warn("No match found for $yesterday, trying $twoDaysAgo as fallback")
+                match = findIplMatch(twoDaysAgo)
+            }
+
+            if (match == null) {
+                log.warn("No completed IPL match found for yesterday or 2 days ago")
                 return null
             }
 
@@ -168,7 +182,7 @@ class IplScraperService(
 
     fun syncUpcomingMatches(): Int {
         return try {
-            val url = "$BASE_URL/matches?apikey=$API_KEY&offset=0"
+            val url = "$BASE_URL/matches?apikey=$apiKey&offset=0"
             val response = restTemplate.getForObject(url, CricApiMatchListResponse::class.java)
                 ?: return 0
 
@@ -177,7 +191,6 @@ class IplScraperService(
                 return 0
             }
 
-            // ── Debug: log all IPL-related matches with their raw status ──────
             val iplRelated = response.data.filter { match ->
                 match.name.contains("IPL", ignoreCase = true) ||
                         IPL_TEAMS.any { team -> match.name.contains(team, ignoreCase = true) }
@@ -189,8 +202,6 @@ class IplScraperService(
             }
             log.info("=== End debug ===")
 
-            // ── Filter: keep only matches that are NOT finished ───────────────
-            // Intentionally lenient — catches "Match not started", "", "Toss", etc.
             val upcoming = iplRelated.filter { match ->
                 val s = match.status.lowercase().trim()
                 !s.contains("won") &&
@@ -239,10 +250,10 @@ class IplScraperService(
         }
     }
 
-    // ── Step 1: Find yesterday's completed IPL match ──────────────────────────
+    // ── Step 1: Find completed IPL match for a given date ─────────────────────
 
     private fun findIplMatch(date: String): CricApiMatch? {
-        val url = "$BASE_URL/matches?apikey=$API_KEY&offset=0"
+        val url = "$BASE_URL/matches?apikey=$apiKey&offset=0"
         val response = restTemplate.getForObject(url, CricApiMatchListResponse::class.java)
             ?: return null
 
@@ -254,17 +265,17 @@ class IplScraperService(
         return response.data.firstOrNull { match ->
             val isIpl = match.name.contains("IPL", ignoreCase = true) ||
                     IPL_TEAMS.any { team -> match.name.contains(team, ignoreCase = true) }
-            val isYesterday = match.date == date || match.dateTimeGMT.startsWith(date)
-            val isCompleted = match.status.contains("won", ignoreCase = true) ||
+            val isTargetDate = match.date == date || match.dateTimeGMT.startsWith(date)
+            val isCompleted  = match.status.contains("won", ignoreCase = true) ||
                     match.status.equals("completed", ignoreCase = true)
-            isIpl && isYesterday && isCompleted
+            isIpl && isTargetDate && isCompleted
         }
     }
 
     // ── Step 2: Fetch full scorecard ──────────────────────────────────────────
 
     private fun fetchScorecard(match: CricApiMatch): ScrapedMatch? {
-        val url = "$BASE_URL/match_scorecard?apikey=$API_KEY&id=${match.id}"
+        val url = "$BASE_URL/match_scorecard?apikey=$apiKey&id=${match.id}"
         val response = restTemplate.getForObject(url, CricApiScorecardResponse::class.java)
             ?: return null
 
@@ -344,7 +355,7 @@ class IplScraperService(
         }
     }
 
-    // ── Fielding from wickets list ────────────────────────────────────────────
+    // ── Fielding ──────────────────────────────────────────────────────────────
 
     private fun processFielding(innings: CricApiInnings, statsMap: MutableMap<String, ScrapedPlayerStats>) {
         innings.wickets.forEach { wicket ->
