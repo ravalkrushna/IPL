@@ -1,6 +1,8 @@
 package com.example.ipl_backend.service
 
+import com.example.ipl_backend.model.IplMatch
 import com.example.ipl_backend.model.UpcomingMatch
+import com.example.ipl_backend.repository.IplMatchRepository
 import com.example.ipl_backend.repository.UpcomingMatchRepository
 import org.jsoup.Jsoup
 import org.slf4j.LoggerFactory
@@ -15,7 +17,8 @@ import java.util.Locale
 
 @Service
 class Ipl2026ScheduleSeederService(
-    private val upcomingMatchRepository: UpcomingMatchRepository,  // ← changed from IplMatchRepository
+    private val upcomingMatchRepository: UpcomingMatchRepository,
+    private val iplMatchRepository: IplMatchRepository,
     private val sheetsSyncService: GoogleSheetsSyncService
 ) {
 
@@ -76,49 +79,59 @@ class Ipl2026ScheduleSeederService(
 
     // ── Public entry points ───────────────────────────────────────────────────
 
-    /**
-     * Idempotent — inserts only matches not already in upcoming_matches.
-     * Safe to call multiple times.
-     */
     fun seedSchedule(): SeedResult {
         log.info("Scraping IPL 2026 schedule from ESPNcricinfo…")
         val matches = fetchMatches()
+        if (matches.isEmpty()) {
+            log.warn("No matches returned from scraper — nothing seeded")
+            return SeedResult(0, 0, "Scraper returned no matches — try again later")
+        }
         return persistMatches(matches)
     }
 
-    /**
-     * Wipes all 2026 upcoming fixtures and re-inserts from latest scrape.
-     * Use when new phases are published or fixtures change.
-     */
     fun reseedSchedule(): SeedResult {
         log.info("Reseeding — clearing existing 2026 upcoming fixtures…")
         val deleted = upcomingMatchRepository.deleteBySeason(SEASON)
+        iplMatchRepository.deleteUnscrapedBySeason(SEASON)
         log.info("Deleted $deleted existing record(s)")
         val matches = fetchMatches()
+        if (matches.isEmpty()) {
+            log.warn("No matches returned from scraper — nothing reseeded")
+            return SeedResult(0, 0, "Scraper returned no matches — try again later")
+        }
         return persistMatches(matches)
     }
 
-    // ── Fetch (scrape → fallback) ─────────────────────────────────────────────
+    // ── Fetch from live scraper only ──────────────────────────────────────────
 
-    private fun fetchMatches(): List<ParsedMatch> = try {
-        val scraped = scrapeFromEspncricinfo()
-        if (scraped.isEmpty()) throw IllegalStateException("Scraper returned no matches")
-        log.info("Live scrape succeeded — ${scraped.size} matches")
-        scraped
-    } catch (e: Exception) {
-        log.warn("Live scrape failed (${e.message}) — falling back to verified schedule")
-        verifiedSchedule()
+    private fun fetchMatches(): List<ParsedMatch> {
+        return try {
+            val scraped = scrapeFromEspncricinfo()
+            if (scraped.isEmpty()) {
+                log.warn("Live scrape returned no matches — ESPNcricinfo page may have changed")
+                emptyList()
+            } else {
+                log.info("Live scrape succeeded — ${scraped.size} matches found")
+                scraped
+            }
+        } catch (e: Exception) {
+            log.error("Live scrape failed: ${e.message} — call reseed-2026-schedule again later")
+            emptyList()
+        }
     }
 
-    // ── Persist to upcoming_matches ───────────────────────────────────────────
+    // ── Persist to both upcoming_matches and ipl_matches ─────────────────────
 
     private fun persistMatches(matches: List<ParsedMatch>): SeedResult {
         var inserted = 0
         var skipped  = 0
 
         for (m in matches) {
-            val record = UpcomingMatch(
-                id        = "ipl-2026-m${m.matchNo}",   // stable deterministic ID
+            val id = "ipl-2026-m${m.matchNo}"
+
+            // ── Save to upcoming_matches (fixtures sheet display) ──────────────
+            val upcomingRecord = UpcomingMatch(
+                id        = id,
                 matchNo   = m.matchNo,
                 teamA     = m.teamA,
                 teamB     = m.teamB,
@@ -126,8 +139,23 @@ class Ipl2026ScheduleSeederService(
                 season    = SEASON,
                 createdAt = Instant.now().toEpochMilli()
             )
+            val wasInserted = upcomingMatchRepository.saveIfAbsent(upcomingRecord)
 
-            if (upcomingMatchRepository.saveIfAbsent(record)) {
+            // ── Also save to ipl_matches (used by cron FK lookup) ─────────────
+            val iplRecord = IplMatch(
+                id          = id,
+                matchNo     = m.matchNo,
+                teamA       = m.teamA,
+                teamB       = m.teamB,
+                matchDate   = m.matchDate,
+                cricinfoUrl = m.cricinfoUrl,
+                isScraped   = false,
+                season      = SEASON,
+                createdAt   = Instant.now().toEpochMilli()
+            )
+            iplMatchRepository.findOrCreate(iplRecord)
+
+            if (wasInserted) {
                 log.info("  ✅ Inserted Match ${m.matchNo}: ${m.teamA} vs ${m.teamB}")
                 inserted++
             } else {
@@ -161,7 +189,6 @@ class Ipl2026ScheduleSeederService(
             .timeout(15_000)
             .get()
 
-        // Step 1: extract match links → matchNo, team codes, cricinfoUrl
         data class LinkEntry(
             val matchNo: Int,
             val teamA: String,
@@ -191,11 +218,10 @@ class Ipl2026ScheduleSeederService(
         }
 
         if (byMatchNo.isEmpty())
-            throw IllegalStateException("No match links found — page structure may have changed")
+            throw IllegalStateException("No match links found — ESPNcricinfo page structure may have changed")
 
         log.info("Found ${byMatchNo.size} match links from ESPNcricinfo")
 
-        // Step 2: walk elements to extract date → team pairings
         var currentDate: LocalDate? = null
         var pendingTeamA: String?   = null
         val dateByTeams = mutableMapOf<Pair<String, String>, Long>()
@@ -227,7 +253,6 @@ class Ipl2026ScheduleSeederService(
 
         log.info("Extracted ${dateByTeams.size} date entries from page body")
 
-        // Step 3: join links + dates
         return byMatchNo.values.mapNotNull { link ->
             val date = dateByTeams[Pair(link.teamA, link.teamB)]
                 ?: dateByTeams[Pair(link.teamB, link.teamA)]
@@ -244,53 +269,6 @@ class Ipl2026ScheduleSeederService(
                 cricinfoUrl = link.href
             )
         }.sortedBy { it.matchNo }
-    }
-
-    // ── Verified fallback schedule ────────────────────────────────────────────
-    // Used when live scraping fails.
-    // Times: 14:00 UTC = 7:30 PM IST (evening), 10:00 UTC = 3:30 PM IST (afternoon DH)
-
-    private fun verifiedSchedule(): List<ParsedMatch> {
-        data class E(val n: Int, val a: String, val b: String, val date: String, val utcH: Int, val ciId: Int)
-
-        val rev = SLUG_TO_CODE.entries.associate { (slug, code) -> code to slug }
-
-        return listOf(
-            E(1,  "RCB",  "SRH",  "2026-03-28", 14, 1527674),
-            E(2,  "MI",   "KKR",  "2026-03-29", 14, 1527675),
-            E(3,  "RR",   "CSK",  "2026-03-30", 14, 1527676),
-            E(4,  "PBKS", "GT",   "2026-03-31", 14, 1527677),
-            E(5,  "LSG",  "DC",   "2026-04-01", 14, 1527678),
-            E(6,  "KKR",  "SRH",  "2026-04-02", 14, 1527679),
-            E(7,  "CSK",  "PBKS", "2026-04-03", 14, 1527680),
-            E(8,  "DC",   "MI",   "2026-04-04", 10, 1527681),
-            E(9,  "GT",   "RR",   "2026-04-04", 14, 1527682),
-            E(10, "SRH",  "LSG",  "2026-04-05", 10, 1527683),
-            E(11, "RCB",  "CSK",  "2026-04-05", 14, 1527684),
-            E(12, "KKR",  "PBKS", "2026-04-06", 14, 1527685),
-            E(13, "RR",   "MI",   "2026-04-07", 14, 1527686),
-            E(14, "DC",   "GT",   "2026-04-08", 14, 1527687),
-            E(15, "KKR",  "LSG",  "2026-04-09", 14, 1527688),
-            E(16, "RR",   "RCB",  "2026-04-10", 14, 1527689),
-            E(17, "PBKS", "SRH",  "2026-04-11", 10, 1527690),
-            E(18, "CSK",  "DC",   "2026-04-11", 14, 1527691),
-            E(19, "LSG",  "GT",   "2026-04-12", 10, 1527692),
-            E(20, "MI",   "RCB",  "2026-04-12", 14, 1527693)
-        ).map { e ->
-            val epochMs = LocalDateTime
-                .of(LocalDate.parse(e.date), LocalTime.of(e.utcH, 0))
-                .toInstant(ZoneOffset.UTC).toEpochMilli()
-            val slugA = rev[e.a] ?: e.a.lowercase()
-            val slugB = rev[e.b] ?: e.b.lowercase()
-            ParsedMatch(
-                matchNo     = e.n,
-                teamA       = e.a,
-                teamB       = e.b,
-                matchDate   = epochMs,
-                cricinfoUrl = "https://www.espncricinfo.com/series/ipl-2026-1510719/" +
-                        "$slugA-vs-$slugB-${e.n}${ordinalSuffix(e.n)}-match-${e.ciId}/live-cricket-score"
-            )
-        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
