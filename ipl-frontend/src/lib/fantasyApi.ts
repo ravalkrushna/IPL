@@ -85,7 +85,8 @@ export type FantasyPlayerResponse = {
   specialism: string
   totalPoints: number
   matchesPlayed: number
-  matches: FantasyPlayerMatchEntry[]
+  matches2025: FantasyPlayerMatchEntry[]
+  matches2026: FantasyPlayerMatchEntry[]
 }
 
 export type FantasyMatchPlayerEntry = {

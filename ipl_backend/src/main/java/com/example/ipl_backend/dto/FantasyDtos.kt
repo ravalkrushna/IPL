@@ -66,8 +66,10 @@ data class FantasyPlayerResponse(
     val specialism: String,
     val totalPoints: Int,
     val matchesPlayed: Int,
-    val matches: List<FantasyPlayerMatchEntry>
+    val matches2025: List<FantasyPlayerMatchEntry>,
+    val matches2026: List<FantasyPlayerMatchEntry>,
 )
+
 
 // ── Match performances ────────────────────────────────────────────────────────
 

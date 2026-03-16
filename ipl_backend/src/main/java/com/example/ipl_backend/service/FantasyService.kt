@@ -88,44 +88,52 @@ class FantasyService(
 
     // ── Player match-by-match (IPL 2026 current season only) ─────────────────
     // Used by the live fantasy competition view — shows only the current season.
-
     fun getPlayerFantasy(playerId: String): FantasyPlayerResponse? {
         val player: Player = playerRepository.findById(playerId) ?: return null
 
-        val season2026MatchIds = iplMatchRepository.findBySeason("2026").map { it.id }.toSet()
-        val performances = performanceRepository.findByPlayerId(playerId)
-            .filter { it.matchId in season2026MatchIds }
+        val season2025MatchIds = iplMatchRepository.findAll()
+            .filter { it.season == null || it.season == "2025" }
+            .map { it.id }.toSet()
 
-        val matchEntries = performances.mapNotNull { perf ->
-            val match = iplMatchRepository.findById(perf.matchId) ?: return@mapNotNull null
-            FantasyPlayerMatchEntry(
-                matchId         = match.id,
-                matchNo         = match.matchNo,
-                teamA           = match.teamA,
-                teamB           = match.teamB,
-                matchDate       = match.matchDate,
-                runs            = perf.runs,
-                ballsFaced      = perf.ballsFaced,
-                fours           = perf.fours,
-                sixes           = perf.sixes,
-                dismissed       = perf.dismissed,
-                wickets         = perf.wickets,
-                catches         = perf.catches,
-                stumpings       = perf.stumpings,
-                runOutsDirect   = perf.runOutsDirect,
-                runOutsIndirect = perf.runOutsIndirect,
-                fantasyPoints   = perf.fantasyPoints
-            )
-        }.sortedBy { it.matchDate }
+        val season2026MatchIds = iplMatchRepository.findBySeason("2026").map { it.id }.toSet()
+
+        val allPerformances = performanceRepository.findByPlayerId(playerId)
+
+        fun List<com.example.ipl_backend.model.PlayerMatchPerformance>.toMatchEntries(matchIds: Set<String>) =
+            this.filter { it.matchId in matchIds }.mapNotNull { perf ->
+                val match = iplMatchRepository.findById(perf.matchId) ?: return@mapNotNull null
+                FantasyPlayerMatchEntry(
+                    matchId         = match.id,
+                    matchNo         = match.matchNo,
+                    teamA           = match.teamA,
+                    teamB           = match.teamB,
+                    matchDate       = match.matchDate,
+                    runs            = perf.runs,
+                    ballsFaced      = perf.ballsFaced,
+                    fours           = perf.fours,
+                    sixes           = perf.sixes,
+                    dismissed       = perf.dismissed,
+                    wickets         = perf.wickets,
+                    catches         = perf.catches,
+                    stumpings       = perf.stumpings,
+                    runOutsDirect   = perf.runOutsDirect,
+                    runOutsIndirect = perf.runOutsIndirect,
+                    fantasyPoints   = perf.fantasyPoints
+                )
+            }.sortedBy { it.matchDate }
+
+        val matches2025 = allPerformances.toMatchEntries(season2025MatchIds)
+        val matches2026 = allPerformances.toMatchEntries(season2026MatchIds)
 
         return FantasyPlayerResponse(
             playerId      = playerId,
             playerName    = player.name,
             iplTeam       = player.iplTeam ?: "",
             specialism    = player.specialism ?: "UNKNOWN",
-            totalPoints   = matchEntries.sumOf { it.fantasyPoints },
-            matchesPlayed = matchEntries.size,
-            matches       = matchEntries
+            totalPoints   = matches2026.sumOf { it.fantasyPoints },
+            matchesPlayed = matches2026.size,
+            matches2025   = matches2025,
+            matches2026   = matches2026
         )
     }
 

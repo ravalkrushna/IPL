@@ -174,28 +174,47 @@ function PlayerMatchBreakdown({ playerId }: { playerId: string }) {
     </div>
   )
 
-  if (!data || data.matches.length === 0) return (
+  const renderMatches = (matches: FantasyPlayerMatchEntry[], label: string) => (
     <div className="fp-matches">
-      <p className="text-[10px] text-stone-600 italic">No match data yet</p>
+      <div style={{
+        fontSize: 9,
+        fontWeight: 700,
+        textTransform: "uppercase",
+        letterSpacing: 1,
+        color: "#57534e",
+        marginBottom: 6,
+        paddingBottom: 4,
+        borderBottom: "1px solid #1c1917"
+      }}>
+        {label}
+      </div>
+      {matches.length === 0 ? (
+        <p className="text-[10px] text-stone-600 italic">No matches played yet</p>
+      ) : (
+        matches.map((m: FantasyPlayerMatchEntry) => (
+          <div key={m.matchId} className="fp-match-row">
+            <span className="fp-match-no">M{m.matchNo}</span>
+            <span className="fp-match-teams">{m.teamA} vs {m.teamB}</span>
+            <div className="fp-match-stats">
+              {m.runs > 0 && <span>{m.runs}r</span>}
+              {m.wickets > 0 && <span>{m.wickets}w</span>}
+              {m.catches > 0 && <span>{m.catches}ct</span>}
+              {m.stumpings > 0 && <span>{m.stumpings}st</span>}
+            </div>
+            <span className="fp-match-pts">
+              {m.fantasyPoints > 0 ? `+${m.fantasyPoints}` : m.fantasyPoints}
+            </span>
+          </div>
+        ))
+      )}
     </div>
   )
 
   return (
-    <div className="fp-matches">
-      {data.matches.map((m: FantasyPlayerMatchEntry) => (
-        <div key={m.matchId} className="fp-match-row">
-          <span className="fp-match-no">M{m.matchNo}</span>
-          <span className="fp-match-teams">{m.teamA} vs {m.teamB}</span>
-          <div className="fp-match-stats">
-            {m.runs > 0 && <span>{m.runs}r</span>}
-            {m.wickets > 0 && <span>{m.wickets}w</span>}
-            {m.catches > 0 && <span>{m.catches}ct</span>}
-            {m.stumpings > 0 && <span>{m.stumpings}st</span>}
-          </div>
-          <span className="fp-match-pts">{m.fantasyPoints > 0 ? `+${m.fantasyPoints}` : m.fantasyPoints}</span>
-        </div>
-      ))}
-    </div>
+    <>
+      {renderMatches(data?.matches2026 ?? [], "IPL 2026")}
+      {renderMatches(data?.matches2025 ?? [], "IPL 2025")}
+    </>
   )
 }
 
