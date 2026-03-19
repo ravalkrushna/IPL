@@ -48,6 +48,7 @@
             <artifactId>google-http-client-gson</artifactId>
             <version>1.44.1</version>
         </dependency>
+
         <!-- Spring Boot Core -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -59,7 +60,6 @@
             <artifactId>poi-ooxml</artifactId>
             <version>5.2.5</version>
         </dependency>
-
 
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -186,19 +186,27 @@
                         <id>compile</id>
                         <phase>compile</phase>
                         <goals><goal>compile</goal></goals>
+                        <configuration>
+                            <sourceDirs>
+                                <sourceDir>${project.basedir}/src/main/java</sourceDir>
+                            </sourceDirs>
+                        </configuration>
                     </execution>
 
                     <execution>
                         <id>test-compile</id>
                         <phase>test-compile</phase>
                         <goals><goal>test-compile</goal></goals>
+                        <configuration>
+                            <sourceDirs>
+                                <sourceDir>${project.basedir}/src/test/java</sourceDir>
+                            </sourceDirs>
+                        </configuration>
                     </execution>
                 </executions>
 
                 <configuration>
                     <jvmTarget>17</jvmTarget>
-
-                    <!-- REQUIRED for Spring -->
                     <compilerPlugins>
                         <plugin>spring</plugin>
                     </compilerPlugins>
