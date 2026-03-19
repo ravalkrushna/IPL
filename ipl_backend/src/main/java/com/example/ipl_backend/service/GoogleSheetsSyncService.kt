@@ -1,5 +1,8 @@
 package com.example.ipl_backend.service
 
+import com.example.ipl_backend.model.AuctionStatus
+import com.example.ipl_backend.model.Auctions
+import com.example.ipl_backend.model.Players
 import com.example.ipl_backend.repository.IplMatchRepository
 import com.example.ipl_backend.repository.PlayerMatchPerformanceRepository
 import com.example.ipl_backend.repository.PlayerRepository
@@ -129,6 +132,83 @@ class GoogleSheetsSyncService(
         val date = zdt.format(DateTimeFormatter.ofPattern("EEE, dd MMM yyyy", Locale.ENGLISH))
         val time = zdt.format(DateTimeFormatter.ofPattern("hh:mm a", Locale.ENGLISH))
         return Pair(date, time)
+    }
+
+    fun syncAuctionTabs() {
+        // Get all auctions
+        val auctions = transaction {
+            Auctions.selectAll()
+                .where { Auctions.status eq AuctionStatus.COMPLETED }
+                .map { Pair(it[Auctions.id], it[Auctions.name]) }
+        }
+
+        for ((auctionId, auctionName) in auctions) {
+            // Get all squads for this auction
+            val squads = transaction {
+                Squads.selectAll()
+                    .where { Squads.auctionId eq auctionId }
+                    .associate { it[Squads.id] to it[Squads.name] }
+            }
+
+            if (squads.isEmpty()) continue
+
+            // Get all sold players in this auction with their squad name and purchase price
+            val soldPlayers = transaction {
+                (SquadPlayers innerJoin Squads innerJoin Players)
+                    .selectAll()
+                    .where { Squads.auctionId eq auctionId }
+                    .map { row ->
+                        Triple(
+                            row[Players.id],
+                            row[Players.name],
+                            row[Squads.name]   // squad/team name
+                        )
+                    }
+            }
+
+            if (soldPlayers.isEmpty()) continue
+
+            // Get 2026 season match IDs
+            val season2026MatchIds = matchRepository.findBySeason("2026").map { it.id }.toSet()
+
+            // Get performances for sold players only
+            val soldPlayerIds = soldPlayers.map { it.first }.toSet()
+            val allPerfs = performanceRepository.findAllPerformances()
+                .filter { it.matchId in season2026MatchIds && it.playerId in soldPlayerIds }
+
+            val perfsByPlayerId = allPerfs.groupBy { it.playerId }
+            val totalsByPlayerId = allPerfs.groupBy { it.playerId }
+                .mapValues { (_, perfs) -> perfs.sumOf { it.fantasyPoints } }
+
+            val matchLabels = allPerfs
+                .map { it.matchId }
+                .distinct()
+                .sortedWith(compareBy { extractMatchNumber(it) })
+
+            // Build header
+            val header = mutableListOf<Any>("Player", "IPL Team", "Auction Team", "Total Points")
+            header.addAll(matchLabels.map { labelFor(it) })
+
+            // Build rows — one per sold player
+            val dataRows = soldPlayers
+                .sortedByDescending { totalsByPlayerId[it.first] ?: 0 }
+                .map { (playerId, playerName, squadName) ->
+                    val player = playerRepository.findById(playerId)
+                    val row = mutableListOf<Any>()
+                    row.add(playerName)
+                    row.add(player?.iplTeam ?: "")
+                    row.add(squadName)
+                    row.add(totalsByPlayerId[playerId] ?: 0)
+
+                    val matchPerfs = perfsByPlayerId[playerId]?.associateBy { it.matchId } ?: emptyMap()
+                    matchLabels.forEach { id -> row.add(matchPerfs[id]?.fantasyPoints ?: "") }
+
+                    row as List<Any>
+                }
+
+            sheetsService.writeToTab(auctionName, listOf(header) + dataRows)
+            log.info("Auction tab '$auctionName' synced — ${dataRows.size} players")
+        }
     }
 
     private fun extractMatchNumber(matchId: String): Int =

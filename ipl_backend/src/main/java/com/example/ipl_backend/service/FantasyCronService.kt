@@ -109,6 +109,7 @@ class FantasyCronService(
         // ── Sync both sheets ──────────────────────────────────────────────────
         try {
             sheetsSyncService.syncToSheet()
+            sheetsSyncService.syncAuctionTabs()
             log.info("Fantasy Points sheet updated")
         } catch (e: Exception) {
             log.error("Fantasy Points sheet sync failed: ${e.message}", e)

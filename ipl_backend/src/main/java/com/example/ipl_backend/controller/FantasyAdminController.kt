@@ -150,7 +150,8 @@ class FantasyAdminController(
      */
     @PostMapping("/sync-points-sheet")
     fun syncPointsSheet(): ResponseEntity<Any> {
-        sheetsSyncService.syncToSheet()
+        sheetsSyncService.syncToSheet()        // existing summary tab
+        sheetsSyncService.syncAuctionTabs()    // one tab per auction
         return ResponseEntity.ok(mapOf("message" to "Fantasy Points sheet synced successfully"))
     }
 
