@@ -11,5 +11,6 @@ class DataSeederConfig {
     @Bean
     fun seedPlayers(scraper: IplPlayerScraperService) = CommandLineRunner {
         scraper.seed()
+        scraper.addMissingPlayers()
     }
 }

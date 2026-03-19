@@ -420,6 +420,69 @@ class IplPlayerScraperService(
         return sb.toString()
     }
 
+    fun addMissingPlayers() {
+        println("🔍 Checking for missing players across all IPL teams...")
+
+        val allScraped = mutableListOf<ScrapedPlayer>()
+        for ((teamName, slug) in IPL_TEAMS) {
+            val players = scrapeTeamSquad(teamName, slug)
+            allScraped.addAll(players)
+            println("  ✅ $teamName: ${players.size} players scraped")
+            Thread.sleep(1500)
+        }
+
+        println("📊 Total scraped from web: ${allScraped.size} players")
+
+        var inserted = 0
+        var skipped  = 0
+        val now = Instant.now().toEpochMilli()
+
+        for (p in allScraped) {
+            if (playerRepository.existsByName(p.name)) {
+                skipped++
+                continue
+            }
+
+            println("  ➕ New player found: ${p.name} (${p.iplTeam})")
+
+            try {
+                val specialism = ROLE_MAP[p.role] ?: "BATSMAN"
+                val profile = if (p.profileUrl != null) {
+                    fetchPlayerProfile(p.profileUrl).also { Thread.sleep(1200) }
+                } else {
+                    PlayerProfile(null, null, null, null, 0, 0, 0)
+                }
+
+                playerRepository.save(Player(
+                    id           = UUID.randomUUID().toString(),
+                    name         = p.name,
+                    country      = profile.country,
+                    age          = profile.age,
+                    specialism   = specialism,
+                    battingStyle = profile.battingStyle,
+                    bowlingStyle = profile.bowlingStyle,
+                    testCaps     = profile.testCaps,
+                    odiCaps      = profile.odiCaps,
+                    t20Caps      = profile.t20Caps,
+                    basePrice    = FLAT_BASE_PRICE,
+                    isSold       = false,
+                    isAuctioned  = false,
+                    iplTeam      = p.iplTeam,
+                    createdAt    = now,
+                    updatedAt    = now,
+                ))
+                inserted++
+            } catch (e: Exception) {
+                println("  ❌ Failed to insert ${p.name}: ${e.message}")
+            }
+        }
+
+        println("")
+        println("✅ addMissingPlayers complete!")
+        println("   ➕ Inserted : $inserted")
+        println("   ⏭️  Skipped  : $skipped (already in DB)")
+    }
+
     // ─────────────────────────────────────────────────────────────────────
     // Shared Jsoup fetch with browser-like headers
     // ─────────────────────────────────────────────────────────────────────
