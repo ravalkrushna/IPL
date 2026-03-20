@@ -3,19 +3,19 @@
 import { createFileRoute, useParams, useNavigate, Outlet, useChildMatches } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
 import { auctionApi } from "@/lib/auctionApi"
-import { fantasyApi } from "@/lib/fantasyApi"
+import { fantasyApi, FantasyLeaderboardEntry } from "@/lib/fantasyApi"
 
 export const Route = createFileRoute("/auction/$auctionId/fantasy")({
   component: FantasyLayout,
 })
 
-// ── Layout wrapper: shows leaderboard OR child (squad detail) ─────────────
 function FantasyLayout() {
   const matches = useChildMatches()
-  const hasChild = matches.length > 0
-  if (hasChild) return <Outlet />
+  if (matches.length > 0) return <Outlet />
   return <FantasyPage />
 }
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────
 
 function fmt(amount: number) {
   if (amount >= 10_000_000) return `₹${(amount / 10_000_000).toFixed(1)}Cr`
@@ -23,11 +23,230 @@ function fmt(amount: number) {
   return `₹${amount.toLocaleString()}`
 }
 
-const TEAM_COLORS = [
-  "#6366f1","#10b981","#f59e0b","#ef4444",
-  "#8b5cf6","#06b6d4","#f97316","#ec4899",
-  "#14b8a6","#84cc16",
+// Per-rank accent colors: gold, silver, bronze, then cycling
+const RANK_COLORS = [
+  { main: "#BA7517", bg: "#FAEEDA", text: "#854F0B" },
+  { main: "#534AB7", bg: "#EEEDFE", text: "#3C3489" },
+  { main: "#0F6E56", bg: "#E1F5EE", text: "#085041" },
+  { main: "#993556", bg: "#FBEAF0", text: "#72243E" },
+  { main: "#185FA5", bg: "#E6F1FB", text: "#0C447C" },
+  { main: "#639922", bg: "#EAF3DE", text: "#3B6D11" },
+  { main: "#993C1D", bg: "#FAECE7", text: "#712B13" },
+  { main: "#5F5E5A", bg: "#F1EFE8", text: "#2C2C2A" },
 ]
+
+// Specialism-based avatar colors
+const SPEC_AVATAR: Record<string, { bg: string; color: string }> = {
+  BATSMAN:      { bg: "#E6F1FB", color: "#185FA5" },
+  BOWLER:       { bg: "#FCEBEB", color: "#A32D2D" },
+  ALLROUNDER:   { bg: "#EEEDFE", color: "#534AB7" },
+  WICKETKEEPER: { bg: "#FAEEDA", color: "#854F0B" },
+  UNKNOWN:      { bg: "#F1EFE8", color: "#5F5E5A" },
+}
+
+function normaliseSpecialism(raw?: string): string {
+  const s = (raw ?? "").toUpperCase().replace(/[\s_-]/g, "")
+  if (s.includes("ALLROUND") || s === "AR") return "ALLROUNDER"
+  if (s.includes("WICKET")   || s === "WK") return "WICKETKEEPER"
+  if (s.includes("BOWL")     || s === "BWL") return "BOWLER"
+  if (s.includes("BAT"))                     return "BATSMAN"
+  return "UNKNOWN"
+}
+
+function specLabel(sp: string) {
+  if (sp === "WICKETKEEPER") return "WK"
+  if (sp === "ALLROUNDER")   return "AR"
+  if (sp === "BOWLER")       return "BWL"
+  if (sp === "BATSMAN")      return "BAT"
+  return "—"
+}
+
+const SPEC_PILL: Record<string, { bg: string; color: string }> = {
+  BATSMAN:      { bg: "#E6F1FB", color: "#185FA5" },
+  BOWLER:       { bg: "#FCEBEB", color: "#A32D2D" },
+  ALLROUNDER:   { bg: "#EEEDFE", color: "#534AB7" },
+  WICKETKEEPER: { bg: "#FAEEDA", color: "#854F0B" },
+  UNKNOWN:      { bg: "#F1EFE8", color: "#5F5E5A" },
+}
+
+// ─── SQUAD DETAIL HOOK ────────────────────────────────────────────────────
+// We prefetch each squad's players to show star player + avatars on the card
+
+function useSquadPreview(squadId: string) {
+  return useQuery({
+    queryKey: ["fantasySquad", squadId],
+    queryFn: () => fantasyApi.squad(squadId),
+    staleTime: 60000,
+  })
+}
+
+// ─── SQUAD CARD ───────────────────────────────────────────────────────────
+
+function SquadCard({
+  entry,
+  rank,
+  pct,
+  onClick,
+}: {
+  entry: FantasyLeaderboardEntry
+  rank: number
+  pct: number
+  onClick: () => void
+}) {
+  const c = RANK_COLORS[rank % RANK_COLORS.length]
+  const rankEmoji = rank === 0 ? "🥇" : rank === 1 ? "🥈" : rank === 2 ? "🥉" : null
+
+  const { data: squad } = useSquadPreview(entry.squadId)
+  const players = squad?.players ?? []
+
+  // Star player = highest points
+  const star = [...players].sort((a, b) => b.totalPoints - a.totalPoints)[0]
+  const starSp = star ? normaliseSpecialism(star.specialism) : null
+
+  // Avatars: top 4 by points, rest as +N
+  const topPlayers = [...players].sort((a, b) => b.totalPoints - a.totalPoints).slice(0, 4)
+  const extra = Math.max(0, players.length - 4)
+
+  // Rank change: mock for now — wire up real data when available
+  const rankChange = entry.rank <= 1 ? "up" : entry.rank === 2 ? "same" : "down"
+  const rankDelta  = entry.rank <= 1 ? 2 : 0
+
+  return (
+    <div className="sq-card" style={{ "--accent": c.main } as React.CSSProperties} onClick={onClick}>
+      {/* Accent bar */}
+      <div style={{ height: 3, background: c.main }} />
+
+      <div style={{ padding: "14px 16px 12px" }}>
+
+        {/* Top row: rank + name | points */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              {rankEmoji
+                ? <span style={{ fontSize: 18, lineHeight: 1 }}>{rankEmoji}</span>
+                : <span style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-secondary)" }}>#{entry.rank}</span>
+              }
+              <span style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-secondary)" }}>
+                {rankEmoji ? `#${entry.rank}` : ""}
+              </span>
+              {/* Rank change pill */}
+              {rankDelta > 0 && rankChange === "up" && (
+                <span style={{ fontSize: 11, fontWeight: 500, background: "#EAF3DE", color: "#3B6D11", padding: "2px 7px", borderRadius: 99, display: "flex", alignItems: "center", gap: 2 }}>
+                  ↑{rankDelta}
+                </span>
+              )}
+              {rankChange === "same" && (
+                <span style={{ fontSize: 11, fontWeight: 500, background: "var(--color-background-secondary)", color: "var(--color-text-secondary)", padding: "2px 7px", borderRadius: 99 }}>
+                  — same
+                </span>
+              )}
+              {rankChange === "down" && (
+                <span style={{ fontSize: 11, fontWeight: 500, background: "#FCEBEB", color: "#A32D2D", padding: "2px 7px", borderRadius: 99, display: "flex", alignItems: "center", gap: 2 }}>
+                  ↓1
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 500, color: "var(--color-text-primary)", marginTop: 6, marginBottom: 2 }}>
+              {entry.squadName}
+            </div>
+            {entry.participantName !== entry.squadName && (
+              <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{entry.participantName}</div>
+            )}
+          </div>
+
+          <div style={{ textAlign: "right", flexShrink: 0 }}>
+            <div style={{ fontSize: 28, fontWeight: 500, lineHeight: 1, color: c.main }}>{entry.totalPoints}</div>
+            <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginTop: 2, letterSpacing: "0.5px" }}>POINTS</div>
+          </div>
+        </div>
+
+        {/* Mid row: star player | avatars */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
+
+          {/* Star player */}
+          {star && starSp ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1 }}>
+              <span style={{ fontSize: 10, color: "var(--color-text-secondary)", flexShrink: 0 }}>Star</span>
+              <span style={{
+                fontSize: 9, fontWeight: 500, padding: "2px 7px", borderRadius: 99, flexShrink: 0,
+                background: SPEC_PILL[starSp]?.bg ?? SPEC_PILL.UNKNOWN.bg,
+                color: SPEC_PILL[starSp]?.color ?? SPEC_PILL.UNKNOWN.color,
+              }}>
+                {specLabel(starSp)}
+              </span>
+              <span style={{ fontSize: 12, color: "var(--color-text-secondary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {star.playerName}
+              </span>
+              <span style={{ fontSize: 11, fontWeight: 500, color: c.main, flexShrink: 0, marginLeft: "auto" }}>
+                {star.totalPoints}pts
+              </span>
+            </div>
+          ) : (
+            <div style={{ flex: 1, fontSize: 12, color: "var(--color-text-secondary)", fontStyle: "italic" }}>
+              {players.length === 0 ? "No players yet" : "—"}
+            </div>
+          )}
+
+          {/* Avatar stack */}
+          {topPlayers.length > 0 && (
+            <div style={{ display: "flex", flexShrink: 0 }}>
+              {topPlayers.map((p, i) => {
+                const sp = normaliseSpecialism(p.specialism)
+                const av = SPEC_AVATAR[sp] ?? SPEC_AVATAR.UNKNOWN
+                const initials = p.playerName.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()
+                return (
+                  <div key={p.playerId} style={{
+                    width: 22, height: 22, borderRadius: "50%",
+                    border: "1.5px solid var(--color-background-primary)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 8, fontWeight: 500,
+                    background: av.bg, color: av.color,
+                    marginLeft: i === 0 ? 0 : -5,
+                    flexShrink: 0, zIndex: topPlayers.length - i,
+                    position: "relative",
+                  }}>
+                    {initials}
+                  </div>
+                )
+              })}
+              {extra > 0 && (
+                <div style={{
+                  width: 22, height: 22, borderRadius: "50%",
+                  border: "1.5px solid var(--color-background-primary)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 8, fontWeight: 500, marginLeft: -5,
+                  background: "var(--color-background-secondary)",
+                  color: "var(--color-text-secondary)",
+                  flexShrink: 0, position: "relative",
+                }}>
+                  +{extra}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Points bar */}
+        <div style={{ height: 3, borderRadius: 99, background: "var(--color-background-secondary)", overflow: "hidden", marginBottom: 8 }}>
+          <div style={{ height: "100%", borderRadius: 99, width: `${pct}%`, background: c.main, transition: "width 0.7s ease" }} />
+        </div>
+
+        {/* Bottom row */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
+            {entry.matchesPlayed} matches played
+          </span>
+          <span className="sq-cta" style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: 3 }}>
+            View squad <span className="sq-arrow">›</span>
+          </span>
+        </div>
+
+      </div>
+    </div>
+  )
+}
+
+// ─── MAIN PAGE ────────────────────────────────────────────────────────────
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap');
@@ -35,85 +254,72 @@ const css = `
 
   .fp-root {
     height: 100vh; display: flex; flex-direction: column;
-    background: #f5f3ef; color: #1c1917;
+    background: var(--color-background-tertiary, #f5f3ef);
     font-family: 'DM Sans', system-ui, sans-serif; overflow: hidden;
   }
 
-  /* ── HEADER ── */
   .fp-header {
     flex-shrink: 0; display: flex; align-items: center;
     justify-content: space-between; padding: 0 24px; height: 56px;
-    background: #ffffff; border-bottom: 1px solid #e8e0d0; gap: 12px;
+    background: var(--color-background-primary);
+    border-bottom: 0.5px solid var(--color-border-tertiary); gap: 12px;
   }
   .fp-header-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
   .fp-icon {
     width: 32px; height: 32px; border-radius: 10px;
-    background: linear-gradient(135deg, #059669, #34d399);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 16px; flex-shrink: 0; box-shadow: 0 2px 6px rgba(5,150,105,0.25);
+    background: #E1F5EE; display: flex; align-items: center;
+    justify-content: center; font-size: 16px; flex-shrink: 0;
   }
-  .fp-title { font-size: 15px; font-weight: 800; color: #1c1917; letter-spacing: -0.3px; }
-  .fp-subtitle { font-size: 11px; color: #a8a29e; font-weight: 500; }
+  .fp-title { font-size: 15px; font-weight: 500; color: var(--color-text-primary); letter-spacing: -0.2px; }
+  .fp-subtitle { font-size: 11px; color: var(--color-text-secondary); }
   .fp-badge {
-    display: flex; align-items: center; gap: 5px; padding: 4px 10px;
-    border-radius: 99px; background: #ecfdf5; border: 1px solid #a7f3d0;
-    font-size: 10px; font-weight: 700; color: #059669; letter-spacing: 0.5px; flex-shrink: 0;
+    display: flex; align-items: center; gap: 5px; padding: 3px 9px;
+    border-radius: 99px; background: #E1F5EE;
+    border: 0.5px solid #9FE1CB;
+    font-size: 10px; font-weight: 500; color: #0F6E56; flex-shrink: 0;
   }
-  .fp-badge-dot { width: 5px; height: 5px; border-radius: 50%; background: #10b981; animation: fpPulse 2s infinite; }
-  @keyframes fpPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.7)} }
+  .fp-badge-dot { width: 5px; height: 5px; border-radius: 50%; background: #1D9E75; animation: fpPulse 2s infinite; }
+  @keyframes fpPulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
   .fp-back-btn {
     display: flex; align-items: center; gap: 5px; padding: 6px 12px;
-    border-radius: 8px; border: 1px solid #e2d9cc; background: #ffffff;
-    color: #78716c; font-size: 12px; font-weight: 600; cursor: pointer;
-    transition: all 0.15s; font-family: 'DM Sans', sans-serif; white-space: nowrap; flex-shrink: 0;
+    border-radius: 8px; border: 0.5px solid var(--color-border-secondary);
+    background: var(--color-background-primary);
+    color: var(--color-text-secondary); font-size: 12px; font-weight: 500;
+    cursor: pointer; transition: all 0.15s; font-family: 'DM Sans', sans-serif;
+    white-space: nowrap; flex-shrink: 0;
   }
-  .fp-back-btn:hover { border-color: #c8bfb4; color: #44403c; background: #f5f3ef; }
+  .fp-back-btn:hover { background: var(--color-background-secondary); color: var(--color-text-primary); }
 
-  /* ── BODY ── */
-  .fp-body { flex: 1; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .fp-body { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
   .fp-body::-webkit-scrollbar { width: 4px; }
-  .fp-body::-webkit-scrollbar-thumb { background: #e2d9cc; border-radius: 99px; }
+  .fp-body::-webkit-scrollbar-thumb { background: var(--color-border-secondary); border-radius: 99px; }
 
-  .fp-list-header { padding: 4px 4px 8px; flex-shrink: 0; }
-  .fp-section-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #a8a29e; margin-bottom: 2px; }
-  .fp-list-title { font-size: 18px; font-weight: 900; color: #1c1917; letter-spacing: -0.5px; }
+  .fp-list-header { padding: 2px 2px 6px; flex-shrink: 0; }
+  .fp-section-label { font-size: 9px; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; color: var(--color-text-secondary); margin-bottom: 2px; }
+  .fp-list-title { font-size: 18px; font-weight: 500; color: var(--color-text-primary); letter-spacing: -0.4px; }
 
-  /* ── Squad entry (leaderboard row) ── */
-  .fp-entry {
-    border-radius: 14px; border: 1px solid #ede8e0; background: #ffffff;
-    cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
-    overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  /* Squad card */
+  .sq-card {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: 16px;
+    overflow: hidden; cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
   }
-  .fp-entry:hover { border-color: #d6cfc4; box-shadow: 0 4px 12px rgba(0,0,0,0.08); background: #fdfcfb; }
-  .fp-entry-bar { height: 3px; width: 100%; }
-  .fp-entry-main { display: flex; align-items: center; gap: 12px; padding: 14px 16px 10px; }
-  .fp-rank { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; color: #c8bfb4; width: 22px; text-align: center; flex-shrink: 0; }
-  .fp-rank.r1 { color: #f59e0b; font-size: 15px; }
-  .fp-rank.r2 { color: #94a3b8; font-size: 14px; }
-  .fp-rank.r3 { color: #b45309; font-size: 13px; }
-  .fp-entry-info { flex: 1; min-width: 0; }
-  .fp-entry-squad { font-size: 15px; font-weight: 800; color: #1c1917; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .fp-entry-participant { font-size: 11px; color: #a8a29e; font-weight: 500; margin-top: 2px; }
-  .fp-entry-pts { text-align: right; flex-shrink: 0; }
-  .fp-pts-val { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; line-height: 1; }
-  .fp-pts-label { font-size: 9px; color: #a8a29e; font-weight: 600; letter-spacing: 0.5px; margin-top: 2px; }
-  .fp-entry-arrow { font-size: 14px; color: #d6cfc4; margin-left: 10px; flex-shrink: 0; }
-
-  /* Points bar + footer */
-  .fp-pts-bar-wrap { padding: 0 16px 6px; }
-  .fp-pts-bar-bg { height: 3px; border-radius: 99px; background: #f0ebe3; overflow: hidden; }
-  .fp-pts-bar-fill { height: 100%; border-radius: 99px; transition: width 0.7s ease; }
-  .fp-entry-footer { display: flex; align-items: center; justify-content: space-between; padding: 0 16px 12px; }
-  .fp-entry-matches { font-size: 10px; color: #c8bfb4; }
-  .fp-entry-cta { font-size: 10px; font-weight: 700; color: #a8a29e; display: flex; align-items: center; gap: 3px; }
+  .sq-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--color-border-secondary);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+  }
+  .sq-arrow { display: inline-block; transition: transform 0.18s ease; font-size: 14px; }
+  .sq-card:hover .sq-arrow { transform: translateX(3px); }
 
   /* Loading */
-  .fp-loading { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 8px; padding: 24px; }
-  .fp-loading-icon { font-size: 28px; animation: fpSpin 2s linear infinite; }
+  .fp-loading { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 8px; padding: 32px; }
+  .fp-loading-spin { font-size: 28px; animation: fpSpin 2s linear infinite; }
   @keyframes fpSpin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
-  .fp-loading-text { font-size: 11px; color: #a8a29e; }
+  .fp-loading-text { font-size: 12px; color: var(--color-text-secondary); }
 
-  /* Mobile */
   @media (max-width: 640px) {
     .fp-root { height: auto; min-height: 100vh; overflow-y: auto; }
     .fp-header { padding: 0 14px; height: 50px; }
@@ -145,6 +351,7 @@ function FantasyPage() {
     <>
       <style>{css}</style>
       <div className="fp-root">
+
         <header className="fp-header">
           <div className="fp-header-left">
             <div className="fp-icon">🏆</div>
@@ -152,7 +359,7 @@ function FantasyPage() {
               <div className="fp-title">Fantasy Leaderboard</div>
               <div className="fp-subtitle">{auction?.name ?? "Loading…"}</div>
             </div>
-            <div className="fp-badge"><span className="fp-badge-dot" />IPL 2026</div>
+            <div className="fp-badge"><span className="fp-badge-dot" /> IPL 2026</div>
           </div>
           <button className="fp-back-btn" onClick={() => navigate({ to: "/auction/$auctionId", params: { auctionId } })}>
             ← Auction Room
@@ -166,58 +373,32 @@ function FantasyPage() {
           </div>
 
           {isLoading ? (
-            <div className="fp-loading" style={{ flex: 1 }}>
-              <div className="fp-loading-icon">🏆</div>
+            <div className="fp-loading">
+              <div className="fp-loading-spin">🏆</div>
               <div className="fp-loading-text">Loading leaderboard…</div>
             </div>
           ) : (leaderboard?.entries.length ?? 0) === 0 ? (
-            <div className="fp-loading" style={{ flex: 1, opacity: 0.5 }}>
+            <div className="fp-loading" style={{ opacity: 0.5 }}>
               <div style={{ fontSize: 36 }}>🏏</div>
               <div className="fp-loading-text">No fantasy data yet</div>
             </div>
           ) : (
-            leaderboard!.entries.map((entry, i) => {
-              const color = TEAM_COLORS[i % TEAM_COLORS.length]
-              const rankEmoji = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${entry.rank}`
-              const rankClass = i === 0 ? "r1" : i === 1 ? "r2" : i === 2 ? "r3" : ""
-              const pct = (entry.totalPoints / maxPoints) * 100
-
-              return (
-                <div
-                  key={entry.squadId}
-                  className="fp-entry"
-                  onClick={() => navigate({
-                    to: "/auction/$auctionId/fantasy/$squadId",
-                    params: { auctionId, squadId: entry.squadId },
-                  })}
-                >
-                  <div className="fp-entry-bar" style={{ background: color }} />
-                  <div className="fp-entry-main">
-                    <span className={`fp-rank ${rankClass}`}>{rankEmoji}</span>
-                    <div className="fp-entry-info">
-                      <div className="fp-entry-squad">{entry.squadName}</div>
-                      <div className="fp-entry-participant">{entry.participantName}</div>
-                    </div>
-                    <div className="fp-entry-pts">
-                      <div className="fp-pts-val" style={{ color }}>{entry.totalPoints}</div>
-                      <div className="fp-pts-label">PTS</div>
-                    </div>
-                    <span className="fp-entry-arrow">›</span>
-                  </div>
-                  <div className="fp-pts-bar-wrap">
-                    <div className="fp-pts-bar-bg">
-                      <div className="fp-pts-bar-fill" style={{ width: `${pct}%`, background: color }} />
-                    </div>
-                  </div>
-                  <div className="fp-entry-footer">
-                    <span className="fp-entry-matches">{entry.matchesPlayed} matches played</span>
-                    <span className="fp-entry-cta">View squad ›</span>
-                  </div>
-                </div>
-              )
-            })
+            leaderboard!.entries.map((entry, i) => (
+              <SquadCard
+                key={entry.squadId}
+                entry={entry}
+                rank={i}
+                pct={(entry.totalPoints / maxPoints) * 100}
+                onClick={() => navigate({
+                  to: "/auction/$auctionId/fantasy/$squadId",
+                  params: { auctionId, squadId: entry.squadId },
+                  search: { filter: "ALL", sort: "pts", expanded: "", playerId: "" },
+                })}
+              />
+            ))
           )}
         </div>
+
       </div>
     </>
   )
