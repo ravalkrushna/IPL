@@ -80,7 +80,8 @@ class GoogleSheetsService {
     // ── Write any tab by name (ensures tab exists, then rewrites from A1) ────
 
     fun writeToTab(tabName: String, rows: List<List<Any>>) {
-        ensureTabExists(tabName)   // auto-creates tab if missing
+        ensureTabExists(tabName)
+        clearTab(tabName)          // ← clear old data first
         val body = ValueRange().setValues(rows)
         sheets.spreadsheets().values()
             .update(SHEET_ID, "$tabName!A1", body)
@@ -103,6 +104,12 @@ class GoogleSheetsService {
 
     fun appendColumn(headerRow: Int, colIndex: Int, header: String) {
         updateCell(headerRow, colIndex, header)
+    }
+
+    fun clearTab(tabName: String) {
+        sheets.spreadsheets().values()
+            .clear(SHEET_ID, "$tabName!A1:ZZ", com.google.api.services.sheets.v4.model.ClearValuesRequest())
+            .execute()
     }
 
     private fun colLetter(col: Int): String {
