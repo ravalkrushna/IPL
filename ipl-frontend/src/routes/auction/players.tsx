@@ -502,16 +502,6 @@ function PlayersPoolPage() {
           </div>
         </div>
 
-        <div className="pp-csv-hint">
-          <span>📋</span>
-          <span>
-            CSV / Excel columns: <code>name</code>, <code>specialism</code>, <code>iplTeam</code>,{" "}
-            <code>age</code>, <code>basePrice</code>, <code>battingStyle</code>,{" "}
-            <code>bowlingStyle</code>, <code>testCaps</code>, <code>odiCaps</code>, <code>t20Caps</code>{" "}
-            — only <code>name</code> is required. Existing players are overwritten.
-          </span>
-        </div>
-
         {uploadMutation.isSuccess && uploadMutation.data && (
           <div className="pp-upload-result success">
             <span className="pp-upload-result-icon">✅</span>
