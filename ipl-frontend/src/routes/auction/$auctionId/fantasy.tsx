@@ -23,7 +23,6 @@ function fmt(amount: number) {
   return `₹${amount.toLocaleString()}`
 }
 
-// Per-rank accent colors: gold, silver, bronze, then cycling
 const RANK_COLORS = [
   { main: "#BA7517", bg: "#FAEEDA", text: "#854F0B" },
   { main: "#534AB7", bg: "#EEEDFE", text: "#3C3489" },
@@ -35,7 +34,6 @@ const RANK_COLORS = [
   { main: "#5F5E5A", bg: "#F1EFE8", text: "#2C2C2A" },
 ]
 
-// Specialism-based avatar colors
 const SPEC_AVATAR: Record<string, { bg: string; color: string }> = {
   BATSMAN:      { bg: "#E6F1FB", color: "#185FA5" },
   BOWLER:       { bg: "#FCEBEB", color: "#A32D2D" },
@@ -70,7 +68,6 @@ const SPEC_PILL: Record<string, { bg: string; color: string }> = {
 }
 
 // ─── SQUAD DETAIL HOOK ────────────────────────────────────────────────────
-// We prefetch each squad's players to show star player + avatars on the card
 
 function useSquadPreview(squadId: string) {
   return useQuery({
@@ -99,39 +96,38 @@ function SquadCard({
   const { data: squad } = useSquadPreview(entry.squadId)
   const players = squad?.players ?? []
 
-  // Star player = highest points
   const star = [...players].sort((a, b) => b.totalPoints - a.totalPoints)[0]
   const starSp = star ? normaliseSpecialism(star.specialism) : null
 
-  // Avatars: top 4 by points, rest as +N
   const topPlayers = [...players].sort((a, b) => b.totalPoints - a.totalPoints).slice(0, 4)
   const extra = Math.max(0, players.length - 4)
 
-  // Rank change: mock for now — wire up real data when available
   const rankChange = entry.rank <= 1 ? "up" : entry.rank === 2 ? "same" : "down"
   const rankDelta  = entry.rank <= 1 ? 2 : 0
 
   return (
     <div className="sq-card" style={{ "--accent": c.main } as React.CSSProperties} onClick={onClick}>
       {/* Accent bar */}
-      <div style={{ height: 3, background: c.main }} />
+      <div style={{ height: 3, background: c.main, flexShrink: 0 }} />
 
-      <div style={{ padding: "14px 16px 12px" }}>
+      {/* Card body — explicit block layout, never flex-shrinks */}
+      <div style={{ padding: "14px 16px 12px", minHeight: 0 }}>
 
-        {/* Top row: rank + name | points */}
+        {/* Top row */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               {rankEmoji
                 ? <span style={{ fontSize: 18, lineHeight: 1 }}>{rankEmoji}</span>
                 : <span style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-secondary)" }}>#{entry.rank}</span>
               }
-              <span style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-secondary)" }}>
-                {rankEmoji ? `#${entry.rank}` : ""}
-              </span>
-              {/* Rank change pill */}
+              {rankEmoji && (
+                <span style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-secondary)" }}>
+                  #{entry.rank}
+                </span>
+              )}
               {rankDelta > 0 && rankChange === "up" && (
-                <span style={{ fontSize: 11, fontWeight: 500, background: "#EAF3DE", color: "#3B6D11", padding: "2px 7px", borderRadius: 99, display: "flex", alignItems: "center", gap: 2 }}>
+                <span style={{ fontSize: 11, fontWeight: 500, background: "#EAF3DE", color: "#3B6D11", padding: "2px 7px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 2 }}>
                   ↑{rankDelta}
                 </span>
               )}
@@ -141,16 +137,18 @@ function SquadCard({
                 </span>
               )}
               {rankChange === "down" && (
-                <span style={{ fontSize: 11, fontWeight: 500, background: "#FCEBEB", color: "#A32D2D", padding: "2px 7px", borderRadius: 99, display: "flex", alignItems: "center", gap: 2 }}>
+                <span style={{ fontSize: 11, fontWeight: 500, background: "#FCEBEB", color: "#A32D2D", padding: "2px 7px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 2 }}>
                   ↓1
                 </span>
               )}
             </div>
-            <div style={{ fontSize: 15, fontWeight: 500, color: "var(--color-text-primary)", marginTop: 6, marginBottom: 2 }}>
+            <div style={{ fontSize: 15, fontWeight: 500, color: "var(--color-text-primary)", marginTop: 6, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {entry.squadName}
             </div>
             {entry.participantName !== entry.squadName && (
-              <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{entry.participantName}</div>
+              <div style={{ fontSize: 12, color: "var(--color-text-secondary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {entry.participantName}
+              </div>
             )}
           </div>
 
@@ -162,8 +160,6 @@ function SquadCard({
 
         {/* Mid row: star player | avatars */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
-
-          {/* Star player */}
           {star && starSp ? (
             <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1 }}>
               <span style={{ fontSize: 10, color: "var(--color-text-secondary)", flexShrink: 0 }}>Star</span>
@@ -187,7 +183,6 @@ function SquadCard({
             </div>
           )}
 
-          {/* Avatar stack */}
           {topPlayers.length > 0 && (
             <div style={{ display: "flex", flexShrink: 0 }}>
               {topPlayers.map((p, i) => {
@@ -240,7 +235,6 @@ function SquadCard({
             View squad <span className="sq-arrow">›</span>
           </span>
         </div>
-
       </div>
     </div>
   )
@@ -252,26 +246,53 @@ const css = `
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap');
   * { box-sizing: border-box; }
 
+  /*
+   * FIX: Desktop layout was collapsing card content because:
+   *   1. fp-root had height:100vh + overflow:hidden — flex children had no
+   *      guaranteed height and were being shrunk to zero on wide viewports.
+   *   2. fp-body was flex with overflow-y:auto but cards inside had no
+   *      min-height, so flex shrink crushed them to just the 3px accent bar.
+   *
+   * Solution: remove overflow:hidden from fp-root, let the page scroll
+   * naturally at the root level, and constrain overflow only on fp-body.
+   * Cards now always render their full content on every viewport.
+   */
+
   .fp-root {
-    height: 100vh; display: flex; flex-direction: column;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
     background: var(--color-background-tertiary, #f5f3ef);
-    font-family: 'DM Sans', system-ui, sans-serif; overflow: hidden;
+    font-family: 'DM Sans', system-ui, sans-serif;
+    /* REMOVED: height: 100vh and overflow: hidden — these were the culprits */
   }
 
   .fp-header {
-    flex-shrink: 0; display: flex; align-items: center;
-    justify-content: space-between; padding: 0 24px; height: 56px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    height: 56px;
     background: var(--color-background-primary);
-    border-bottom: 0.5px solid var(--color-border-tertiary); gap: 12px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    gap: 12px;
   }
+
   .fp-header-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+
   .fp-icon {
     width: 32px; height: 32px; border-radius: 10px;
     background: #E1F5EE; display: flex; align-items: center;
     justify-content: center; font-size: 16px; flex-shrink: 0;
   }
+
   .fp-title { font-size: 15px; font-weight: 500; color: var(--color-text-primary); letter-spacing: -0.2px; }
   .fp-subtitle { font-size: 11px; color: var(--color-text-secondary); }
+
   .fp-badge {
     display: flex; align-items: center; gap: 5px; padding: 3px 9px;
     border-radius: 99px; background: #E1F5EE;
@@ -280,6 +301,7 @@ const css = `
   }
   .fp-badge-dot { width: 5px; height: 5px; border-radius: 50%; background: #1D9E75; animation: fpPulse 2s infinite; }
   @keyframes fpPulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
   .fp-back-btn {
     display: flex; align-items: center; gap: 5px; padding: 6px 12px;
     border-radius: 8px; border: 0.5px solid var(--color-border-secondary);
@@ -290,20 +312,32 @@ const css = `
   }
   .fp-back-btn:hover { background: var(--color-background-secondary); color: var(--color-text-primary); }
 
-  .fp-body { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
-  .fp-body::-webkit-scrollbar { width: 4px; }
-  .fp-body::-webkit-scrollbar-thumb { background: var(--color-border-secondary); border-radius: 99px; }
+  /* FIX: fp-body no longer needs to fill remaining viewport height via flex.
+     It just flows naturally. The page itself scrolls. */
+  .fp-body {
+    flex: 1;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* Custom scrollbar styles kept for browsers that show them on body */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-thumb { background: var(--color-border-secondary); border-radius: 99px; }
 
   .fp-list-header { padding: 2px 2px 6px; flex-shrink: 0; }
   .fp-section-label { font-size: 9px; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; color: var(--color-text-secondary); margin-bottom: 2px; }
   .fp-list-title { font-size: 18px; font-weight: 500; color: var(--color-text-primary); letter-spacing: -0.4px; }
 
-  /* Squad card */
+  /* Squad card — min-height ensures content is never crushed by flex parent */
   .sq-card {
     background: var(--color-background-primary);
     border: 0.5px solid var(--color-border-tertiary);
     border-radius: 16px;
-    overflow: hidden; cursor: pointer;
+    overflow: hidden;
+    cursor: pointer;
+    flex-shrink: 0; /* ADDED: never let the card compress vertically */
     transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
   }
   .sq-card:hover {
@@ -320,11 +354,18 @@ const css = `
   @keyframes fpSpin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
   .fp-loading-text { font-size: 12px; color: var(--color-text-secondary); }
 
+  /* Desktop: full-width body with generous horizontal padding, cards stretch edge-to-edge */
+  @media (min-width: 641px) {
+    .fp-body {
+      padding: 16px 24px;
+    }
+  }
+
+  /* Mobile: unchanged behaviour */
   @media (max-width: 640px) {
-    .fp-root { height: auto; min-height: 100vh; overflow-y: auto; }
     .fp-header { padding: 0 14px; height: 50px; }
     .fp-subtitle, .fp-badge { display: none; }
-    .fp-body { overflow: visible; padding: 10px 12px; }
+    .fp-body { padding: 10px 12px; }
   }
 `
 
