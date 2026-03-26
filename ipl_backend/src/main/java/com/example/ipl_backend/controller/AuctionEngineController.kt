@@ -62,19 +62,56 @@ class AuctionEngineController(
         val allPools          = auctionPoolService.getPoolsForAuction(auctionId)
         val analysisSeconds   = currentPlayer?.let { auctionTimerService.getSecondsRemaining(it.id) } ?: 0
         val analysisTotalSecs = currentPlayer?.let { auctionTimerService.getTotalSecs(it.id) } ?: 0
-        val upcomingPlayers   = auctionEngineService.getUpcomingPlayers(auctionId) // ← ADD
+        val upcomingPlayers   = auctionEngineService.getUpcomingPlayers(auctionId)
+        val auctionRound      = auctionEngineService.getAuctionRound(auctionId)
+        val unsoldCandidates  =
+            if (poolExhausted) auctionEngineService.getUnsoldCandidatesForAuction(auctionId)
+            else emptyList()
 
         val response: Map<String, Any?> = mapOf(
-            "currentPlayer"     to currentPlayer,
-            "biddingOpen"       to biddingOpen,
-            "analysisSeconds"   to analysisSeconds,
-            "analysisTotalSecs" to analysisTotalSecs,
-            "activePool"        to activePool?.poolType?.name,
-            "pools"             to allPools,
-            "lastResult"        to lastResult,
-            "poolExhausted"     to poolExhausted,
-            "upcomingPlayers"   to upcomingPlayers  // ← ADD
+            "currentPlayer"      to currentPlayer,
+            "biddingOpen"        to biddingOpen,
+            "analysisSeconds"    to analysisSeconds,
+            "analysisTotalSecs"  to analysisTotalSecs,
+            "activePool"         to activePool?.poolType?.name,
+            "pools"              to allPools,
+            "lastResult"         to lastResult,
+            "poolExhausted"      to poolExhausted,
+            "upcomingPlayers"    to upcomingPlayers,
+            "auctionRound"       to auctionRound,
+            "unsoldCandidates"   to unsoldCandidates
         )
         return ResponseEntity.ok(response)
+    }
+
+    /**
+     * Lists players who will be queued on the next unsold round (auctioned in a prior pass, not sold).
+     * Same data as [getState].unsoldCandidates when the queue is exhausted.
+     */
+    @GetMapping("/unsold-candidates")
+    fun unsoldCandidates(@PathVariable auctionId: String): ResponseEntity<Map<String, Any?>> {
+        return try {
+            val list = auctionEngineService.getUnsoldCandidatesForAuction(auctionId)
+            ResponseEntity.ok(mapOf("players" to list, "count" to list.size))
+        } catch (e: Exception) {
+            ResponseEntity.badRequest().body(mapOf("error" to (e.message ?: "Cannot load unsold candidates")))
+        }
+    }
+
+    @PostMapping("/start-unsold-round")
+    fun startUnsoldRound(@PathVariable auctionId: String): ResponseEntity<Map<String, Any?>> {
+        return try {
+            val result = auctionEngineService.startUnsoldRound(auctionId)
+            ResponseEntity.ok(
+                mapOf(
+                    "message"        to "Unsold round started",
+                    "auctionRound"   to result.auctionRound,
+                    "queuedPlayers"  to result.queuedPlayers,
+                    "playerPreviews" to result.playerPreviews
+                )
+            )
+        } catch (e: Exception) {
+            ResponseEntity.badRequest().body(mapOf("error" to (e.message ?: "Cannot start unsold round")))
+        }
     }
 }

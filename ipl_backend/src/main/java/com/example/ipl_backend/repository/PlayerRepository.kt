@@ -4,6 +4,7 @@ import com.example.ipl_backend.model.Player
 import com.example.ipl_backend.model.Players
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.stereotype.Repository
 import java.time.Instant
@@ -137,6 +138,26 @@ class PlayerRepository {
                 .orderBy(Players.name)
                 .map { it.toPlayer() }
         }
+
+    /** Players who went through the block (hammer/skip) but were not sold — candidates for round 2+. */
+    fun findAuctionedButUnsoldPlayers(): List<Player> =
+        transaction {
+            Players.selectAll()
+                .where { (Players.isAuctioned eq true) and (Players.isSold eq false) }
+                .orderBy(Players.name)
+                .map { it.toPlayer() }
+        }
+
+    fun clearAuctionedFlagForPlayerIds(ids: List<String>) {
+        if (ids.isEmpty()) return
+        transaction {
+            val now = Instant.now().toEpochMilli()
+            Players.update({ Players.id inList ids }) {
+                it[isAuctioned] = false
+                it[updatedAt]   = now
+            }
+        }
+    }
 
     fun findNextAvailablePlayerGlobal(auctionId: String): Player? =
         transaction {

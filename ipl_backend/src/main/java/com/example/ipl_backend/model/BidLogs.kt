@@ -50,5 +50,6 @@ enum class BidType {
     POOL_STARTED,     // Admin activated a pool
     POOL_ENDED,       // Admin ended a pool
     NEXT_PLAYER,      // Admin moved to next player
-    ANALYSIS_STARTED  // Analysis timer started for player
+    ANALYSIS_STARTED, // Analysis timer started for player
+    UNSOLD_ROUND_STARTED // Round 2+ — only unsold (auctioned, not sold) players re-queued
 }

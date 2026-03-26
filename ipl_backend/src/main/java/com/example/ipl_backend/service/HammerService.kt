@@ -26,7 +26,7 @@ class HammerService(
 ) {
 
     companion object {
-        const val MAX_SQUAD_SIZE = 16
+        const val MAX_SQUAD_SIZE = 20
     }
 
     // Idempotency guard — prevents double hammer

@@ -2,6 +2,8 @@ package com.example.ipl_backend.repository
 
 import com.example.ipl_backend.model.*
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.stereotype.Repository
 
@@ -65,4 +67,14 @@ class BidRepository {
                 .orderBy(Bids.createdAt to SortOrder.ASC)
                 .map { it.toBid() }
         }
+
+    /** Clears round-1 (or prior) bids so an unsold player can be bid on again in a later round. */
+    fun deleteForPlayersInAuction(playerIds: List<String>, auctionId: String) {
+        if (playerIds.isEmpty()) return
+        transaction {
+            Bids.deleteWhere {
+                (Bids.auctionId eq auctionId) and (Bids.playerId inList playerIds)
+            }
+        }
+    }
 }

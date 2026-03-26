@@ -2,9 +2,14 @@ package com.example.ipl_backend.service
 
 import com.example.ipl_backend.exception.AuctionNotFoundException
 import com.example.ipl_backend.exception.InvalidAuctionStateException
+import com.example.ipl_backend.model.AuctionStatus
+import com.example.ipl_backend.model.BidType
 import com.example.ipl_backend.model.Player
+import com.example.ipl_backend.model.PoolStatus
+import com.example.ipl_backend.model.PoolType
 import com.example.ipl_backend.repository.AuctionPoolRepository
 import com.example.ipl_backend.repository.AuctionRepository
+import com.example.ipl_backend.repository.BidRepository
 import com.example.ipl_backend.repository.PlayerRepository
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
@@ -15,7 +20,10 @@ class AuctionEngineService(
     private val playerRepository: PlayerRepository,
     private val auctionRepository: AuctionRepository,
     private val auctionPoolRepository: AuctionPoolRepository,
-    private val auctionTimerService: AuctionTimerService
+    private val auctionTimerService: AuctionTimerService,
+    private val auctionPoolService: AuctionPoolService,
+    private val bidRepository: BidRepository,
+    private val bidLogService: BidLogService
 ) {
 
     private val currentPlayers = ConcurrentHashMap<String, Player>()
@@ -23,6 +31,8 @@ class AuctionEngineService(
     private val lastResults    = ConcurrentHashMap<String, LastResult>()
     private val poolExhausted  = ConcurrentHashMap<String, Boolean>()
     private val playerQueues   = ConcurrentHashMap<String, ArrayDeque<Player>>()
+    /** 1 = main round; each unsold-only round increments (2, 3, …). */
+    private val auctionRound   = ConcurrentHashMap<String, Int>()
 
     data class LastResult(
         val playerName: String,
@@ -36,6 +46,14 @@ class AuctionEngineService(
     fun isBiddingOpen(auctionId: String): Boolean    = biddingOpen[auctionId] == true
     fun getLastResult(auctionId: String): LastResult? = lastResults[auctionId]
     fun isPoolExhausted(auctionId: String): Boolean  = poolExhausted[auctionId] == true
+
+    fun getAuctionRound(auctionId: String): Int = auctionRound[auctionId] ?: 1
+
+    /** Unsold players eligible for the next unsold-only round (same rows the next round will queue). */
+    fun getUnsoldCandidatesForAuction(auctionId: String): List<Player> {
+        auctionRepository.findById(auctionId) ?: throw AuctionNotFoundException("Auction not found")
+        return playerRepository.findAuctionedButUnsoldPlayers()
+    }
 
     // ─── QUEUE ───────────────────────────────────────────────────────────────
 
@@ -81,9 +99,15 @@ class AuctionEngineService(
             }
         }
 
-        // Build queue lazily on first call if not yet initialized
+        // Build queue lazily on first call if not yet initialized (main round only)
         if (!playerQueues.containsKey(auctionId)) {
-            initQueue(auctionId)
+            if (getAuctionRound(auctionId) <= 1) {
+                initQueue(auctionId)
+            } else {
+                throw InvalidAuctionStateException(
+                    "No queue for this unsold round — call POST .../start-unsold-round first"
+                )
+            }
         }
 
         val queue = playerQueues[auctionId]!!
@@ -163,6 +187,84 @@ class AuctionEngineService(
         lastResults.remove(auctionId)
         poolExhausted.remove(auctionId)
         playerQueues.remove(auctionId)
+        auctionRound.remove(auctionId)
         println("🔄 Engine state reset for auction=$auctionId")
     }
+
+    /**
+     * After the current round’s queue is exhausted, starts the next round with only
+     * auctioned-but-unsold players (clears their bids for this auction and resets [Players.isAuctioned]
+     * so bidding works again). May be invoked repeatedly for round 3, 4, … until no unsold remain.
+     */
+    fun startUnsoldRound(auctionId: String): StartUnsoldRoundResult {
+        val auction = auctionRepository.findById(auctionId)
+            ?: throw AuctionNotFoundException("Auction not found")
+        if (auction.status != AuctionStatus.LIVE) {
+            throw InvalidAuctionStateException("Auction must be LIVE to start an unsold round")
+        }
+        if (poolExhausted[auctionId] != true) {
+            throw InvalidAuctionStateException(
+                "Finish the current round first — the player queue must be exhausted before the next unsold round"
+            )
+        }
+
+        val unsold = playerRepository.findAuctionedButUnsoldPlayers()
+        if (unsold.isEmpty()) {
+            throw InvalidAuctionStateException("No unsold players — everyone sold or no one was auctioned yet")
+        }
+
+        val ids = unsold.map { it.id }
+        bidRepository.deleteForPlayersInAuction(ids, auctionId)
+        playerRepository.clearAuctionedFlagForPlayerIds(ids)
+
+        val grouped = unsold.groupBy { it.basePrice }
+        val queue: List<Player> = grouped.entries
+            .sortedByDescending { it.key }
+            .flatMap { (_, players) -> players.shuffled() }
+        playerQueues[auctionId] = ArrayDeque(queue)
+
+        val nextRound = getAuctionRound(auctionId) + 1
+        auctionRound[auctionId] = nextRound
+
+        poolExhausted[auctionId] = false
+        currentPlayers.remove(auctionId)
+        biddingOpen[auctionId] = false
+        auctionTimerService.cancelAllForAuction(auctionId)
+
+        ensurePoolActiveForUnsoldRound(auctionId)
+
+        bidLogService.logBid(
+            auctionId = auctionId,
+            playerId  = null,
+            bidType   = BidType.UNSOLD_ROUND_STARTED
+        )
+        println("🔁 Unsold round started for auction=$auctionId → round=$nextRound, ${queue.size} players")
+
+        return StartUnsoldRoundResult(
+            auctionRound   = nextRound,
+            queuedPlayers  = queue.size,
+            playerPreviews = queue.take(20)
+        )
+    }
+
+    private fun ensurePoolActiveForUnsoldRound(auctionId: String) {
+        val allPool = auctionPoolRepository.findByAuctionAndType(auctionId, PoolType.ALL)
+            ?: throw InvalidAuctionStateException("No ALL pool for auction $auctionId")
+
+        when (allPool.status) {
+            PoolStatus.COMPLETED -> {
+                auctionPoolRepository.updateStatus(allPool.id, PoolStatus.PENDING)
+                auctionPoolService.activatePool(auctionId, PoolType.ALL)
+            }
+            PoolStatus.PENDING, PoolStatus.PAUSED ->
+                auctionPoolService.activatePool(auctionId, PoolType.ALL)
+            PoolStatus.ACTIVE -> { /* already running */ }
+        }
+    }
+
+    data class StartUnsoldRoundResult(
+        val auctionRound: Int,
+        val queuedPlayers: Int,
+        val playerPreviews: List<Player>
+    )
 }
