@@ -13,7 +13,8 @@ class FantasyService(
     private val playerRepository: PlayerRepository,
     private val iplMatchRepository: IplMatchRepository,
     private val performanceRepository: PlayerMatchPerformanceRepository,
-    private val fantasyTotalRepository: PlayerFantasyTotalsRepository
+    private val fantasyTotalRepository: PlayerFantasyTotalsRepository,
+    private val fantasyPointsCalculator: FantasyPointsCalculator
 ) {
 
     // ── Leaderboard ───────────────────────────────────────────────────────────
@@ -102,6 +103,7 @@ class FantasyService(
         fun List<com.example.ipl_backend.model.PlayerMatchPerformance>.toMatchEntries(matchIds: Set<String>) =
             this.filter { it.matchId in matchIds }.mapNotNull { perf ->
                 val match = iplMatchRepository.findById(perf.matchId) ?: return@mapNotNull null
+                val bd = fantasyPointsCalculator.breakdown(perf)
                 FantasyPlayerMatchEntry(
                     matchId         = match.id,
                     matchNo         = match.matchNo,
@@ -114,11 +116,20 @@ class FantasyService(
                     sixes           = perf.sixes,
                     dismissed       = perf.dismissed,
                     wickets         = perf.wickets,
+                    dotBalls        = perf.dotBalls,
                     catches         = perf.catches,
                     stumpings       = perf.stumpings,
                     runOutsDirect   = perf.runOutsDirect,
                     runOutsIndirect = perf.runOutsIndirect,
-                    fantasyPoints   = perf.fantasyPoints
+                    // Use calculator total so headline points always match XI + batting + bowling + fielding.
+                    // Stored perf.fantasyPoints can drift if stats were edited without recalculating.
+                    fantasyPoints   = bd.total,
+                    pointBreakdown  = FantasyPointBreakdown(
+                        playingXi = bd.playingXi,
+                        batting   = bd.batting,
+                        bowling   = bd.bowling,
+                        fielding  = bd.fielding
+                    )
                 )
             }.sortedBy { it.matchDate }
 
@@ -156,6 +167,7 @@ class FantasyService(
                 sixes           = perf.sixes,
                 dismissed       = perf.dismissed,
                 wickets         = perf.wickets,
+                dotBalls        = perf.dotBalls,
                 lbwBowledCount  = perf.lbwBowledCount,
                 oversBowled     = perf.oversBowled,
                 runsGiven       = perf.runsGiven,
@@ -164,7 +176,7 @@ class FantasyService(
                 stumpings       = perf.stumpings,
                 runOutsDirect   = perf.runOutsDirect,
                 runOutsIndirect = perf.runOutsIndirect,
-                fantasyPoints   = perf.fantasyPoints
+                fantasyPoints   = fantasyPointsCalculator.calculate(perf)
             )
         }.sortedByDescending { it.fantasyPoints }
 
@@ -228,7 +240,7 @@ class FantasyService(
         val totalStumpings = performances.sumOf { it.stumpings }
         val totalFours     = performances.sumOf { it.fours }
         val totalSixes     = performances.sumOf { it.sixes }
-        val fantasyPoints  = performances.sumOf { it.fantasyPoints }
+        val fantasyPoints  = performances.sumOf { fantasyPointsCalculator.calculate(it) }
 
         val avg  = if (dismissals > 0) totalRuns.toDouble() / dismissals else totalRuns.toDouble()
         val sr   = if (ballsFaced > 0) (totalRuns.toDouble() / ballsFaced) * 100 else 0.0

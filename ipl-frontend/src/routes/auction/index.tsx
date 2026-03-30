@@ -482,14 +482,16 @@ function AuctionLobbyPage() {
                   <tbody>
                     {(auctions as Auction[]).map(a => {
                       const isLive = a.status === "LIVE"
+                      const isCompleted = a.status === "COMPLETED"
+                      const canEnterRoom = isLive || isCompleted
                       return (
                         <tr
                           key={a.id}
                           onClick={() => {
-                            if (!isAdmin && isLive)
+                            if (!isAdmin && canEnterRoom)
                               navigate({ to: "/auction/$auctionId", params: { auctionId: a.id } })
                           }}
-                          className={!isAdmin && isLive ? "clickable" : ""}
+                          className={!isAdmin && canEnterRoom ? "clickable" : ""}
                         >
                           <td className="td-name">{a.name}</td>
                           <td>
@@ -509,7 +511,7 @@ function AuctionLobbyPage() {
                                   Start
                                 </button>
                               )}
-                              {isLive && (
+                              {canEnterRoom && (
                                 <button className="btn-open"
                                   onClick={e => { e.stopPropagation(); navigate({ to: "/auction/$auctionId", params: { auctionId: a.id } }) }}>
                                   Open →

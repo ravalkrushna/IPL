@@ -59,6 +59,13 @@ export type FantasySquadResponse = {
   players: FantasySquadPlayerEntry[]
 }
 
+export type FantasyPointBreakdown = {
+  playingXi: number
+  batting: number
+  bowling: number
+  fielding: number
+}
+
 export type FantasyPlayerMatchEntry = {
   matchId: string
   matchNo: number
@@ -71,11 +78,13 @@ export type FantasyPlayerMatchEntry = {
   sixes: number
   dismissed: boolean
   wickets: number
+  dotBalls?: number
   catches: number
   stumpings: number
   runOutsDirect: number
   runOutsIndirect: number
   fantasyPoints: number
+  pointBreakdown?: FantasyPointBreakdown | null
 }
 
 export type FantasyPlayerResponse = {
@@ -100,6 +109,7 @@ export type FantasyMatchPlayerEntry = {
   sixes: number
   dismissed: boolean
   wickets: number
+  dotBalls?: number
   lbwBowledCount: number
   oversBowled: number
   runsGiven: number

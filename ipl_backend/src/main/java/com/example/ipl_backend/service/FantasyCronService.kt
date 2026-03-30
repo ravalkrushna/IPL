@@ -21,12 +21,25 @@ data class FantasySyncTriggerResult(
     val ok: Boolean,
     val message: String,
     val performancesSaved: Int = 0,
+    val performancesUpdated: Int = 0,
     val playersSkippedNotInDb: Int = 0,
     val playersSkippedAlreadySaved: Int = 0,
     val matchId: String? = null,
     val matchLabel: String? = null,
     /** e.g. NO_MATCH_FROM_FEED, SCRAPER_ERROR */
     val reason: String? = null
+)
+
+data class FantasyRebuildAndSyncResult(
+    val ok: Boolean,
+    val message: String,
+    val season: String,
+    val performancesScanned: Int,
+    val performancesUpdated: Int,
+    val totalPointsBefore: Int,
+    val totalPointsAfter: Int,
+    val playersWithTotals: Int,
+    val sheetSyncOk: Boolean
 )
 
 @Service
@@ -69,6 +82,62 @@ class FantasyCronService(
         return runSync(iplMatchId)
     }
 
+    /**
+     * Rebuilds fantasy points from DB score stats for the given season, resets player totals,
+     * and syncs all relevant Google Sheet tabs in one go.
+     */
+    fun rebuildSeasonAndSyncAll(season: String = "2026"): FantasyRebuildAndSyncResult {
+        log.info("=== Rebuild + sync started for season={} ===", season)
+
+        val perfs = performanceRepository.findAllPerformancesForSeason(season)
+        val before = perfs.sumOf { it.fantasyPoints }
+        var updated = 0
+
+        perfs.forEach { perf ->
+            val recalculated = calculator.calculate(perf)
+            if (recalculated != perf.fantasyPoints) updated++
+            performanceRepository.upsert(perf.copy(fantasyPoints = recalculated))
+        }
+
+        // Rebuild totals from scratch so leaderboard APIs and sheets stay consistent.
+        fantasyTotalsRepository.deleteAll()
+        val refreshed = performanceRepository.findAllPerformancesForSeason(season)
+        refreshed.forEach { perf ->
+            fantasyTotalsRepository.addPoints(perf.playerId, perf.fantasyPoints)
+        }
+        val after = refreshed.sumOf { it.fantasyPoints }
+        val playersWithTotals = fantasyTotalsRepository.findAll().size
+
+        var sheetOk = true
+        try {
+            sheetsSyncService.syncToSheet()
+            sheetsSyncService.syncAuctionTabs()
+            sheetsSyncService.syncFixturesToSheet()
+        } catch (e: Exception) {
+            sheetOk = false
+            log.error("Rebuild completed but sheet sync failed: ${e.message}", e)
+        }
+
+        val msg = buildString {
+            append("Rebuild complete for season $season: scanned ${perfs.size} performance row(s), ")
+            append("updated $updated point row(s), rebuilt totals for $playersWithTotals player(s)")
+            if (!sheetOk) append(", but sheet sync failed (check server logs)")
+        }
+
+        log.info("=== Rebuild + sync finished: {} ===", msg)
+        return FantasyRebuildAndSyncResult(
+            ok = sheetOk,
+            message = msg,
+            season = season,
+            performancesScanned = perfs.size,
+            performancesUpdated = updated,
+            totalPointsBefore = before,
+            totalPointsAfter = after,
+            playersWithTotals = playersWithTotals,
+            sheetSyncOk = sheetOk
+        )
+    }
+
     private fun runSync(iplMatchId: String? = null): FantasySyncTriggerResult {
         val scrapedMatch = try {
             if (!iplMatchId.isNullOrBlank()) {
@@ -106,6 +175,7 @@ class FantasyCronService(
         val matchRecord = resolveMatchRecord(scrapedMatch)
         val now         = Instant.now().toEpochMilli()
         var saved       = 0
+        var updated     = 0
         var notInDb     = 0
         var alreadySaved = 0
 
@@ -121,10 +191,10 @@ class FantasyCronService(
                 return@forEach
             }
 
-            if (performanceRepository.existsByPlayerIdAndMatchLabel(player.id, matchRecord.id)) {
-                log.info("Already saved: ${stats.playerName} for ${matchRecord.id}")
+            val alreadyExists = performanceRepository.existsByPlayerIdAndMatchLabel(player.id, matchRecord.id)
+            if (alreadyExists) {
+                // Refresh existing row as well (dot balls / corrected scorecard values can arrive later).
                 alreadySaved++
-                return@forEach
             }
 
             val perf = PlayerMatchPerformance(
@@ -141,6 +211,7 @@ class FantasyCronService(
                 oversBowled     = BigDecimal.valueOf(stats.oversBowled),
                 runsGiven       = stats.runsGiven,
                 maidens         = stats.maidens,
+                dotBalls        = stats.dotBalls,
                 catches         = stats.catches,
                 stumpings       = stats.stumpings,
                 runOutsDirect   = stats.runOutsDirect,
@@ -154,13 +225,21 @@ class FantasyCronService(
             val perfWithPts = perf.copy(fantasyPoints = points)
 
             performanceRepository.upsert(perfWithPts)
-            fantasyTotalsRepository.addPoints(player.id, points)
-
-            saved++
-            log.info("${stats.playerName} → $points pts for ${matchRecord.id}")
+            if (alreadyExists) {
+                updated++
+                log.info("Updated: ${stats.playerName} → $points pts for ${matchRecord.id}")
+            } else {
+                // Keep old behavior for fresh inserts; full consistency is still ensured by rebuild endpoint.
+                fantasyTotalsRepository.addPoints(player.id, points)
+                saved++
+                log.info("Saved: ${stats.playerName} → $points pts for ${matchRecord.id}")
+            }
         }
 
-        log.info("Saved $saved performances for ${matchRecord.id} (notInDb=$notInDb, alreadySaved=$alreadySaved)")
+        log.info(
+            "Processed ${matchRecord.id}: saved={}, updated={}, notInDb={}, alreadySaved={}",
+            saved, updated, notInDb, alreadySaved
+        )
 
         if (saved > 0 || alreadySaved > 0) {
             matchRepository.markAsScraped(matchRecord.id)
@@ -188,6 +267,7 @@ class FantasyCronService(
 
         val summaryMsg = buildString {
             append("Match ${scrapedMatch.matchLabel}: saved $saved new performance row(s)")
+            if (updated > 0) append(", updated $updated existing row(s)")
             if (alreadySaved > 0) append(", $alreadySaved already in DB")
             if (notInDb > 0) append(", $notInDb player name(s) not found in your players table")
         }
@@ -196,6 +276,7 @@ class FantasyCronService(
             ok = saved > 0 || alreadySaved > 0,
             message = summaryMsg,
             performancesSaved = saved,
+            performancesUpdated = updated,
             playersSkippedNotInDb = notInDb,
             playersSkippedAlreadySaved = alreadySaved,
             matchId = matchRecord.id,

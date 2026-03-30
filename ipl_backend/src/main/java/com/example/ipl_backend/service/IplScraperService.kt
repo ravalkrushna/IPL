@@ -32,6 +32,7 @@ data class ScrapedPlayerStats(
     val runsGiven: Int = 0,
     val wickets: Int = 0,
     val maidens: Int = 0,
+    val dotBalls: Int = 0,
     val lbwBowledCount: Int = 0,
     val catches: Int = 0,
     val stumpings: Int = 0,
@@ -441,6 +442,7 @@ class IplScraperService(
             if (name.isBlank()) continue
             val overs = oversFromNode(row.path("Overs"))
             val maidens = row.path("Maidens").asInt(0)
+            val dotBalls = intFromAny(row, "Dots", "Dot Balls", "DotBalls", "Dot_Balls")
             val runs = row.path("Runs").asInt(0)
             val wkts = row.path("Wickets").asInt(0)
             val existing = stats[name] ?: ScrapedPlayerStats(name)
@@ -448,9 +450,30 @@ class IplScraperService(
                 oversBowled = existing.oversBowled + overs,
                 runsGiven = existing.runsGiven + runs,
                 wickets = existing.wickets + wkts,
-                maidens = existing.maidens + maidens
+                maidens = existing.maidens + maidens,
+                dotBalls = existing.dotBalls + dotBalls
             )
         }
+    }
+
+    private fun intFromAny(node: JsonNode, vararg keys: String): Int {
+        for (k in keys) {
+            val v = node.path(k)
+            if (!v.isMissingNode && !v.isNull) {
+                if (v.isInt || v.isLong || v.isNumber) return v.asInt(0)
+                if (v.isTextual) return v.asText().trim().toIntOrNull() ?: 0
+            }
+        }
+        // Fallback: some feeds rename this column (e.g. "Dot", "Dot balls").
+        val f = node.fields()
+        while (f.hasNext()) {
+            val (key, value) = f.next()
+            if (key.lowercase().replace(Regex("[^a-z]"), "").contains("dot")) {
+                if (value.isInt || value.isLong || value.isNumber) return value.asInt(0)
+                if (value.isTextual) return value.asText().trim().toIntOrNull() ?: 0
+            }
+        }
+        return 0
     }
 
     private fun oversFromNode(n: JsonNode): Double =

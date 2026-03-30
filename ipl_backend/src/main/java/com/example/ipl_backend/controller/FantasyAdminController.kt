@@ -170,6 +170,7 @@ class FantasyAdminController(
                 "ok"                         to r.ok,
                 "message"                    to r.message,
                 "performancesSaved"          to r.performancesSaved,
+                "performancesUpdated"        to r.performancesUpdated,
                 "playersSkippedNotInDb"      to r.playersSkippedNotInDb,
                 "playersSkippedAlreadySaved" to r.playersSkippedAlreadySaved,
                 "matchId"                    to r.matchId,
@@ -195,6 +196,32 @@ class FantasyAdminController(
                     "playerRowsWritten"    to summary.playerRowsWritten,
                     "ipl2026MatchesInDb"  to summary.ipl2026MatchesInDb
                 )
+            )
+        )
+    }
+
+    /**
+     * One-shot maintenance endpoint:
+     * 1) Recalculate all fantasy points from score stats
+     * 2) Rebuild player totals
+     * 3) Sync Fantasy/auction/fixtures Google Sheet tabs
+     */
+    @PostMapping("/rebuild-and-sync-all")
+    fun rebuildAndSyncAll(
+        @RequestParam(name = "season", required = false, defaultValue = "2026") season: String
+    ): ResponseEntity<Any> {
+        val r = fantasyCronService.rebuildSeasonAndSyncAll(season.trim())
+        return ResponseEntity.ok(
+            mapOf(
+                "ok" to r.ok,
+                "message" to r.message,
+                "season" to r.season,
+                "performancesScanned" to r.performancesScanned,
+                "performancesUpdated" to r.performancesUpdated,
+                "totalPointsBefore" to r.totalPointsBefore,
+                "totalPointsAfter" to r.totalPointsAfter,
+                "playersWithTotals" to r.playersWithTotals,
+                "sheetSyncOk" to r.sheetSyncOk
             )
         )
     }

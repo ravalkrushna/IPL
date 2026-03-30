@@ -1315,7 +1315,14 @@ function AdminPanel({ auctionId, onEnd }: { auctionId: string; onEnd: () => void
 
 // ─── PARTICIPANT VIEW ─────────────────────────────────────────────────────
 
-function ParticipantView({ auctionId }: { auctionId: string; me: { participantId: string; role: string; name: string } }) {
+function ParticipantView({
+  auctionId,
+  readOnly = false,
+}: {
+  auctionId: string
+  me: { participantId: string; role: string; name: string }
+  readOnly?: boolean
+}) {
   const expandedSquad    = useAuctionRoomStore(s => s.expandedSquad)
   const setExpandedSquad = useAuctionRoomStore(s => s.setExpandedSquad)
 
@@ -1355,27 +1362,38 @@ function ParticipantView({ auctionId }: { auctionId: string; me: { participantId
       <div className="ar-left-col flex-1 flex flex-col min-w-0 border-r border-stone-200 overflow-hidden">
         <div className="ar-left-inner flex gap-3 p-4 pb-2 shrink-0">
           <div className="flex-1 min-w-0 flex flex-col">
-            {currentPlayer
-              ? <div className="flex-1">
-                  <PlayerHeroCard
-                    player={currentPlayer}
-                    seconds={analysisSeconds}
-                    total={analysisTotalSecs}
-                    biddingOpen={biddingOpen}
-                    paused={isPaused}
-                    battingStyle={currentPlayer.battingStyle}
-                    bowlingStyle={currentPlayer.bowlingStyle}
-                  />
+            {readOnly ? (
+              <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/80 flex items-center justify-center flex-1 min-h-32 px-4">
+                <div className="text-center max-w-md">
+                  <div className="text-3xl mb-2">🏁</div>
+                  <p className="text-sm font-black text-emerald-900">Auction finished</p>
+                  <p className="text-xs text-emerald-800/80 mt-1 font-medium">
+                    Open <span className="font-black">Fantasy</span> from the header to see points per match and how each player earned them (batting, bowling, fielding).
+                  </p>
                 </div>
-              : <div className="rounded-xl border border-dashed border-stone-200 bg-stone-50 flex items-center justify-center flex-1 min-h-32">
-                  <div className="text-center">
-                    <div className="text-3xl mb-1 animate-pulse">🏏</div>
-                    <p className="text-xs text-slate-400 font-medium">Waiting for next player…</p>
-                  </div>
+              </div>
+            ) : currentPlayer ? (
+              <div className="flex-1">
+                <PlayerHeroCard
+                  player={currentPlayer}
+                  seconds={analysisSeconds}
+                  total={analysisTotalSecs}
+                  biddingOpen={biddingOpen}
+                  paused={isPaused}
+                  battingStyle={currentPlayer.battingStyle}
+                  bowlingStyle={currentPlayer.bowlingStyle}
+                />
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-stone-200 bg-stone-50 flex items-center justify-center flex-1 min-h-32">
+                <div className="text-center">
+                  <div className="text-3xl mb-1 animate-pulse">🏏</div>
+                  <p className="text-xs text-slate-400 font-medium">Waiting for next player…</p>
                 </div>
-            }
+              </div>
+            )}
           </div>
-          {currentPlayer && (
+          {!readOnly && currentPlayer && (
             <div className="ar-upcoming-wrap w-64 shrink-0 flex flex-col">
               <UpcomingPlayers upcomingPlayers={engineState?.upcomingPlayers ?? []} currentPlayerId={currentPlayer?.id} />
             </div>
@@ -1401,7 +1419,7 @@ function ParticipantView({ auctionId }: { auctionId: string; me: { participantId
             <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest">All Squads</p>
             <p className="text-xs text-stone-600 mt-0.5 font-semibold">{sortedSquads.length} participants</p>
           </div>
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          {!readOnly && <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />}
         </div>
         <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2 min-h-0">
           {sortedSquads.length === 0
@@ -1493,11 +1511,21 @@ function AuctionRoomPage() {
     )
   }
 
+  const auctionEnded = auction.status === "COMPLETED"
+
   const statusChip = (() => {
+    if (auctionEnded) {
+      return (
+        <div className="flex items-center gap-1.5 bg-stone-100 border border-stone-200 rounded-full px-2.5 py-1">
+          <span className="text-xs">✓</span>
+          <span className="text-xs font-bold text-slate-600">Auction ended</span>
+        </div>
+      )
+    }
     const pool   = engineState?.pools?.[0]
     const status = pool?.status
     if (status === "ACTIVE")        return <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" /><span className="text-xs font-bold text-emerald-700">Running</span></div>
-    if (status === "COMPLETED")     return <div className="flex items-center gap-1.5 bg-stone-100 border border-stone-200 rounded-full px-2.5 py-1"><span className="text-xs">✓</span><span className="text-xs font-bold text-slate-500">Completed</span></div>
+    if (status === "COMPLETED")     return <div className="flex items-center gap-1.5 bg-stone-100 border border-stone-200 rounded-full px-2.5 py-1"><span className="text-xs">✓</span><span className="text-xs font-bold text-slate-500">Round done</span></div>
     if (engineState?.poolExhausted) return <div className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 rounded-lg px-2.5 py-1"><span className="text-xs">🏁</span><span className="text-xs font-bold text-indigo-600">All auctioned</span></div>
     return <div className="flex items-center gap-1.5 bg-stone-50 border border-stone-200 rounded-full px-2.5 py-1"><span className="text-xs font-bold text-slate-400">Ready</span></div>
   })()
@@ -1548,17 +1576,33 @@ function AuctionRoomPage() {
             <div className="ar-status-chip shrink-0">{statusChip}</div>
           </div>
           <div className="ar-header-right flex items-center gap-2">
-            {isAdmin && <AddParticipantNavButton auctionId={auctionId} />}
-            <button
-              onClick={() => { setRemainingPage(0); setShowRemainingPlayers(true) }}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border border-stone-200 bg-white text-stone-500 hover:bg-stone-50 hover:text-stone-700 transition-all"
-            >
-              📋 Remaining
-            </button>
+            {isAdmin && !auctionEnded && <AddParticipantNavButton auctionId={auctionId} />}
+            {!auctionEnded && (
+              <button
+                onClick={() => { setRemainingPage(0); setShowRemainingPlayers(true) }}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border border-stone-200 bg-white text-stone-500 hover:bg-stone-50 hover:text-stone-700 transition-all"
+              >
+                📋 Remaining
+              </button>
+            )}
             <button onClick={() => navigate({ to: "/auction/$auctionId/fantasy", params: { auctionId } })}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-all">
+              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border transition-all ${
+                auctionEnded
+                  ? "border-emerald-400 bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
+                  : "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
+              }`}>
               🏆 Fantasy
             </button>
+            {auctionEnded && (
+              <button
+                type="button"
+                disabled
+                title="Re-auction will be available in a future update"
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border border-stone-200 bg-stone-100 text-stone-400 cursor-not-allowed opacity-80"
+              >
+                ↻ Re-auction
+              </button>
+            )}
             <button onClick={() => navigate({ to: "/auction" })}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border border-stone-200 bg-white text-stone-500 hover:bg-stone-50 hover:text-stone-700 transition-all">
               ← Back to Lobby
@@ -1567,22 +1611,54 @@ function AuctionRoomPage() {
         </header>
 
         {/* ── Mobile bar ── */}
+        {auctionEnded && (
+          <div className="shrink-0 px-4 py-3 border-b border-emerald-200/90 bg-gradient-to-r from-emerald-50/95 to-amber-50/40 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-black text-emerald-950 tracking-tight">This auction has ended</p>
+              <p className="text-[11px] text-emerald-900/75 font-medium mt-0.5">
+                Fantasy is the home for squad rankings and per-match point breakdowns. Re-auction is reserved for a future release.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => navigate({ to: "/auction/$auctionId/fantasy", params: { auctionId } })}
+                className="text-xs font-black px-3 py-2 rounded-lg bg-emerald-600 text-white border border-emerald-500 hover:bg-emerald-700 shadow-sm"
+              >
+                🏆 Open Fantasy
+              </button>
+              <button
+                type="button"
+                disabled
+                title="Re-auction will be available in a future update"
+                className="text-xs font-bold px-3 py-2 rounded-lg border border-stone-300 bg-white text-stone-400 cursor-not-allowed"
+              >
+                ↻ Re-auction
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="ar-mobile-bar">
           <div className="ar-mobile-bar-left">
             {statusChip}
-            <button
-              onClick={() => { setRemainingPage(0); setShowRemainingPlayers(true) }}
-              className="ar-mob-back-btn"
-            >
-              📋 Remaining
-            </button>
-            {isAdmin && <AddParticipantNavButton auctionId={auctionId} />}
+            {!auctionEnded && (
+              <button
+                onClick={() => { setRemainingPage(0); setShowRemainingPlayers(true) }}
+                className="ar-mob-back-btn"
+              >
+                📋 Remaining
+              </button>
+            )}
+            {isAdmin && !auctionEnded && <AddParticipantNavButton auctionId={auctionId} />}
           </div>
           <div className="ar-mobile-bar-right">
             {/* ✅ Fixed: use ar-mob-back-btn class consistently */}
             <button onClick={() => navigate({ to: "/auction/$auctionId/fantasy", params: { auctionId } })}
               className="ar-mob-back-btn"
-              style={{ borderColor: "#fcd34d", color: "#92400e", background: "#fffbeb" }}>
+              style={auctionEnded
+                ? { borderColor: "#34d399", color: "#fff", background: "#059669", fontWeight: 800 }
+                : { borderColor: "#fcd34d", color: "#92400e", background: "#fffbeb" }}>
               🏆 Fantasy
             </button>
             <button onClick={() => navigate({ to: "/auction" })} className="ar-mob-back-btn">
@@ -1672,10 +1748,16 @@ function AuctionRoomPage() {
           </DialogContent>
         </Dialog>
 
-        {isAdmin
-          ? <AdminPanel auctionId={auctionId} onEnd={() => navigate({ to: "/auction" })} />
-          : <ParticipantView auctionId={auctionId} me={me} />
-        }
+        {auctionEnded ? (
+          <ParticipantView auctionId={auctionId} me={me} readOnly />
+        ) : isAdmin ? (
+          <AdminPanel
+            auctionId={auctionId}
+            onEnd={() => navigate({ to: "/auction/$auctionId/fantasy", params: { auctionId } })}
+          />
+        ) : (
+          <ParticipantView auctionId={auctionId} me={me} />
+        )}
       </div>
     </>
   )

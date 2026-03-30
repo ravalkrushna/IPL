@@ -17,7 +17,7 @@ import java.math.BigDecimal
 class FantasyPointsCalculator {
 
     fun calculate(p: PlayerMatchPerformance): Int =
-        playingXiPoints(p) + battingPoints(p) + bowlingPoints(p) + fieldingPoints(p)
+        playingXiPoints(p) + battingPoints(p) + bowlingPoints(p) + bowlingDotBallPoints(p) + fieldingPoints(p)
 
     private fun playingXiPoints(p: PlayerMatchPerformance): Int =
         if (p.playingXi) 4 else 0
@@ -109,7 +109,6 @@ class FantasyPointsCalculator {
      * - 11.01–11.99: -4
      * - Above 12: -6
      *
-     * Note: Your model doesn’t currently include “dot balls”, so we can’t implement the Bowling “Dot Ball +1” rule.
      */
     private fun iplEconomyPoints(economy: Double): Int =
         when {
@@ -132,6 +131,9 @@ class FantasyPointsCalculator {
         return pts
     }
 
+    private fun bowlingDotBallPoints(p: PlayerMatchPerformance): Int =
+        p.dotBalls
+
     data class PointsBreakdown(
         val playingXi: Int,
         val batting: Int,
@@ -143,7 +145,7 @@ class FantasyPointsCalculator {
     fun breakdown(p: PlayerMatchPerformance): PointsBreakdown {
         val playingXiPts = playingXiPoints(p)
         val battingPts   = battingPoints(p)
-        val bowlingPts   = bowlingPoints(p)
+        val bowlingPts   = bowlingPoints(p) + bowlingDotBallPoints(p)
         val fieldingPts  = fieldingPoints(p)
         return PointsBreakdown(
             playingXi = playingXiPts,
@@ -163,7 +165,7 @@ fun main() {
         id = "1", playerId = "p1", matchId = "m1",
         runs = 50, ballsFaced = 30, fours = 4, sixes = 2,
         dismissed = false, wickets = 0, lbwBowledCount = 0,
-        oversBowled = BigDecimal.ZERO, runsGiven = 0, maidens = 0,
+        oversBowled = BigDecimal.ZERO, runsGiven = 0, maidens = 0, dotBalls = 0,
         catches = 0, stumpings = 0, runOutsDirect = 0, runOutsIndirect = 0,
         playingXi = true, fantasyPoints = 0, createdAt = 0L
     )
@@ -175,7 +177,7 @@ fun main() {
         id = "2", playerId = "p2", matchId = "m1",
         runs = 0, ballsFaced = 0, fours = 0, sixes = 0,
         dismissed = false, wickets = 5, lbwBowledCount = 2,
-        oversBowled = BigDecimal("4.0"), runsGiven = 20, maidens = 1,
+        oversBowled = BigDecimal("4.0"), runsGiven = 20, maidens = 1, dotBalls = 12,
         catches = 0, stumpings = 0, runOutsDirect = 0, runOutsIndirect = 0,
         playingXi = true, fantasyPoints = 0, createdAt = 0L
     )
@@ -186,7 +188,7 @@ fun main() {
         id = "3", playerId = "p3", matchId = "m1",
         runs = 0, ballsFaced = 3, fours = 0, sixes = 0,
         dismissed = true, wickets = 0, lbwBowledCount = 0,
-        oversBowled = BigDecimal.ZERO, runsGiven = 0, maidens = 0,
+        oversBowled = BigDecimal.ZERO, runsGiven = 0, maidens = 0, dotBalls = 0,
         catches = 0, stumpings = 0, runOutsDirect = 0, runOutsIndirect = 0,
         playingXi = true, fantasyPoints = 0, createdAt = 0L
     )

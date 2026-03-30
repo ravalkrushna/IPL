@@ -21,6 +21,7 @@ object PlayerMatchPerformances : Table("player_match_performances") {
     val oversBowled     = decimal("overs_bowled", 4, 1).default(java.math.BigDecimal.ZERO)
     val runsGiven       = integer("runs_given").default(0)
     val maidens         = integer("maidens").default(0)
+    val dotBalls        = integer("dot_balls").default(0)
 
     // ── Fielding ──────────────────────────────────────────────────────────
     val catches          = integer("catches").default(0)
@@ -56,6 +57,7 @@ data class PlayerMatchPerformance(
     val oversBowled: java.math.BigDecimal,
     val runsGiven: Int,
     val maidens: Int,
+    val dotBalls: Int,
 
     val catches: Int,
     val stumpings: Int,

@@ -40,6 +40,7 @@ class Ipl2025SeederService(
         var ballsBowled: Int = 0,
         var runsGiven: Int = 0,
         var maidens: Int = 0,
+        var dotBalls: Int = 0,
         var catches: Int = 0,
         var stumpings: Int = 0,
         var runOutsDirect: Int = 0,
@@ -175,7 +176,10 @@ class Ipl2025SeederService(
                     val extrasNode: JsonNode = delivery.path("extras")
                     val isWide   = extrasNode.has("wides")
                     val isNoBall = extrasNode.has("noballs")
-                    if (!isWide && !isNoBall) bowlerStats.ballsBowled++
+                    if (!isWide && !isNoBall) {
+                        bowlerStats.ballsBowled++
+                        if (totalRuns == 0) bowlerStats.dotBalls++
+                    }
                     bowlerStats.runsGiven += batRuns + extras
 
                     // ── Wickets ───────────────────────────────────────────
@@ -301,6 +305,7 @@ class Ipl2025SeederService(
                 oversBowled     = oversBowled,
                 runsGiven       = stats.runsGiven,
                 maidens         = stats.maidens,
+                dotBalls        = stats.dotBalls,
                 catches         = stats.catches,
                 stumpings       = stats.stumpings,
                 runOutsDirect   = stats.runOutsDirect,

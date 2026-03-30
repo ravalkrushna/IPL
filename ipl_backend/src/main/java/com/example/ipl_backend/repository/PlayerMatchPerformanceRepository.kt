@@ -26,6 +26,7 @@ class PlayerMatchPerformanceRepository {
             oversBowled     = this[PlayerMatchPerformances.oversBowled],
             runsGiven       = this[PlayerMatchPerformances.runsGiven],
             maidens         = this[PlayerMatchPerformances.maidens],
+            dotBalls        = this[PlayerMatchPerformances.dotBalls],
             catches         = this[PlayerMatchPerformances.catches],
             stumpings       = this[PlayerMatchPerformances.stumpings],
             runOutsDirect   = this[PlayerMatchPerformances.runOutsDirect],
@@ -51,6 +52,7 @@ class PlayerMatchPerformanceRepository {
                 it[oversBowled]     = performance.oversBowled
                 it[runsGiven]       = performance.runsGiven
                 it[maidens]         = performance.maidens
+                it[dotBalls]        = performance.dotBalls
                 it[catches]         = performance.catches
                 it[stumpings]       = performance.stumpings
                 it[runOutsDirect]   = performance.runOutsDirect
@@ -88,6 +90,7 @@ class PlayerMatchPerformanceRepository {
                     it[oversBowled]     = performance.oversBowled
                     it[runsGiven]       = performance.runsGiven
                     it[maidens]         = performance.maidens
+                    it[dotBalls]        = performance.dotBalls
                     it[catches]         = performance.catches
                     it[stumpings]       = performance.stumpings
                     it[runOutsDirect]   = performance.runOutsDirect

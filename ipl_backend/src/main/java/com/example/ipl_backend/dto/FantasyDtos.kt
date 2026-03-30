@@ -40,6 +40,14 @@ data class FantasySquadResponse(
 
 // ── Player match-by-match ─────────────────────────────────────────────────────
 
+/** Per-category fantasy points for one match (Dream11 IPL–style components). */
+data class FantasyPointBreakdown(
+    val playingXi: Int,
+    val batting: Int,
+    val bowling: Int,
+    val fielding: Int
+)
+
 data class FantasyPlayerMatchEntry(
     val matchId: String,
     val matchNo: Int,
@@ -52,11 +60,13 @@ data class FantasyPlayerMatchEntry(
     val sixes: Int,
     val dismissed: Boolean,
     val wickets: Int,
+    val dotBalls: Int,
     val catches: Int,
     val stumpings: Int,
     val runOutsDirect: Int,
     val runOutsIndirect: Int,
-    val fantasyPoints: Int
+    val fantasyPoints: Int,
+    val pointBreakdown: FantasyPointBreakdown? = null
 )
 
 data class FantasyPlayerResponse(
@@ -84,6 +94,7 @@ data class FantasyMatchPlayerEntry(
     val sixes: Int,
     val dismissed: Boolean,
     val wickets: Int,
+    val dotBalls: Int,
     val lbwBowledCount: Int,
     val oversBowled: BigDecimal,
     val runsGiven: Int,

@@ -111,7 +111,7 @@ function SquadCard({
       <div style={{ height: 3, background: c.main, flexShrink: 0 }} />
 
       {/* Card body — explicit block layout, never flex-shrinks */}
-      <div style={{ padding: "14px 16px 12px", minHeight: 0 }}>
+      <div style={{ padding: "18px 18px 16px", minHeight: 0 }}>
 
         {/* Top row */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
@@ -142,7 +142,7 @@ function SquadCard({
                 </span>
               )}
             </div>
-            <div style={{ fontSize: 15, fontWeight: 500, color: "var(--color-text-primary)", marginTop: 6, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: "#1c1917", marginTop: 8, marginBottom: 2, letterSpacing: "-0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {entry.squadName}
             </div>
             {entry.participantName !== entry.squadName && (
@@ -153,8 +153,8 @@ function SquadCard({
           </div>
 
           <div style={{ textAlign: "right", flexShrink: 0 }}>
-            <div style={{ fontSize: 28, fontWeight: 500, lineHeight: 1, color: c.main }}>{entry.totalPoints}</div>
-            <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginTop: 2, letterSpacing: "0.5px" }}>POINTS</div>
+            <div style={{ fontSize: 11, fontWeight: 800, color: "#78716c", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Pts</div>
+            <div style={{ fontSize: 30, fontWeight: 800, lineHeight: 1, color: c.main, fontFamily: "'JetBrains Mono', ui-monospace, monospace", letterSpacing: "-0.03em" }}>{entry.totalPoints.toLocaleString()}</div>
           </div>
         </div>
 
@@ -231,8 +231,8 @@ function SquadCard({
           <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
             {entry.matchesPlayed} matches played
           </span>
-          <span className="sq-cta" style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: 3 }}>
-            View squad <span className="sq-arrow">›</span>
+          <span className="sq-cta" style={{ fontSize: 13, fontWeight: 700, color: "#0f766e", display: "flex", alignItems: "center", gap: 4 }}>
+            Squad & breakdown <span className="sq-arrow">›</span>
           </span>
         </div>
       </div>
@@ -262,9 +262,8 @@ const css = `
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    background: var(--color-background-tertiary, #f5f3ef);
+    background: linear-gradient(180deg, #faf8f5 0%, #f0ebe3 100%);
     font-family: 'DM Sans', system-ui, sans-serif;
-    /* REMOVED: height: 100vh and overflow: hidden — these were the culprits */
   }
 
   .fp-header {
@@ -275,23 +274,27 @@ const css = `
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 24px;
-    height: 56px;
-    background: var(--color-background-primary);
-    border-bottom: 0.5px solid var(--color-border-tertiary);
+    padding: 0 clamp(1rem, 3vw, 2.5rem);
+    min-height: 64px;
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid #e5dfd4;
+    box-shadow: 0 4px 24px rgba(28,25,23,0.06);
     gap: 12px;
   }
 
-  .fp-header-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .fp-header-left { display: flex; align-items: center; gap: 14px; min-width: 0; }
 
   .fp-icon {
-    width: 32px; height: 32px; border-radius: 10px;
-    background: #E1F5EE; display: flex; align-items: center;
-    justify-content: center; font-size: 16px; flex-shrink: 0;
+    width: 44px; height: 44px; border-radius: 14px;
+    background: linear-gradient(145deg, #E1F5EE, #c8f0e0);
+    display: flex; align-items: center;
+    justify-content: center; font-size: 22px; flex-shrink: 0;
+    box-shadow: 0 2px 10px rgba(15,110,86,0.12);
   }
 
-  .fp-title { font-size: 15px; font-weight: 500; color: var(--color-text-primary); letter-spacing: -0.2px; }
-  .fp-subtitle { font-size: 11px; color: var(--color-text-secondary); }
+  .fp-title { font-size: 20px; font-weight: 800; color: var(--color-text-primary, #1c1917); letter-spacing: -0.4px; line-height: 1.15; }
+  .fp-subtitle { font-size: 13px; color: var(--color-text-secondary, #78716c); font-weight: 600; margin-top: 2px; }
 
   .fp-badge {
     display: flex; align-items: center; gap: 5px; padding: 3px 9px;
@@ -303,47 +306,85 @@ const css = `
   @keyframes fpPulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
   .fp-back-btn {
-    display: flex; align-items: center; gap: 5px; padding: 6px 12px;
-    border-radius: 8px; border: 0.5px solid var(--color-border-secondary);
-    background: var(--color-background-primary);
-    color: var(--color-text-secondary); font-size: 12px; font-weight: 500;
+    display: flex; align-items: center; gap: 6px; padding: 10px 14px;
+    border-radius: 12px; border: 1px solid #d6cfc4;
+    background: #fafaf9;
+    color: #57534e; font-size: 13px; font-weight: 700;
     cursor: pointer; transition: all 0.15s; font-family: 'DM Sans', sans-serif;
     white-space: nowrap; flex-shrink: 0;
   }
-  .fp-back-btn:hover { background: var(--color-background-secondary); color: var(--color-text-primary); }
+  .fp-back-btn:hover { background: #ffffff; color: #1c1917; border-color: #a8a29e; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
 
   /* FIX: fp-body no longer needs to fill remaining viewport height via flex.
      It just flows naturally. The page itself scrolls. */
   .fp-body {
     flex: 1;
-    padding: 14px 16px;
+    width: 100%;
+    max-width: min(1400px, 100%);
+    margin: 0 auto;
+    padding: 20px clamp(1rem, 3vw, 2.5rem) 32px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
   }
 
   /* Custom scrollbar styles kept for browsers that show them on body */
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-thumb { background: var(--color-border-secondary); border-radius: 99px; }
 
-  .fp-list-header { padding: 2px 2px 6px; flex-shrink: 0; }
-  .fp-section-label { font-size: 9px; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; color: var(--color-text-secondary); margin-bottom: 2px; }
-  .fp-list-title { font-size: 18px; font-weight: 500; color: var(--color-text-primary); letter-spacing: -0.4px; }
+  .fp-list-header { padding: 4px 2px 8px; flex-shrink: 0; }
+  .fp-section-label { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; color: #57534e; margin-bottom: 4px; }
+  .fp-list-title { font-size: 22px; font-weight: 800; color: var(--color-text-primary, #1c1917); letter-spacing: -0.5px; line-height: 1.2; }
+  .fp-list-desc { font-size: 14px; color: #78716c; font-weight: 500; margin-top: 8px; line-height: 1.45; }
 
-  /* Squad card — min-height ensures content is never crushed by flex parent */
+  .fp-scoring-box {
+    margin-bottom: 4px;
+    border-radius: 14px;
+    border: 1px solid #e5dfd4;
+    background: #ffffff;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(28,25,23,0.04);
+  }
+  .fp-scoring-box summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 14px 16px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #44403c;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+  }
+  .fp-scoring-box summary::-webkit-details-marker { display: none; }
+  .fp-scoring-box summary::after { content: "▾"; font-size: 10px; opacity: 0.6; }
+  .fp-scoring-box[open] summary::after { transform: rotate(180deg); }
+  .fp-scoring-inner {
+    padding: 0 14px 12px;
+    font-size: 11px;
+    line-height: 1.55;
+    color: var(--color-text-secondary);
+  }
+  .fp-scoring-inner ul { margin: 6px 0 0 1.1em; padding: 0; }
+  .fp-scoring-inner li { margin-bottom: 4px; }
+  .fp-scoring-inner a { color: #0F6E56; font-weight: 600; }
+
+  /* Squad card */
   .sq-card {
-    background: var(--color-background-primary);
-    border: 0.5px solid var(--color-border-tertiary);
-    border-radius: 16px;
+    background: #ffffff;
+    border: 1px solid #e5dfd4;
+    border-radius: 18px;
     overflow: hidden;
     cursor: pointer;
-    flex-shrink: 0; /* ADDED: never let the card compress vertically */
-    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    flex-shrink: 0;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    box-shadow: 0 2px 10px rgba(28,25,23,0.05);
   }
   .sq-card:hover {
-    transform: translateY(-2px);
-    border-color: var(--color-border-secondary);
-    box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+    transform: translateY(-3px);
+    border-color: #c4bbb0;
+    box-shadow: 0 12px 32px rgba(28,25,23,0.1);
   }
   .sq-arrow { display: inline-block; transition: transform 0.18s ease; font-size: 14px; }
   .sq-card:hover .sq-arrow { transform: translateX(3px); }
@@ -354,18 +395,15 @@ const css = `
   @keyframes fpSpin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
   .fp-loading-text { font-size: 12px; color: var(--color-text-secondary); }
 
-  /* Desktop: full-width body with generous horizontal padding, cards stretch edge-to-edge */
   @media (min-width: 641px) {
-    .fp-body {
-      padding: 16px 24px;
-    }
+    .fp-body { padding: 24px 24px 40px; }
   }
 
-  /* Mobile: unchanged behaviour */
   @media (max-width: 640px) {
-    .fp-header { padding: 0 14px; height: 50px; }
-    .fp-subtitle, .fp-badge { display: none; }
-    .fp-body { padding: 10px 12px; }
+    .fp-header { padding: 0 14px; min-height: 56px; }
+    .fp-title { font-size: 17px; }
+    .fp-badge { display: none; }
+    .fp-body { padding: 16px 12px 28px; }
   }
 `
 
@@ -397,21 +435,41 @@ function FantasyPage() {
           <div className="fp-header-left">
             <div className="fp-icon">🏆</div>
             <div>
-              <div className="fp-title">Fantasy Leaderboard</div>
-              <div className="fp-subtitle">{auction?.name ?? "Loading…"}</div>
+              <div className="fp-title">Fantasy</div>
+              <div className="fp-subtitle">{auction?.name ?? "Loading…"} · rankings & match points</div>
             </div>
             <div className="fp-badge"><span className="fp-badge-dot" /> IPL 2026</div>
           </div>
           <button className="fp-back-btn" onClick={() => navigate({ to: "/auction/$auctionId", params: { auctionId } })}>
-            ← Auction Room
+            ← Auction room
           </button>
         </header>
 
         <div className="fp-body">
           <div className="fp-list-header">
-            <div className="fp-section-label">Rankings</div>
-            <div className="fp-list-title">{leaderboard?.entries.length ?? 0} Squads</div>
+            <div className="fp-section-label">Leaderboard</div>
+            <div className="fp-list-title">{leaderboard?.entries.length ?? 0} squads</div>
+            <p className="fp-list-desc">
+              Ranked by total fantasy points. Open a squad to see every player, then tap for match-by-match points (runs, wickets, fielding, and Dream11-style category splits).
+            </p>
           </div>
+
+          <details className="fp-scoring-box">
+            <summary>How fantasy points work</summary>
+            <div className="fp-scoring-inner">
+              Points follow the <strong>TATA IPL</strong> table on Dream11: runs scored, boundaries, milestones,
+              strike-rate bands (batting), wickets, economy, maidens (bowling), and catches, stumpings, and run-outs (fielding),
+              plus points for being in the playing XI.
+              Open any squad and expand a player to see each match split into <strong>Playing XI</strong>, <strong>Batting</strong>,{" "}
+              <strong>Bowling</strong>, and <strong>Fielding</strong>.
+              <ul>
+                <li>Tap a squad card below for per-player, per-match breakdown.</li>
+              </ul>
+              <a href="https://www.dream11.com/fantasy-cricket/point-system" target="_blank" rel="noopener noreferrer">
+                Dream11 — Fantasy Cricket — Point system (IPL)
+              </a>
+            </div>
+          </details>
 
           {isLoading ? (
             <div className="fp-loading">
