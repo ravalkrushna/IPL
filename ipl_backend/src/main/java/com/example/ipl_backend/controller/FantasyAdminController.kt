@@ -136,13 +136,47 @@ class FantasyAdminController(
     // ── Fantasy points ────────────────────────────────────────────────────────
 
     /**
+     * Lists completed IPL 2026 matches from official IPL JSON feeds (same data as iplt20.com results).
+     * Use `matches[].id` with `POST .../sync-now?matchId=...` when auto-detect finds nothing.
+     */
+    @GetMapping("/ipl-matches")
+    fun iplFeedMatches(): ResponseEntity<Any> {
+        val diagnostics = iplScraperService.iplFeedDiagnostics()
+        val rows = iplScraperService.listRecentIplMatchesForDebug(50)
+        return ResponseEntity.ok(
+            mapOf(
+                "count" to rows.size,
+                "matches" to rows,
+                "diagnostics" to diagnostics,
+                "hint" to "POST /admin/fantasy/sync-now?matchId=<numeric id> — writes DB + Google Sheets. Ids: diagnostics.sampleCompleted or matches[].id."
+            )
+        )
+    }
+
+    /** Same payload as [iplFeedMatches] — old path kept for existing clients. */
+    @GetMapping("/cricapi-ipl-matches")
+    fun legacyCricapiIplMatches(): ResponseEntity<Any> = iplFeedMatches()
+
+    /**
      * Manually trigger the daily cron job: scrape yesterday's match,
      * calculate fantasy points, and update both Google Sheets tabs.
+     * @param matchId optional numeric IPL feed match id (from GET /admin/fantasy/ipl-matches)
      */
     @PostMapping("/sync-now")
-    fun syncNow(): ResponseEntity<Any> {
-        val msg = fantasyCronService.triggerManually()
-        return ResponseEntity.ok(mapOf("message" to msg))
+    fun syncNow(@RequestParam(name = "matchId", required = false) matchId: String?): ResponseEntity<Any> {
+        val r = fantasyCronService.triggerManually(matchId)
+        return ResponseEntity.ok(
+            mapOf(
+                "ok"                         to r.ok,
+                "message"                    to r.message,
+                "performancesSaved"          to r.performancesSaved,
+                "playersSkippedNotInDb"      to r.playersSkippedNotInDb,
+                "playersSkippedAlreadySaved" to r.playersSkippedAlreadySaved,
+                "matchId"                    to r.matchId,
+                "matchLabel"                 to r.matchLabel,
+                "reason"                     to r.reason
+            )
+        )
     }
 
     /**
@@ -150,9 +184,19 @@ class FantasyAdminController(
      */
     @PostMapping("/sync-points-sheet")
     fun syncPointsSheet(): ResponseEntity<Any> {
-        sheetsSyncService.syncToSheet()        // existing summary tab
-        sheetsSyncService.syncAuctionTabs()    // one tab per auction
-        return ResponseEntity.ok(mapOf("message" to "Fantasy Points sheet synced successfully"))
+        val summary = sheetsSyncService.syncToSheet()
+        sheetsSyncService.syncAuctionTabs()
+        return ResponseEntity.ok(
+            mapOf(
+                "message" to "Fantasy Points sheet synced successfully",
+                "summary" to mapOf(
+                    "performancesUsed"     to summary.performancesUsed,
+                    "matchColumns"         to summary.matchColumns,
+                    "playerRowsWritten"    to summary.playerRowsWritten,
+                    "ipl2026MatchesInDb"  to summary.ipl2026MatchesInDb
+                )
+            )
+        )
     }
 
     // ── Player CSV exports ────────────────────────────────────────────────────

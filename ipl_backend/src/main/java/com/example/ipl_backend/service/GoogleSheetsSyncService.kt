@@ -34,16 +34,32 @@ class GoogleSheetsSyncService(
         const val FIXTURES_TAB = "IPL 2026 Fixtures"
         const val POINTS_TAB   = "Fantasy Points"
         val IST = ZoneId.of("Asia/Kolkata")
+        private const val FANTASY_SEASON = "2026"
     }
+
+    data class FantasySheetSyncResult(
+        val performancesUsed: Int,
+        val matchColumns: Int,
+        val playerRowsWritten: Int,
+        val ipl2026MatchesInDb: Int
+    )
 
     // ── Fantasy points sheet ──────────────────────────────────────────────────
 
-    fun syncToSheet() {
+    fun syncToSheet(): FantasySheetSyncResult {
         val allPlayers = playerRepository.findAll()
 
-        val season2026MatchIds = matchRepository.findBySeason("2026").map { it.id }.toSet()
-        val allPerfs = performanceRepository.findAllPerformances()
-            .filter { it.matchId in season2026MatchIds }
+        val matchesInDb = matchRepository.findBySeason(FANTASY_SEASON)
+        val allPerfs    = performanceRepository.findAllPerformancesForSeason(FANTASY_SEASON)
+
+        if (allPerfs.isEmpty()) {
+            log.warn(
+                "No player_match_performances linked to ipl_matches.season='{}'. " +
+                    "Check: (1) cron/sync-now saved rows, (2) ipl_matches.season is '{}' for those fixtures.",
+                FANTASY_SEASON,
+                FANTASY_SEASON
+            )
+        }
 
         val totalsByPlayerId = allPerfs.groupBy { it.playerId }
             .mapValues { (_, performances) -> performances.sumOf { it.fantasyPoints } }
@@ -78,7 +94,21 @@ class GoogleSheetsSyncService(
             }
 
         sheetsService.writeToTab(POINTS_TAB, listOf(header) + dataRows)
-        log.info("Fantasy Points sheet synced — ${dataRows.size} players, ${matchLabels.size} matches")
+        log.info(
+            "Fantasy Points sheet synced — {} players, {} match columns, {} perf rows ({} IPL {} matches in DB)",
+            dataRows.size,
+            matchLabels.size,
+            allPerfs.size,
+            matchesInDb.size,
+            FANTASY_SEASON
+        )
+
+        return FantasySheetSyncResult(
+            performancesUsed     = allPerfs.size,
+            matchColumns         = matchLabels.size,
+            playerRowsWritten    = dataRows.size,
+            ipl2026MatchesInDb   = matchesInDb.size
+        )
     }
 
     // ── Fixtures sheet ────────────────────────────────────────────────────────
@@ -168,13 +198,9 @@ class GoogleSheetsSyncService(
 
             if (soldPlayers.isEmpty()) continue
 
-            // Get 2026 season match IDs
-            val season2026MatchIds = matchRepository.findBySeason("2026").map { it.id }.toSet()
-
-            // Get performances for sold players only
             val soldPlayerIds = soldPlayers.map { it.first }.toSet()
-            val allPerfs = performanceRepository.findAllPerformances()
-                .filter { it.matchId in season2026MatchIds && it.playerId in soldPlayerIds }
+            val allPerfs = performanceRepository.findAllPerformancesForSeason(FANTASY_SEASON)
+                .filter { it.playerId in soldPlayerIds }
 
             val perfsByPlayerId = allPerfs.groupBy { it.playerId }
             val totalsByPlayerId = allPerfs.groupBy { it.playerId }

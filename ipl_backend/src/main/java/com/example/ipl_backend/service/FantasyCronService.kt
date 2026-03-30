@@ -17,6 +17,18 @@ import java.time.LocalTime
 import java.time.ZoneOffset
 import java.util.UUID
 
+data class FantasySyncTriggerResult(
+    val ok: Boolean,
+    val message: String,
+    val performancesSaved: Int = 0,
+    val playersSkippedNotInDb: Int = 0,
+    val playersSkippedAlreadySaved: Int = 0,
+    val matchId: String? = null,
+    val matchLabel: String? = null,
+    /** e.g. NO_MATCH_FROM_FEED, SCRAPER_ERROR */
+    val reason: String? = null
+)
+
 @Service
 class FantasyCronService(
     private val scraper: IplScraperService,
@@ -31,27 +43,71 @@ class FantasyCronService(
     private val log = LoggerFactory.getLogger(javaClass)
 
     // ── Cron: runs every day at 12:00 PM ─────────────────────────────────────
-    // Scrapes yesterday's completed IPL 2026 match via CricAPI, calculates
+    // Scrapes yesterday's completed IPL 2026 match via IPLT20 feeds, calculates
     // fantasy points, persists them, then updates both Google Sheets tabs.
 
     @Scheduled(cron = "0 30 6 * * *")
     fun syncMatchResults() {
         log.info("=== Fantasy cron job started ===")
+        val result = runSync(iplMatchId = null)
+        log.info(
+            "=== Fantasy cron job finished — ok={}, saved={}, notInDb={}, alreadySaved={}, msg={} ===",
+            result.ok,
+            result.performancesSaved,
+            result.playersSkippedNotInDb,
+            result.playersSkippedAlreadySaved,
+            result.message
+        )
+    }
 
-        val scrapedMatch = scraper.scrapeLatestMatch()
+    /**
+     * Manual trigger — returns details for Postman / debugging.
+     * @param iplMatchId optional numeric IPL feed match id from GET /admin/fantasy/ipl-matches
+     */
+    fun triggerManually(iplMatchId: String? = null): FantasySyncTriggerResult {
+        log.info("=== Manual fantasy sync triggered (matchId={}) ===", iplMatchId ?: "auto")
+        return runSync(iplMatchId)
+    }
+
+    private fun runSync(iplMatchId: String? = null): FantasySyncTriggerResult {
+        val scrapedMatch = try {
+            if (!iplMatchId.isNullOrBlank()) {
+                scraper.scrapeMatchByIplMatchId(iplMatchId.trim())
+            } else {
+                scraper.scrapeLatestMatch()
+            }
+        } catch (e: Exception) {
+            log.error("Scraper failed: ${e.message}", e)
+            return FantasySyncTriggerResult(
+                ok = false,
+                message = "IPL feed / scraper error: ${e.message}",
+                reason  = "SCRAPER_ERROR"
+            )
+        }
+
         if (scrapedMatch == null) {
             log.warn("No match scraped — skipping sync")
-            return
+            val hint = if (!iplMatchId.isNullOrBlank()) {
+                "Scorecard failed for matchId=$iplMatchId (invalid id, match not finished, or no innings JSON). " +
+                    "Try GET /admin/fantasy/ipl-matches for completed match ids."
+            } else {
+                "No completed IPL 2026 match in feed for yesterday/2d ago (IST), or last 14 days fallback. " +
+                    "Call POST /admin/fantasy/sync-now?matchId=<id> using a numeric id from GET /admin/fantasy/ipl-matches."
+            }
+            return FantasySyncTriggerResult(
+                ok = false,
+                message = hint,
+                reason = "NO_MATCH_FROM_FEED"
+            )
         }
 
         log.info("Processing: ${scrapedMatch.matchLabel} — ${scrapedMatch.players.size} players")
 
-        // Resolve (or create) the canonical IplMatch row for this match.
-        // This guarantees the FK in player_match_performances is satisfied.
         val matchRecord = resolveMatchRecord(scrapedMatch)
-
-        val now   = Instant.now().toEpochMilli()
-        var saved = 0
+        val now         = Instant.now().toEpochMilli()
+        var saved       = 0
+        var notInDb     = 0
+        var alreadySaved = 0
 
         scrapedMatch.players.forEach { stats ->
             val player = playerRepository.findByName(stats.playerName)
@@ -61,19 +117,20 @@ class FantasyCronService(
 
             if (player == null) {
                 log.warn("Player not found: ${stats.playerName}")
+                notInDb++
                 return@forEach
             }
 
-            // Idempotency: use the canonical match record ID, not the raw label
             if (performanceRepository.existsByPlayerIdAndMatchLabel(player.id, matchRecord.id)) {
                 log.info("Already saved: ${stats.playerName} for ${matchRecord.id}")
+                alreadySaved++
                 return@forEach
             }
 
             val perf = PlayerMatchPerformance(
                 id              = UUID.randomUUID().toString(),
                 playerId        = player.id,
-                matchId         = matchRecord.id,   // FK-safe canonical ID
+                matchId         = matchRecord.id,
                 runs            = stats.runs,
                 ballsFaced      = stats.ballsFaced,
                 fours           = stats.fours,
@@ -103,32 +160,48 @@ class FantasyCronService(
             log.info("${stats.playerName} → $points pts for ${matchRecord.id}")
         }
 
-        log.info("Saved $saved performances for ${matchRecord.id}")
-        matchRepository.markAsScraped(matchRecord.id)
+        log.info("Saved $saved performances for ${matchRecord.id} (notInDb=$notInDb, alreadySaved=$alreadySaved)")
 
-        // ── Sync both sheets ──────────────────────────────────────────────────
+        if (saved > 0 || alreadySaved > 0) {
+            matchRepository.markAsScraped(matchRecord.id)
+        }
+
         try {
-            sheetsSyncService.syncToSheet()
+            val sheetResult = sheetsSyncService.syncToSheet()
             sheetsSyncService.syncAuctionTabs()
-            log.info("Fantasy Points sheet updated")
+            log.info(
+                "Fantasy Points sheet — perfRows={}, matchCols={}, playerRows={}",
+                sheetResult.performancesUsed,
+                sheetResult.matchColumns,
+                sheetResult.playerRowsWritten
+            )
         } catch (e: Exception) {
             log.error("Fantasy Points sheet sync failed: ${e.message}", e)
         }
 
         try {
             sheetsSyncService.syncFixturesToSheet()
-            log.info("Fixtures sheet updated (match status → Completed)")
+            log.info("Fixtures sheet updated")
         } catch (e: Exception) {
             log.error("Fixtures sheet sync failed: ${e.message}", e)
         }
 
-        log.info("=== Fantasy cron job completed ===")
-    }
+        val summaryMsg = buildString {
+            append("Match ${scrapedMatch.matchLabel}: saved $saved new performance row(s)")
+            if (alreadySaved > 0) append(", $alreadySaved already in DB")
+            if (notInDb > 0) append(", $notInDb player name(s) not found in your players table")
+        }
 
-    // ── Manual trigger ────────────────────────────────────────────────────────
-    fun triggerManually(): String {
-        syncMatchResults()
-        return "Sync triggered successfully"
+        return FantasySyncTriggerResult(
+            ok = saved > 0 || alreadySaved > 0,
+            message = summaryMsg,
+            performancesSaved = saved,
+            playersSkippedNotInDb = notInDb,
+            playersSkippedAlreadySaved = alreadySaved,
+            matchId = matchRecord.id,
+            matchLabel = scrapedMatch.matchLabel,
+            reason = if (saved == 0 && alreadySaved == 0) "NO_ROWS_SAVED" else null
+        )
     }
 
     // ── Match record resolution ───────────────────────────────────────────────

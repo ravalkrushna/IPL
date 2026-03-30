@@ -232,8 +232,21 @@ class FantasyLeaderboardController(
     // POST /api/v1/fantasy/sync
 
     @PostMapping("/sync")
-    fun manualSync(): ResponseEntity<String> {
-        val result = cronService.triggerManually()
-        return ResponseEntity.ok(result)
+    fun manualSync(
+        @RequestParam(name = "matchId", required = false) matchId: String?
+    ): ResponseEntity<Map<String, Any?>> {
+        val r = cronService.triggerManually(matchId)
+        return ResponseEntity.ok(
+            mapOf(
+                "ok"                         to r.ok,
+                "message"                    to r.message,
+                "performancesSaved"          to r.performancesSaved,
+                "playersSkippedNotInDb"      to r.playersSkippedNotInDb,
+                "playersSkippedAlreadySaved" to r.playersSkippedAlreadySaved,
+                "matchId"                    to r.matchId,
+                "matchLabel"                 to r.matchLabel,
+                "reason"                     to r.reason
+            )
+        )
     }
 }

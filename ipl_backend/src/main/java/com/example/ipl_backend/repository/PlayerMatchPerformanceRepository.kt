@@ -1,5 +1,6 @@
 package com.example.ipl_backend.repository
 
+import com.example.ipl_backend.model.IplMatches
 import com.example.ipl_backend.model.PlayerMatchPerformance
 import com.example.ipl_backend.model.PlayerMatchPerformances
 import org.jetbrains.exposed.sql.*
@@ -118,6 +119,16 @@ class PlayerMatchPerformanceRepository {
     fun findAllPerformances(): List<PlayerMatchPerformance> =
         transaction {
             PlayerMatchPerformances.selectAll()
+                .orderBy(PlayerMatchPerformances.createdAt to SortOrder.ASC)
+                .map { it.toPerformance() }
+        }
+
+    /** Performances whose match row has the given season (e.g. "2026"). */
+    fun findAllPerformancesForSeason(season: String): List<PlayerMatchPerformance> =
+        transaction {
+            (PlayerMatchPerformances innerJoin IplMatches)
+                .selectAll()
+                .where { IplMatches.season eq season }
                 .orderBy(PlayerMatchPerformances.createdAt to SortOrder.ASC)
                 .map { it.toPerformance() }
         }
