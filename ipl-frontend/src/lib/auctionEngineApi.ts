@@ -29,7 +29,9 @@ export interface EngineState {
   pools: PoolResponse[]
   lastResult: LastResult | null
   poolExhausted: boolean
-  upcomingPlayers: Player[]  // ← ADD THIS
+  upcomingPlayers: Player[]
+  auctionRound?: number
+  unsoldCandidates?: Player[]
 }
 
 export const auctionEngineApi = {
@@ -48,6 +50,10 @@ export const auctionEngineApi = {
   /** Poll this for sold/unsold overlay if needed standalone */
   lastResult: (auctionId: string): Promise<LastResult | null> =>
     api.get(`/auctions/${auctionId}/engine/last-result`).then(r => r.data),
+
+  /** Start unsold-only round (round 2+) after current queue exhausts */
+  startUnsoldRound: (auctionId: string): Promise<{ message: string; auctionRound: number; queuedPlayers: number }> =>
+    api.post(`/auctions/${auctionId}/engine/start-unsold-round`).then(r => r.data),
 }
 
 export const auctionPoolApi = {

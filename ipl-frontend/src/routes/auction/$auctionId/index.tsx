@@ -2,7 +2,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createFileRoute, useParams, useNavigate } from "@tanstack/react-router"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { auctionApi } from "@/lib/auctionApi"
 import { auctionEngineApi, auctionPoolApi } from "@/lib/auctionEngineApi"
@@ -22,7 +22,8 @@ export const Route = createFileRoute("/auction/$auctionId/")({
   component: AuctionRoomPage,
 })
 
-const MAX_SQUAD_SIZE = 25
+const MIN_SQUAD_SIZE = 15
+const MAX_SQUAD_SIZE = 30
 
 const TEAM_COLORS = [
   "#6366f1", "#10b981", "#f59e0b", "#ef4444",
@@ -1062,6 +1063,25 @@ function AdminPanel({ auctionId, onEnd }: { auctionId: string; onEnd: () => void
     staleTime: 8000,
   })
   const { data: walletMap } = useWalletMap(auctionId, allSquads)
+  const squadsForEndCheck = (allSquads ?? []) as {
+    name: string
+    participantId?: string
+    players?: unknown[]
+  }[]
+  const squadsBelowMin = squadsForEndCheck.filter(
+    (s) => (s.players?.length ?? 0) < MIN_SQUAD_SIZE,
+  )
+  const squadsBelowMinBudgetExhausted = squadsBelowMin.filter((s) => {
+    if (!s.participantId) return false
+    const remaining = walletMap?.[s.participantId]
+    return remaining != null && remaining <= 0
+  })
+  const squadsBelowMinWithBudgetLeft = squadsBelowMin.filter((s) => {
+    if (!s.participantId) return true
+    const remaining = walletMap?.[s.participantId]
+    return remaining == null || remaining > 0
+  })
+  const canEndAuction = squadsBelowMinWithBudgetLeft.length === 0
 
   const endAuction = useMutation({
     mutationFn: () => auctionApi.end(auctionId),
@@ -1079,17 +1099,64 @@ function AdminPanel({ auctionId, onEnd }: { auctionId: string; onEnd: () => void
       queryClient.invalidateQueries({ queryKey: ["players", { getAll: true }] })
     },
   })
+  const startUnsoldRound = useMutation({
+    mutationFn: () => auctionEngineApi.startUnsoldRound(auctionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["engineState", auctionId] })
+      queryClient.invalidateQueries({ queryKey: ["players", { getAll: true }] })
+    },
+  })
+
+  const orderedPools = [...(engineState?.pools ?? [])]
+    .sort((a, b) => a.sequenceOrder - b.sequenceOrder)
+  const allowedRoundPools = orderedPools.slice(0, 2)
+  const activePoolType = engineState?.activePool ?? null
+  const auctionRound = engineState?.auctionRound ?? 1
+  const activePool = orderedPools.find(
+    p =>
+      allowedRoundPools.some(ap => ap.id === p.id) &&
+      p.status === "ACTIVE",
+  )
+  const nextActivatablePool = allowedRoundPools.find(
+    p =>
+      p.poolType !== activePoolType &&
+      (p.status === "PENDING" || p.status === "PAUSED"),
+  )
+  const canStartRound2 = poolExhausted && !currentPlayer && auctionRound < 2
+  const canProceedToNextPlayer = Boolean(
+    currentPlayer ||
+    activePool ||
+    nextActivatablePool,
+  ) || canStartRound2
+  const noMoreRounds = poolExhausted && !currentPlayer && auctionRound >= 2 && !nextActivatablePool
+  const isStartingUnsoldRound = startUnsoldRound.isPending
+  const getRoundLabel = (pool?: { id: string } | null) => {
+    if (!pool) return null
+    const idx = allowedRoundPools.findIndex(p => p.id === pool.id)
+    return idx >= 0 ? idx + 1 : null
+  }
 
   const doNextPlayer = async () => {
-    const pool = engineState?.pools?.[0]
-    if (pool && (pool.status === "PENDING" || pool.status === "PAUSED")) await activatePool.mutateAsync(pool.poolType)
+    if (!canProceedToNextPlayer) return
+
+    // Backend requires explicit unsold-round start before queueing round 2 players.
+    if (canStartRound2) {
+      await startUnsoldRound.mutateAsync()
+    }
+
+    // Round-aware flow:
+    // - Keep using currently active pool when present
+    // - Otherwise move only into round 1/2 pools (unsold round as round 2)
+    if (!activePool && nextActivatablePool) {
+      await activatePool.mutateAsync(nextActivatablePool.poolType)
+    }
     nextPlayer.mutate()
   }
   const handleNextPlayer = async () => {
     if (currentPlayer && !biddingOpen) { setShowUnsoldConfirm(true); return }
     await doNextPlayer()
   }
-  const nextPlayerBusy = nextPlayer.isPending || activatePool.isPending
+  const nextPlayerBusy = nextPlayer.isPending || activatePool.isPending || startUnsoldRound.isPending
 
   const manualHammer = useMutation({
     mutationFn: (data: { participantId: string; finalAmount: number }) =>
@@ -1156,10 +1223,27 @@ function AdminPanel({ auctionId, onEnd }: { auctionId: string; onEnd: () => void
         <div className="rounded-xl border border-stone-200 bg-white shrink-0 overflow-hidden">
           <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest px-4 pt-3.5 pb-2">Controls</p>
           <div className="px-3 pb-3 flex flex-col gap-2">
+            <div className="text-[10px] font-semibold text-stone-400 px-1">
+              {activePool
+                ? `Round ${getRoundLabel(activePool) ?? 1}`
+                : nextActivatablePool
+                  ? `Next: Round ${getRoundLabel(nextActivatablePool) ?? 2}`
+                  : canStartRound2
+                    ? "Next: Round 2"
+                  : "No more rounds"}
+            </div>
             <div className="ar-ctrl-primary">
-              <button onClick={handleNextPlayer} disabled={nextPlayerBusy}
+              <button onClick={handleNextPlayer} disabled={nextPlayerBusy || !canProceedToNextPlayer}
                 className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-black text-sm transition-all shadow-sm">
-                {activatePool.isPending ? "Starting…" : nextPlayer.isPending ? "Loading…" : "⏭ Next Player"}
+                {isStartingUnsoldRound
+                  ? "Starting round 2…"
+                  : activatePool.isPending
+                  ? "Starting round…"
+                  : nextPlayer.isPending
+                    ? "Loading…"
+                    : noMoreRounds || !canProceedToNextPlayer
+                      ? "All rounds complete"
+                      : "⏭ Next Player"}
               </button>
               <button onClick={() => setShowManualHammer(true)}
                 className="w-full py-2.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold text-sm transition-all">
@@ -1167,17 +1251,42 @@ function AdminPanel({ auctionId, onEnd }: { auctionId: string; onEnd: () => void
               </button>
             </div>
             <div className="border-t border-stone-100 pt-2">
+              {!canEndAuction && (
+                <p className="text-[11px] text-amber-600 font-semibold text-center mb-1.5">
+                  Each squad needs at least {MIN_SQUAD_SIZE} players unless budget is exhausted ({squadsBelowMinWithBudgetLeft.length} still short with budget left).
+                </p>
+              )}
+              {canEndAuction && squadsBelowMinBudgetExhausted.length > 0 && (
+                <p className="text-[11px] text-amber-600 font-semibold text-center mb-1.5">
+                  {squadsBelowMinBudgetExhausted.length} squad(s) are below {MIN_SQUAD_SIZE}, but budget is exhausted. You can still end.
+                </p>
+              )}
               {!confirmEnd
-                ? <button onClick={() => setConfirmEnd(true)}
-                    className="w-full py-2 rounded-lg bg-stone-50 hover:bg-red-50 border border-stone-200 hover:border-red-200 text-stone-400 hover:text-red-500 font-bold text-sm transition-all">
+                ? <button onClick={() => setConfirmEnd(true)} disabled={!canEndAuction}
+                    className="w-full py-2 rounded-lg bg-stone-50 hover:bg-red-50 border border-stone-200 hover:border-red-200 text-stone-400 hover:text-red-500 font-bold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                     🏁 End Auction
                   </button>
                 : <div className="space-y-1.5">
                     <p className="text-xs text-red-500 text-center font-semibold">Cannot be undone.</p>
                     <div className="flex gap-2">
                       <button onClick={() => setConfirmEnd(false)} className="flex-1 py-1.5 rounded-lg bg-slate-50 border text-slate-500 text-xs font-bold hover:bg-slate-100">Cancel</button>
-                      <button onClick={() => { endAuction.mutate(); setConfirmEnd(false) }} disabled={endAuction.isPending}
-                        className="flex-1 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-black">End</button>
+                      <button onClick={() => {
+                        if (squadsBelowMinBudgetExhausted.length > 0) {
+                          const names = squadsBelowMinBudgetExhausted
+                            .map(s => s.name)
+                            .slice(0, 8)
+                            .join(", ")
+                          const extra = squadsBelowMinBudgetExhausted.length > 8
+                            ? ` +${squadsBelowMinBudgetExhausted.length - 8} more`
+                            : ""
+                          window.alert(
+                            `Warning: Some squads are below ${MIN_SQUAD_SIZE} players but have exhausted budget.\n\n${names}${extra}`,
+                          )
+                        }
+                        endAuction.mutate()
+                        setConfirmEnd(false)
+                      }} disabled={endAuction.isPending || !canEndAuction}
+                        className="flex-1 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-black disabled:opacity-40 disabled:cursor-not-allowed">End</button>
                     </div>
                   </div>
               }
@@ -1363,6 +1472,15 @@ function AuctionRoomPage() {
   }, [engineState?.lastResult?.timestamp])
 
   const isAdmin = me?.role === "ADMIN"
+  const [showRemainingPlayers, setShowRemainingPlayers] = useState(false)
+  const [remainingPage, setRemainingPage] = useState(0)
+  const { data: allPlayersForRemaining } = useQuery({
+    queryKey: ["players", { getAll: true }, "remainingModal", auctionId],
+    queryFn: () => import("@/lib/playerApi").then(m => m.playerApi.list({ getAll: true })),
+    enabled: showRemainingPlayers,
+    staleTime: 0,
+    placeholderData: (prev) => prev,
+  })
 
   if (!auction || !me) {
     return (
@@ -1383,6 +1501,18 @@ function AuctionRoomPage() {
     if (engineState?.poolExhausted) return <div className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 rounded-lg px-2.5 py-1"><span className="text-xs">🏁</span><span className="text-xs font-bold text-indigo-600">All auctioned</span></div>
     return <div className="flex items-center gap-1.5 bg-stone-50 border border-stone-200 rounded-full px-2.5 py-1"><span className="text-xs font-bold text-slate-400">Ready</span></div>
   })()
+
+  const currentPlayerId = engineState?.currentPlayer?.id
+  const remainingPlayersForModal = ((allPlayersForRemaining ?? []) as Player[])
+    .filter((p: Player) => p.auctioned !== true && p.id !== currentPlayerId)
+    .sort((a: Player, b: Player) => Number(b.basePrice ?? 0) - Number(a.basePrice ?? 0))
+  const remainingPageSize = 50
+  const remainingTotalPages = Math.ceil(remainingPlayersForModal.length / remainingPageSize)
+  const remainingClampedPage =
+    remainingTotalPages === 0 ? 0 : Math.min(remainingPage, remainingTotalPages - 1)
+  const remainingStartIdx = remainingClampedPage * remainingPageSize
+  const remainingEndIdx = Math.min(remainingStartIdx + remainingPageSize, remainingPlayersForModal.length)
+  const remainingPageItems = remainingPlayersForModal.slice(remainingStartIdx, remainingEndIdx)
 
   return (
     <>
@@ -1419,6 +1549,12 @@ function AuctionRoomPage() {
           </div>
           <div className="ar-header-right flex items-center gap-2">
             {isAdmin && <AddParticipantNavButton auctionId={auctionId} />}
+            <button
+              onClick={() => { setRemainingPage(0); setShowRemainingPlayers(true) }}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border border-stone-200 bg-white text-stone-500 hover:bg-stone-50 hover:text-stone-700 transition-all"
+            >
+              📋 Remaining
+            </button>
             <button onClick={() => navigate({ to: "/auction/$auctionId/fantasy", params: { auctionId } })}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-all">
               🏆 Fantasy
@@ -1434,6 +1570,12 @@ function AuctionRoomPage() {
         <div className="ar-mobile-bar">
           <div className="ar-mobile-bar-left">
             {statusChip}
+            <button
+              onClick={() => { setRemainingPage(0); setShowRemainingPlayers(true) }}
+              className="ar-mob-back-btn"
+            >
+              📋 Remaining
+            </button>
             {isAdmin && <AddParticipantNavButton auctionId={auctionId} />}
           </div>
           <div className="ar-mobile-bar-right">
@@ -1448,6 +1590,87 @@ function AuctionRoomPage() {
             </button>
           </div>
         </div>
+
+        <Dialog open={showRemainingPlayers} onOpenChange={setShowRemainingPlayers}>
+          <DialogContent className="max-w-2xl bg-white border-stone-200 text-stone-800 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <DialogHeader>
+              <div className="flex items-center justify-between gap-4">
+                <DialogTitle className="text-lg font-black">📋 Remaining in current round</DialogTitle>
+                <div className="text-right">
+                  <p className="text-[11px] text-stone-400 font-semibold">Total remaining</p>
+                  <p className="text-sm font-black text-stone-700">{remainingPlayersForModal.length}</p>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <div className="space-y-3 mt-2">
+              <div className="rounded-xl border border-stone-100 divide-y divide-stone-50 overflow-y-auto max-h-[55vh]">
+                {remainingPageItems.length === 0 ? (
+                  <p className="text-xs text-stone-400 italic text-center py-6">No remaining players in this round.</p>
+                ) : (
+                  remainingPageItems.map((p: Player, i: number) => {
+                    const st = specialismStyle(p.specialism)
+                    const sp = normaliseSpecialism(p.specialism)
+                    const abbr =
+                      sp === "WICKETKEEPER" ? "WK" :
+                      sp === "ALLROUNDER" ? "AR" :
+                      sp === "BOWLER" ? "BWL" :
+                      sp === "BATSMAN" ? "BAT" :
+                      ""
+
+                    const base = p.basePrice == null ? null : Number(p.basePrice)
+                    return (
+                      <div key={p.id} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-stone-50 transition-colors">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="text-[11px] font-black text-stone-300 w-5 shrink-0 text-center">
+                            {remainingStartIdx + i + 1}
+                          </span>
+                          <div className={`w-2 h-2 rounded-full shrink-0 ${st.dot}`} />
+                          <div className="min-w-0">
+                            <p className="text-sm font-black text-stone-800 truncate">{p.name}</p>
+                            {abbr ? (
+                              <p className="text-xs font-semibold text-stone-400 truncate">{abbr}</p>
+                            ) : (
+                              <p className="text-xs font-semibold text-stone-400 truncate">&nbsp;</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs font-semibold text-stone-400">Base</p>
+                          <p className="text-sm font-black text-amber-600 tabular-nums">
+                            {base != null && !Number.isNaN(base) ? fmt(base) : "—"}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+
+              {remainingPlayersForModal.length > 0 && (
+                <div className="flex items-center justify-between gap-3 pt-2">
+                  <button
+                    className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white text-stone-500 hover:bg-stone-50 text-xs font-bold transition-all disabled:opacity-40"
+                    disabled={remainingClampedPage === 0}
+                    onClick={() => setRemainingPage(p => Math.max(0, p - 1))}
+                  >
+                    ← Prev
+                  </button>
+                  <p className="text-[11px] text-stone-400 italic">
+                    Page {remainingClampedPage + 1} / {remainingTotalPages} · Showing {remainingStartIdx + 1}-{Math.max(remainingEndIdx, remainingStartIdx + 1)} of {remainingPlayersForModal.length}
+                  </p>
+                  <button
+                    className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white text-stone-500 hover:bg-stone-50 text-xs font-bold transition-all disabled:opacity-40"
+                    disabled={remainingClampedPage >= remainingTotalPages - 1}
+                    onClick={() => setRemainingPage(p => p + 1)}
+                  >
+                    Next →
+                  </button>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {isAdmin
           ? <AdminPanel auctionId={auctionId} onEnd={() => navigate({ to: "/auction" })} />
