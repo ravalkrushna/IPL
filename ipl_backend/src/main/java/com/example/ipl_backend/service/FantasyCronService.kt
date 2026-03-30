@@ -240,8 +240,10 @@ class FantasyCronService(
 
     private fun normalizeName(name: String) = name
         .lowercase()
-        .replace(Regex("^[a-z]\\.\\s*"), "")
-        .replace(Regex("[^a-z ]"), "")
+        .replace(Regex("^[a-z]\\.?\\s*"), "") // drop leading initials like "N. " or "N "
+        .replace(Regex("[^a-z ]"), "")       // keep only letters/spaces
         .replace(Regex("\\s+"), " ")
         .trim()
+        // Common feed-vs-seed spelling mismatch (e.g. "N. Tilak Verma" vs "Tilak Varma")
+        .replace("verma", "varma")
 }

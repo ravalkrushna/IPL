@@ -33,6 +33,7 @@ class GoogleSheetsSyncService(
     companion object {
         const val FIXTURES_TAB = "IPL 2026 Fixtures"
         const val POINTS_TAB   = "Fantasy Points"
+        const val TEAM_TOTAL_TAB = "Team Total"
         val IST = ZoneId.of("Asia/Kolkata")
         private const val FANTASY_SEASON = "2026"
     }
@@ -66,6 +67,15 @@ class GoogleSheetsSyncService(
 
         val teamNameByPlayerId = fetchTeamNameByPlayerId()
         val perfsByPlayerId    = allPerfs.groupBy { it.playerId }
+
+        // Team Total is based on your auction squads (Squads.name), not on IPL team code (MI/CSK/etc.).
+        // We use the same mapping that powers "Auction Team" in the auction tabs.
+        val totalsBySquad = mutableMapOf<String, Int>()
+        for ((playerId, squadName) in teamNameByPlayerId) {
+            if (squadName.isBlank()) continue
+            val pts = totalsByPlayerId[playerId] ?: 0
+            totalsBySquad[squadName] = (totalsBySquad[squadName] ?: 0) + pts
+        }
 
         val matchLabels = allPerfs
             .map { it.matchId }
@@ -102,6 +112,18 @@ class GoogleSheetsSyncService(
             matchesInDb.size,
             FANTASY_SEASON
         )
+
+        // ── Team Total sheet ──────────────────────────────────────────────
+        // Shows each auction squad's overall total across all players.
+        val teamRows = totalsBySquad.entries
+            .sortedByDescending { it.value }
+            .map { (squadName, total) -> listOf<Any>(squadName, total) }
+
+        sheetsService.writeToTab(
+            TEAM_TOTAL_TAB,
+            listOf(listOf<Any>("Team", "Team 2026 Total")) + teamRows
+        )
+        log.info("Team Total sheet synced — {} team rows", teamRows.size)
 
         return FantasySheetSyncResult(
             performancesUsed     = allPerfs.size,
