@@ -69,6 +69,20 @@ function IplMatchesPage() {
     enabled: isAdmin && showFeedMatches,
     staleTime: 15000,
   })
+  const feedMatchOptions = useMemo(() => {
+    const rows = feedMatches.data?.matches ?? []
+    return rows
+      .map((m) => {
+        const id = String(m.id ?? "")
+        const label =
+          String((m as { matchLabel?: unknown }).matchLabel ?? "") ||
+          String((m as { title?: unknown }).title ?? "") ||
+          String((m as { name?: unknown }).name ?? "")
+        return { id, label }
+      })
+      .filter((x) => x.id.trim().length > 0)
+      .sort((a, b) => Number(b.id) - Number(a.id))
+  }, [feedMatches.data])
 
   const syncNowMutation = useMutation({
     mutationFn: () => fantasyApi.adminSyncNow(matchIdInput.trim() || undefined),
@@ -198,13 +212,13 @@ function IplMatchesPage() {
               <div style={{ fontSize: 12, color: "#57534e", border: "1px solid #e5dfd4", borderRadius: 10, padding: 10, background: "#fafaf9" }}>
                 <div style={{ fontWeight: 700, marginBottom: 6 }}>IPL feed matches: {feedMatches.data?.count ?? 0}</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {(feedMatches.data?.matches ?? []).slice(0, 25).map((m) => (
+                  {feedMatchOptions.slice(0, 25).map((m) => (
                     <button
-                      key={String(m.id)}
-                      onClick={() => setMatchIdInput(String(m.id))}
+                      key={m.id}
+                      onClick={() => setMatchIdInput(m.id)}
                       style={{ border: "1px solid #d6cfc4", background: "#fff", borderRadius: 999, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}
                     >
-                      {String(m.id)}
+                      {m.id}
                     </button>
                   ))}
                 </div>
@@ -228,7 +242,20 @@ function IplMatchesPage() {
                   onClick={() => setSelectedMatchId((prev) => (prev === m.matchId ? "" : m.matchId))}
                   className={`w-full text-left rounded-lg border px-3 py-2 transition ${selectedMatchId === m.matchId ? "border-indigo-500 bg-indigo-50" : "border-stone-200 bg-stone-50 hover:bg-stone-100"}`}
                 >
-                  <p className="text-xs text-stone-500">M{m.matchNo}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-stone-500">M{m.matchNo}</p>
+                    <span
+                      className="text-[10px] font-semibold text-stone-600 bg-white border border-stone-300 rounded px-1.5 py-0.5"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setMatchIdInput(String(m.matchId))
+                      }}
+                      title="Use this ID in matchId input"
+                    >
+                      ID: {m.matchId}
+                    </span>
+                  </div>
                   <p className="text-sm font-semibold text-stone-800">{m.matchLabel}</p>
                 </button>
               ))}
