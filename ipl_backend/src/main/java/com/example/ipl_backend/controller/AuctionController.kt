@@ -58,6 +58,11 @@ class AuctionController(
         ResponseEntity.ok(auctionService.end(id))
 
     @PreAuthorize("hasRole('ADMIN')")
+    @PutMapping("/{id}/reauction/start")
+    fun startReauction(@PathVariable id: String): ResponseEntity<Auction> =
+        ResponseEntity.ok(auctionService.startReauction(id))
+
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}")
     fun update(
         @PathVariable id: String,

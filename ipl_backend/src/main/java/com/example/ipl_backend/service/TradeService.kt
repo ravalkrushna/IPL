@@ -1,0 +1,306 @@
+package com.example.ipl_backend.service
+
+import com.example.ipl_backend.dto.CreateTradeRequest
+import com.example.ipl_backend.dto.CreateSellListingRequest
+import com.example.ipl_backend.dto.TradeResponse
+import com.example.ipl_backend.exception.AuctionNotFoundException
+import com.example.ipl_backend.exception.InvalidAuctionStateException
+import com.example.ipl_backend.model.*
+import com.example.ipl_backend.repository.AuctionRepository
+import com.example.ipl_backend.repository.WalletRepository
+import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.transactions.transaction
+import org.springframework.stereotype.Service
+import java.math.BigDecimal
+import java.time.Instant
+import java.util.UUID
+
+@Service
+class TradeService(
+    private val auctionRepository: AuctionRepository,
+    private val walletRepository: WalletRepository
+) {
+
+    companion object {
+        // Marker pattern for open sell listing rows:
+        // seller squad == placeholder buyer squad, no buyer players, one-way seller->buyer cash.
+        private fun isOpenSellListing(t: TradeResponse): Boolean =
+            t.fromSquadId == t.toSquadId &&
+                t.toPlayerIds.isEmpty() &&
+                t.cashFromToTo > BigDecimal.ZERO &&
+                t.cashToToFrom == BigDecimal.ZERO &&
+                t.fromPlayerIds.size == 1
+    }
+
+    fun createTrade(request: CreateTradeRequest): TradeResponse {
+        val auction = auctionRepository.findById(request.auctionId)
+            ?: throw AuctionNotFoundException("Auction not found")
+        ensureAuctionCompleted(auction)
+        validateTradeRequest(request)
+
+        val now = Instant.now().toEpochMilli()
+        val id = UUID.randomUUID().toString()
+
+        transaction {
+            ensureSquadsInAuction(request.auctionId, request.fromSquadId, request.toSquadId)
+            ensureOwnership(request.fromSquadId, request.fromPlayerIds)
+            ensureOwnership(request.toSquadId, request.toPlayerIds)
+
+            Trades.insert {
+                it[Trades.id] = id
+                it[auctionId] = request.auctionId
+                it[fromSquadId] = request.fromSquadId
+                it[toSquadId] = request.toSquadId
+                it[fromPlayerIdsCsv] = request.fromPlayerIds.joinToString(",")
+                it[toPlayerIdsCsv] = request.toPlayerIds.joinToString(",")
+                it[cashFromToTo] = request.cashFromToTo
+                it[cashToToFrom] = request.cashToToFrom
+                it[status] = TradeStatus.PENDING
+                it[createdAt] = now
+                it[updatedAt] = now
+            }
+        }
+        return getById(id)!!
+    }
+
+    fun createSellListing(request: CreateSellListingRequest): TradeResponse {
+        if (request.playerId.isBlank()) throw IllegalArgumentException("playerId is required")
+        if (request.askingPrice <= BigDecimal.ZERO) throw IllegalArgumentException("askingPrice must be > 0")
+
+        val auction = auctionRepository.findById(request.auctionId)
+            ?: throw AuctionNotFoundException("Auction not found")
+        ensureAuctionCompleted(auction)
+
+        val now = Instant.now().toEpochMilli()
+        val id = UUID.randomUUID().toString()
+
+        transaction {
+            ensureSquadInAuction(request.auctionId, request.fromSquadId)
+            ensureOwnership(request.fromSquadId, listOf(request.playerId))
+
+            Trades.insert {
+                it[Trades.id] = id
+                it[auctionId] = request.auctionId
+                it[fromSquadId] = request.fromSquadId
+                it[toSquadId] = request.fromSquadId // placeholder until a buyer accepts
+                it[fromPlayerIdsCsv] = request.playerId
+                it[toPlayerIdsCsv] = ""
+                it[cashFromToTo] = request.askingPrice
+                it[cashToToFrom] = BigDecimal.ZERO
+                it[status] = TradeStatus.PENDING
+                it[createdAt] = now
+                it[updatedAt] = now
+            }
+        }
+        return getById(id)!!
+    }
+
+    fun acceptTrade(tradeId: String): TradeResponse {
+        transaction {
+            val trade = loadTradeForUpdate(tradeId) ?: throw IllegalArgumentException("Trade not found")
+            if (trade.status != TradeStatus.PENDING) throw IllegalStateException("Trade is not PENDING")
+
+            val auction = auctionRepository.findById(trade.auctionId)
+                ?: throw AuctionNotFoundException("Auction not found")
+            ensureAuctionCompleted(auction)
+
+            ensureSquadsInAuction(trade.auctionId, trade.fromSquadId, trade.toSquadId)
+            ensureOwnership(trade.fromSquadId, trade.fromPlayerIds)
+            ensureOwnership(trade.toSquadId, trade.toPlayerIds)
+            applyWalletLegs(trade)
+            applyPlayerTransfers(trade)
+
+            val now = Instant.now().toEpochMilli()
+            Trades.update({ Trades.id eq tradeId }) {
+                it[status] = TradeStatus.ACCEPTED
+                it[updatedAt] = now
+            }
+        }
+        return getById(tradeId)!!
+    }
+
+    fun acceptSellListing(tradeId: String, buyerSquadId: String): TradeResponse {
+        if (buyerSquadId.isBlank()) throw IllegalArgumentException("buyerSquadId is required")
+        transaction {
+            val listing = loadTradeForUpdate(tradeId) ?: throw IllegalArgumentException("Trade not found")
+            if (listing.status != TradeStatus.PENDING) throw IllegalStateException("Listing is not PENDING")
+            if (!isOpenSellListing(listing)) throw IllegalArgumentException("Trade is not an open sell listing")
+            if (listing.fromSquadId == buyerSquadId) throw IllegalArgumentException("Seller squad cannot accept its own listing")
+
+            val auction = auctionRepository.findById(listing.auctionId)
+                ?: throw AuctionNotFoundException("Auction not found")
+            ensureAuctionCompleted(auction)
+            ensureSquadsInAuction(listing.auctionId, listing.fromSquadId, buyerSquadId)
+            ensureOwnership(listing.fromSquadId, listing.fromPlayerIds)
+
+            val resolved = listing.copy(toSquadId = buyerSquadId)
+            applyWalletLegs(resolved)
+            applyPlayerTransfers(resolved)
+
+            val now = Instant.now().toEpochMilli()
+            Trades.update({ Trades.id eq tradeId }) {
+                it[toSquadId] = buyerSquadId
+                it[status] = TradeStatus.ACCEPTED
+                it[updatedAt] = now
+            }
+        }
+        return getById(tradeId)!!
+    }
+
+    fun rejectTrade(tradeId: String): TradeResponse = markTrade(tradeId, TradeStatus.REJECTED)
+    fun cancelTrade(tradeId: String): TradeResponse = markTrade(tradeId, TradeStatus.CANCELLED)
+
+    fun listByAuction(auctionId: String): List<TradeResponse> =
+        transaction {
+            Trades.selectAll()
+                .where { Trades.auctionId eq auctionId }
+                .orderBy(Trades.createdAt to SortOrder.DESC)
+                .map { it.toTradeResponse() }
+        }
+
+    fun getById(tradeId: String): TradeResponse? =
+        transaction {
+            Trades.selectAll()
+                .where { Trades.id eq tradeId }
+                .firstOrNull()
+                ?.toTradeResponse()
+        }
+
+    private fun markTrade(tradeId: String, status: TradeStatus): TradeResponse {
+        transaction {
+            val current = loadTradeForUpdate(tradeId) ?: throw IllegalArgumentException("Trade not found")
+            if (current.status != TradeStatus.PENDING) throw IllegalStateException("Trade is not PENDING")
+            Trades.update({ Trades.id eq tradeId }) {
+                it[Trades.status] = status
+                it[updatedAt] = Instant.now().toEpochMilli()
+            }
+        }
+        return getById(tradeId)!!
+    }
+
+    private fun applyWalletLegs(t: TradeResponse) {
+        val fromParticipant = squadParticipantId(t.fromSquadId)
+        val toParticipant = squadParticipantId(t.toSquadId)
+
+        if (t.cashFromToTo > BigDecimal.ZERO) {
+            val fromWallet = walletRepository.findForUpdate(fromParticipant, t.auctionId)
+                ?: throw IllegalStateException("Wallet not found for from-squad participant")
+            if (fromWallet.balance < t.cashFromToTo) throw IllegalStateException("Insufficient wallet for from-squad")
+            walletRepository.decrementBalance(fromParticipant, t.auctionId, t.cashFromToTo)
+            walletRepository.incrementBalance(toParticipant, t.auctionId, t.cashFromToTo)
+        }
+        if (t.cashToToFrom > BigDecimal.ZERO) {
+            val toWallet = walletRepository.findForUpdate(toParticipant, t.auctionId)
+                ?: throw IllegalStateException("Wallet not found for to-squad participant")
+            if (toWallet.balance < t.cashToToFrom) throw IllegalStateException("Insufficient wallet for to-squad")
+            walletRepository.decrementBalance(toParticipant, t.auctionId, t.cashToToFrom)
+            walletRepository.incrementBalance(fromParticipant, t.auctionId, t.cashToToFrom)
+        }
+    }
+
+    private fun applyPlayerTransfers(t: TradeResponse) {
+        // Keep the same purchase price row value when moving ownership.
+        t.fromPlayerIds.forEach { playerId ->
+            val price = squadPlayerPrice(t.fromSquadId, playerId) ?: BigDecimal.ZERO
+            SquadPlayers.deleteWhere { (SquadPlayers.squadId eq t.fromSquadId) and (SquadPlayers.playerId eq playerId) }
+            SquadPlayers.insert {
+                it[id] = UUID.randomUUID().toString()
+                it[squadId] = t.toSquadId
+                it[SquadPlayers.playerId] = playerId
+                it[purchasePrice] = price
+            }
+        }
+        t.toPlayerIds.forEach { playerId ->
+            val price = squadPlayerPrice(t.toSquadId, playerId) ?: BigDecimal.ZERO
+            SquadPlayers.deleteWhere { (SquadPlayers.squadId eq t.toSquadId) and (SquadPlayers.playerId eq playerId) }
+            SquadPlayers.insert {
+                it[id] = UUID.randomUUID().toString()
+                it[squadId] = t.fromSquadId
+                it[SquadPlayers.playerId] = playerId
+                it[purchasePrice] = price
+            }
+        }
+    }
+
+    private fun squadPlayerPrice(squadId: String, playerId: String): BigDecimal? =
+        SquadPlayers.selectAll()
+            .where { (SquadPlayers.squadId eq squadId) and (SquadPlayers.playerId eq playerId) }
+            .forUpdate()
+            .firstOrNull()
+            ?.get(SquadPlayers.purchasePrice)
+
+    private fun squadParticipantId(squadId: String): UUID =
+        Squads.select(Squads.participantId)
+            .where { Squads.id eq squadId }
+            .firstOrNull()
+            ?.get(Squads.participantId)
+            ?: throw IllegalStateException("Squad participant not found")
+
+    private fun ensureSquadsInAuction(auctionId: String, fromSquadId: String, toSquadId: String) {
+        if (fromSquadId == toSquadId) throw IllegalArgumentException("fromSquadId and toSquadId cannot be same")
+        val okFrom = Squads.selectAll().where { (Squads.id eq fromSquadId) and (Squads.auctionId eq auctionId) }.count() > 0
+        val okTo = Squads.selectAll().where { (Squads.id eq toSquadId) and (Squads.auctionId eq auctionId) }.count() > 0
+        if (!okFrom || !okTo) throw IllegalArgumentException("Both squads must belong to the auction")
+    }
+
+    private fun ensureSquadInAuction(auctionId: String, squadId: String) {
+        val ok = Squads.selectAll().where { (Squads.id eq squadId) and (Squads.auctionId eq auctionId) }.count() > 0
+        if (!ok) throw IllegalArgumentException("Squad must belong to the auction")
+    }
+
+    private fun ensureOwnership(squadId: String, playerIds: List<String>) {
+        if (playerIds.isEmpty()) return
+        val owned = SquadPlayers.selectAll()
+            .where { (SquadPlayers.squadId eq squadId) and (SquadPlayers.playerId inList playerIds) }
+            .map { it[SquadPlayers.playerId] }
+            .toSet()
+        if (owned.size != playerIds.toSet().size) {
+            throw IllegalArgumentException("One or more traded players are not owned by squad=$squadId")
+        }
+    }
+
+    private fun validateTradeRequest(r: CreateTradeRequest) {
+        if (r.fromPlayerIds.isEmpty() && r.toPlayerIds.isEmpty()) {
+            throw IllegalArgumentException("Trade must include at least one player on either side")
+        }
+        if (r.cashFromToTo < BigDecimal.ZERO || r.cashToToFrom < BigDecimal.ZERO) {
+            throw IllegalArgumentException("Cash legs cannot be negative")
+        }
+        if (r.fromPlayerIds.any { it.isBlank() } || r.toPlayerIds.any { it.isBlank() }) {
+            throw IllegalArgumentException("Player IDs cannot be blank")
+        }
+    }
+
+    private fun ensureAuctionCompleted(auction: Auction) {
+        if (auction.status != AuctionStatus.COMPLETED) {
+            throw InvalidAuctionStateException("Trades are allowed only after auction completion")
+        }
+    }
+
+    private fun loadTradeForUpdate(id: String): TradeResponse? =
+        Trades.selectAll()
+            .where { Trades.id eq id }
+            .forUpdate()
+            .firstOrNull()
+            ?.toTradeResponse()
+
+    private fun ResultRow.toTradeResponse(): TradeResponse {
+        val fromCsv = this[Trades.fromPlayerIdsCsv]
+        val toCsv = this[Trades.toPlayerIdsCsv]
+        return TradeResponse(
+            id = this[Trades.id],
+            auctionId = this[Trades.auctionId],
+            fromSquadId = this[Trades.fromSquadId],
+            toSquadId = this[Trades.toSquadId],
+            fromPlayerIds = fromCsv.split(",").map { it.trim() }.filter { it.isNotBlank() },
+            toPlayerIds = toCsv.split(",").map { it.trim() }.filter { it.isNotBlank() },
+            cashFromToTo = this[Trades.cashFromToTo],
+            cashToToFrom = this[Trades.cashToToFrom],
+            status = this[Trades.status],
+            createdAt = this[Trades.createdAt],
+            updatedAt = this[Trades.updatedAt]
+        )
+    }
+}
+

@@ -18,6 +18,8 @@ import { Route as Auth_layoutRouteImport } from './routes/auth/__layout'
 import { Route as AuctionProfileRouteImport } from './routes/auction/profile'
 import { Route as AuctionPlayersRouteImport } from './routes/auction/players'
 import { Route as AuctionAuctionIdIndexRouteImport } from './routes/auction/$auctionId/index'
+import { Route as AuctionAuctionIdTradeRouteImport } from './routes/auction/$auctionId/trade'
+import { Route as AuctionAuctionIdIplMatchesRouteImport } from './routes/auction/$auctionId/ipl-matches'
 import { Route as AuctionAuctionIdFantasyRouteImport } from './routes/auction/$auctionId/fantasy'
 import { Route as AuctionAuctionIdFantasySquadIdRouteImport } from './routes/auction/$auctionId/fantasy/$squadId'
 
@@ -66,6 +68,17 @@ const AuctionAuctionIdIndexRoute = AuctionAuctionIdIndexRouteImport.update({
   path: '/auction/$auctionId/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuctionAuctionIdTradeRoute = AuctionAuctionIdTradeRouteImport.update({
+  id: '/auction/$auctionId/trade',
+  path: '/auction/$auctionId/trade',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuctionAuctionIdIplMatchesRoute =
+  AuctionAuctionIdIplMatchesRouteImport.update({
+    id: '/auction/$auctionId/ipl-matches',
+    path: '/auction/$auctionId/ipl-matches',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuctionAuctionIdFantasyRoute = AuctionAuctionIdFantasyRouteImport.update({
   id: '/auction/$auctionId/fantasy',
   path: '/auction/$auctionId/fantasy',
@@ -88,6 +101,8 @@ export interface FileRoutesByFullPath {
   '/auth/verify-otp': typeof AuthVerifyOtpRoute
   '/auction/': typeof AuctionIndexRoute
   '/auction/$auctionId/fantasy': typeof AuctionAuctionIdFantasyRouteWithChildren
+  '/auction/$auctionId/ipl-matches': typeof AuctionAuctionIdIplMatchesRoute
+  '/auction/$auctionId/trade': typeof AuctionAuctionIdTradeRoute
   '/auction/$auctionId/': typeof AuctionAuctionIdIndexRoute
   '/auction/$auctionId/fantasy/$squadId': typeof AuctionAuctionIdFantasySquadIdRoute
 }
@@ -101,6 +116,8 @@ export interface FileRoutesByTo {
   '/auth/verify-otp': typeof AuthVerifyOtpRoute
   '/auction': typeof AuctionIndexRoute
   '/auction/$auctionId/fantasy': typeof AuctionAuctionIdFantasyRouteWithChildren
+  '/auction/$auctionId/ipl-matches': typeof AuctionAuctionIdIplMatchesRoute
+  '/auction/$auctionId/trade': typeof AuctionAuctionIdTradeRoute
   '/auction/$auctionId': typeof AuctionAuctionIdIndexRoute
   '/auction/$auctionId/fantasy/$squadId': typeof AuctionAuctionIdFantasySquadIdRoute
 }
@@ -115,6 +132,8 @@ export interface FileRoutesById {
   '/auth/verify-otp': typeof AuthVerifyOtpRoute
   '/auction/': typeof AuctionIndexRoute
   '/auction/$auctionId/fantasy': typeof AuctionAuctionIdFantasyRouteWithChildren
+  '/auction/$auctionId/ipl-matches': typeof AuctionAuctionIdIplMatchesRoute
+  '/auction/$auctionId/trade': typeof AuctionAuctionIdTradeRoute
   '/auction/$auctionId/': typeof AuctionAuctionIdIndexRoute
   '/auction/$auctionId/fantasy/$squadId': typeof AuctionAuctionIdFantasySquadIdRoute
 }
@@ -130,6 +149,8 @@ export interface FileRouteTypes {
     | '/auth/verify-otp'
     | '/auction/'
     | '/auction/$auctionId/fantasy'
+    | '/auction/$auctionId/ipl-matches'
+    | '/auction/$auctionId/trade'
     | '/auction/$auctionId/'
     | '/auction/$auctionId/fantasy/$squadId'
   fileRoutesByTo: FileRoutesByTo
@@ -143,6 +164,8 @@ export interface FileRouteTypes {
     | '/auth/verify-otp'
     | '/auction'
     | '/auction/$auctionId/fantasy'
+    | '/auction/$auctionId/ipl-matches'
+    | '/auction/$auctionId/trade'
     | '/auction/$auctionId'
     | '/auction/$auctionId/fantasy/$squadId'
   id:
@@ -156,6 +179,8 @@ export interface FileRouteTypes {
     | '/auth/verify-otp'
     | '/auction/'
     | '/auction/$auctionId/fantasy'
+    | '/auction/$auctionId/ipl-matches'
+    | '/auction/$auctionId/trade'
     | '/auction/$auctionId/'
     | '/auction/$auctionId/fantasy/$squadId'
   fileRoutesById: FileRoutesById
@@ -170,6 +195,8 @@ export interface RootRouteChildren {
   AuthVerifyOtpRoute: typeof AuthVerifyOtpRoute
   AuctionIndexRoute: typeof AuctionIndexRoute
   AuctionAuctionIdFantasyRoute: typeof AuctionAuctionIdFantasyRouteWithChildren
+  AuctionAuctionIdIplMatchesRoute: typeof AuctionAuctionIdIplMatchesRoute
+  AuctionAuctionIdTradeRoute: typeof AuctionAuctionIdTradeRoute
   AuctionAuctionIdIndexRoute: typeof AuctionAuctionIdIndexRoute
 }
 
@@ -238,6 +265,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuctionAuctionIdIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auction/$auctionId/trade': {
+      id: '/auction/$auctionId/trade'
+      path: '/auction/$auctionId/trade'
+      fullPath: '/auction/$auctionId/trade'
+      preLoaderRoute: typeof AuctionAuctionIdTradeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auction/$auctionId/ipl-matches': {
+      id: '/auction/$auctionId/ipl-matches'
+      path: '/auction/$auctionId/ipl-matches'
+      fullPath: '/auction/$auctionId/ipl-matches'
+      preLoaderRoute: typeof AuctionAuctionIdIplMatchesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auction/$auctionId/fantasy': {
       id: '/auction/$auctionId/fantasy'
       path: '/auction/$auctionId/fantasy'
@@ -279,6 +320,8 @@ const rootRouteChildren: RootRouteChildren = {
   AuthVerifyOtpRoute: AuthVerifyOtpRoute,
   AuctionIndexRoute: AuctionIndexRoute,
   AuctionAuctionIdFantasyRoute: AuctionAuctionIdFantasyRouteWithChildren,
+  AuctionAuctionIdIplMatchesRoute: AuctionAuctionIdIplMatchesRoute,
+  AuctionAuctionIdTradeRoute: AuctionAuctionIdTradeRoute,
   AuctionAuctionIdIndexRoute: AuctionAuctionIdIndexRoute,
 }
 export const routeTree = rootRouteImport

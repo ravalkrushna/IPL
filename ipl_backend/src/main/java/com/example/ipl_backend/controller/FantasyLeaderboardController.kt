@@ -176,14 +176,25 @@ class FantasyLeaderboardController(
     // GET /api/v1/fantasy/matches
 
     @GetMapping("/matches")
-    fun matchList(): ResponseEntity<List<MatchListEntry>> {
+    fun matchList(
+        @RequestParam(name = "season", required = false, defaultValue = "2026") season: String
+    ): ResponseEntity<List<MatchListEntry>> {
+        val normalizedSeason = season.trim()
         val matchedIds = performanceRepository.findAllPerformances()
             .map { it.matchId }
             .toSet()
 
         val matches = transaction {
             IplMatches.selectAll()
-                .filter { it[IplMatches.id] in matchedIds }
+                .filter {
+                    val rowSeason = it[IplMatches.season]
+                    val seasonMatches = if (normalizedSeason == "2025") {
+                        rowSeason == null || rowSeason == "2025"
+                    } else {
+                        rowSeason == normalizedSeason
+                    }
+                    (it[IplMatches.id] in matchedIds) && seasonMatches
+                }
                 .map { row ->
                     MatchListEntry(
                         matchId    = row[IplMatches.id],
@@ -241,7 +252,9 @@ class FantasyLeaderboardController(
                 "ok"                         to r.ok,
                 "message"                    to r.message,
                 "performancesSaved"          to r.performancesSaved,
+                "performancesUpdated"        to r.performancesUpdated,
                 "playersSkippedNotInDb"      to r.playersSkippedNotInDb,
+                "playersSkippedNotInDbNames" to r.playersSkippedNotInDbNames,
                 "playersSkippedAlreadySaved" to r.playersSkippedAlreadySaved,
                 "matchId"                    to r.matchId,
                 "matchLabel"                 to r.matchLabel,

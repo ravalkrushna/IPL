@@ -29,6 +29,9 @@ export const auctionApi = {
   end: (id: string): Promise<Auction> =>
     api.put(`/auctions/${id}/end`).then(r => r.data),
 
+  startReauction: (id: string): Promise<Auction> =>
+    api.put(`/auctions/${id}/reauction/start`).then(r => r.data),
+
   delete: (id: string): Promise<void> =>
     api.delete(`/auctions/${id}`).then(r => r.data),
 }

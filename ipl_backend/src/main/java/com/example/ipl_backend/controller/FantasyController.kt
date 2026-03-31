@@ -11,14 +11,20 @@ class FantasyController(
 ) {
 
     @GetMapping("/leaderboard/{auctionId}")
-    fun getLeaderboard(@PathVariable auctionId: String): ResponseEntity<Any> {
-        val result = fantasyService.getLeaderboard(auctionId)
+    fun getLeaderboard(
+        @PathVariable auctionId: String,
+        @RequestParam(name = "season", required = false, defaultValue = "2026") season: String
+    ): ResponseEntity<Any> {
+        val result = fantasyService.getLeaderboard(auctionId, season.trim())
         return ResponseEntity.ok(result)
     }
 
     @GetMapping("/squad/{squadId}")
-    fun getSquadFantasy(@PathVariable squadId: String): ResponseEntity<Any> {
-        val result = fantasyService.getSquadFantasy(squadId)
+    fun getSquadFantasy(
+        @PathVariable squadId: String,
+        @RequestParam(name = "season", required = false, defaultValue = "2026") season: String
+    ): ResponseEntity<Any> {
+        val result = fantasyService.getSquadFantasy(squadId, season.trim())
             ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok(result)
     }

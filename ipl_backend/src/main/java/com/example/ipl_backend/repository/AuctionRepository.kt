@@ -19,6 +19,8 @@ class AuctionRepository {
             status            = this[Auctions.status],
             analysisTimerSecs = this[Auctions.analysisTimerSecs],
             minBidIncrement   = this[Auctions.minBidIncrement],
+            reauctionStarted  = this[Auctions.reauctionStarted],
+            reauctionStartedAt = this[Auctions.reauctionStartedAt],
             createdAt         = this[Auctions.createdAt],
             updatedAt         = this[Auctions.updatedAt]
         )
@@ -31,6 +33,8 @@ class AuctionRepository {
                 it[status]            = auction.status
                 it[analysisTimerSecs] = auction.analysisTimerSecs
                 it[minBidIncrement]   = auction.minBidIncrement
+                it[reauctionStarted]  = auction.reauctionStarted
+                it[reauctionStartedAt]= auction.reauctionStartedAt
                 it[createdAt]         = auction.createdAt
                 it[updatedAt]         = auction.updatedAt
             }
@@ -91,6 +95,16 @@ class AuctionRepository {
     fun delete(id: String) {
         transaction {
             Auctions.deleteWhere { Auctions.id eq id }
+        }
+    }
+
+    fun markReauctionStarted(id: String, startedAt: Long) {
+        transaction {
+            Auctions.update({ Auctions.id eq id }) {
+                it[reauctionStarted] = true
+                it[reauctionStartedAt] = startedAt
+                it[updatedAt] = startedAt
+            }
         }
     }
 }

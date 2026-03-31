@@ -23,6 +23,8 @@ data class FantasySyncTriggerResult(
     val performancesSaved: Int = 0,
     val performancesUpdated: Int = 0,
     val playersSkippedNotInDb: Int = 0,
+    /** Feed/scraper names that had no row in `players` (add or alias them, then re-sync). */
+    val playersSkippedNotInDbNames: List<String> = emptyList(),
     val playersSkippedAlreadySaved: Int = 0,
     val matchId: String? = null,
     val matchLabel: String? = null,
@@ -178,6 +180,7 @@ class FantasyCronService(
         var updated     = 0
         var notInDb     = 0
         var alreadySaved = 0
+        val skippedNotInDbNames = mutableListOf<String>()
 
         scrapedMatch.players.forEach { stats ->
             val player = playerRepository.findByName(stats.playerName)
@@ -187,6 +190,7 @@ class FantasyCronService(
 
             if (player == null) {
                 log.warn("Player not found: ${stats.playerName}")
+                skippedNotInDbNames.add(stats.playerName)
                 notInDb++
                 return@forEach
             }
@@ -278,6 +282,7 @@ class FantasyCronService(
             performancesSaved = saved,
             performancesUpdated = updated,
             playersSkippedNotInDb = notInDb,
+            playersSkippedNotInDbNames = skippedNotInDbNames.distinct().sorted(),
             playersSkippedAlreadySaved = alreadySaved,
             matchId = matchRecord.id,
             matchLabel = scrapedMatch.matchLabel,

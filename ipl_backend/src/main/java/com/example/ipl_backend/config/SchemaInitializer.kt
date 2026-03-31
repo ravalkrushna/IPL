@@ -31,7 +31,8 @@ class SchemaInitializer {
                 PlayerMatchPerformances,
                 PlayerFantasyTotals,
                 PlayerNameAliases,
-                UpcomingMatches
+                UpcomingMatches,
+                Trades
             )
         }
     }

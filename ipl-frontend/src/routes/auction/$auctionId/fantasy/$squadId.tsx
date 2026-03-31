@@ -359,7 +359,7 @@ function PointBreakdownChips({ b }: { b: FantasyPointBreakdown }) {
   )
 }
 
-function PlayerMatchBreakdown({ playerId }: { playerId: string }) {
+function PlayerMatchBreakdown({ playerId, season }: { playerId: string; season: "2026" | "2025" }) {
   const { data, isLoading } = useQuery({
     queryKey: ["fantasyPlayer", playerId],
     queryFn: () => fantasyApi.player(playerId),
@@ -414,23 +414,19 @@ function PlayerMatchBreakdown({ playerId }: { playerId: string }) {
     )
   }
 
-  return (
-    <>
-      {renderSeason(data?.matches2026 ?? [], "IPL 2026", true)}
-      {renderSeason(data?.matches2025 ?? [], "IPL 2025")}
-    </>
-  )
+  return <>{season === "2026" ? renderSeason(data?.matches2026 ?? [], "IPL 2026", true) : renderSeason(data?.matches2025 ?? [], "IPL 2025", true)}</>
 }
 
 // ─── PLAYER CARD ──────────────────────────────────────────────────────────
 
 function PlayerCard({
-  p, rank, isActive, onToggle, embedBreakdown = true,
+  p, rank, isActive, onToggle, season, embedBreakdown = true,
 }: {
   p: FantasySquadPlayerEntry
   rank: number
   isActive: boolean
   onToggle: () => void
+  season: "2026" | "2025"
   embedBreakdown?: boolean
 }) {
   const cardRef = useRef<HTMLDivElement>(null)
@@ -467,7 +463,7 @@ function PlayerCard({
           </div>
         </div>
       </div>
-      {isActive && embedBreakdown && <PlayerMatchBreakdown playerId={p.playerId} />}
+      {isActive && embedBreakdown && <PlayerMatchBreakdown playerId={p.playerId} season={season} />}
     </div>
   )
 }
@@ -478,11 +474,12 @@ function FantasySquadPage() {
   const { auctionId, squadId } = useParams({ from: "/auction/$auctionId/fantasy/$squadId" })
   const navigate = useNavigate()
 
-  const { activePlayerId } = Route.useSearch() as { activePlayerId?: string }
+  const { activePlayerId, season: seasonParam } = Route.useSearch() as { activePlayerId?: string; season?: string }
+  const season: "2026" | "2025" = seasonParam === "2025" ? "2025" : "2026"
 
   const { data, isLoading } = useQuery({
-    queryKey: ["fantasySquad", squadId],
-    queryFn: () => fantasyApi.squad(squadId),
+    queryKey: ["fantasySquad", squadId, season],
+    queryFn: () => fantasyApi.squad(squadId, season),
     staleTime: 30000,
   })
 
@@ -503,7 +500,7 @@ function FantasySquadPage() {
     navigate({
       to: "/auction/$auctionId/fantasy/$squadId",
       params: { auctionId, squadId },
-      search: { activePlayerId: activePlayerId === pid ? "" : pid },
+      search: { activePlayerId: activePlayerId === pid ? "" : pid, season },
       replace: true,
     })
   }
@@ -524,7 +521,7 @@ function FantasySquadPage() {
             </div>
             <div style={{ minWidth: 0 }}>
               <div className="sd-title">{data?.squadName ?? "Loading…"}</div>
-              <div className="sd-subtitle">Fantasy · squad detail</div>
+              <div className="sd-subtitle">Fantasy · squad detail · IPL {season}</div>
             </div>
             {data && (
               <div
@@ -535,12 +532,28 @@ function FantasySquadPage() {
               </div>
             )}
           </div>
-          <button
-            className="sd-back-btn"
-            onClick={() => navigate({ to: "/auction/$auctionId/fantasy", params: { auctionId } })}
-          >
-            ← Leaderboard
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button
+              className="sd-back-btn"
+              style={season === "2026" ? { background: "#059669", color: "#fff", borderColor: "#059669" } : {}}
+              onClick={() => navigate({ to: "/auction/$auctionId/fantasy/$squadId", params: { auctionId, squadId }, search: { activePlayerId: "", season: "2026" }, replace: true })}
+            >
+              IPL 2026
+            </button>
+            <button
+              className="sd-back-btn"
+              style={season === "2025" ? { background: "#334155", color: "#fff", borderColor: "#334155" } : {}}
+              onClick={() => navigate({ to: "/auction/$auctionId/fantasy/$squadId", params: { auctionId, squadId }, search: { activePlayerId: "", season: "2025" }, replace: true })}
+            >
+              IPL 2025
+            </button>
+            <button
+              className="sd-back-btn"
+              onClick={() => navigate({ to: "/auction/$auctionId/fantasy", params: { auctionId } })}
+            >
+              ← Leaderboard
+            </button>
+          </div>
         </header>
 
         {/* Stats strip */}
@@ -589,6 +602,7 @@ function FantasySquadPage() {
                     rank={i}
                     isActive={activePlayerId === p.playerId}
                     onToggle={() => setActivePlayer(p.playerId)}
+                    season={season}
                     embedBreakdown={!useSidePanel}
                   />
                 ))}
@@ -604,7 +618,7 @@ function FantasySquadPage() {
                     <div className="sd-detail-head-label">Match breakdown</div>
                     <div className="sd-detail-head-name">{activePlayer.playerName}</div>
                   </div>
-                  <PlayerMatchBreakdown playerId={activePlayerId} />
+                  <PlayerMatchBreakdown playerId={activePlayerId} season={season} />
                 </div>
               ) : (
                 <div className="sd-detail-empty">

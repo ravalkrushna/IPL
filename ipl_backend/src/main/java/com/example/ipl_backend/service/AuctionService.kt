@@ -108,6 +108,20 @@ class AuctionService(
         return auctionRepository.findById(id)!!
     }
 
+    fun startReauction(id: String): Auction {
+        val auction = auctionRepository.findById(id)
+            ?: throw AuctionNotFoundException("Auction not found")
+        if (auction.status != AuctionStatus.COMPLETED) {
+            throw InvalidAuctionStateException("Re-auction can start only after auction is COMPLETED")
+        }
+        if (auction.reauctionStarted) return auction
+
+        walletRepository.resetAllWalletsToStartingBalance(id)
+        auctionRepository.markReauctionStarted(id, Instant.now().toEpochMilli())
+        println("🔁 Re-auction started for auction=$id; all wallets reset to 100Cr")
+        return auctionRepository.findById(id)!!
+    }
+
     fun getById(id: String): Auction =
         auctionRepository.findById(id) ?: throw AuctionNotFoundException("Auction not found")
 

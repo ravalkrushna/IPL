@@ -22,6 +22,10 @@ object Auctions : Table("auctions") {
     val minBidIncrement = decimal("min_bid_increment", 15, 2)
         .default(java.math.BigDecimal("500000.00"))
 
+    // Re-auction can be triggered only after the main auction is completed.
+    val reauctionStarted = bool("reauction_started").default(false)
+    val reauctionStartedAt = long("reauction_started_at").nullable()
+
     val createdAt = long("created_at")
     val updatedAt = long("updated_at")
 
@@ -34,6 +38,8 @@ data class Auction(
     val status: AuctionStatus,
     val analysisTimerSecs: Int,
     val minBidIncrement: java.math.BigDecimal,
+    val reauctionStarted: Boolean = false,
+    val reauctionStartedAt: Long? = null,
     val createdAt: Long,
     val updatedAt: Long
 )

@@ -13,27 +13,27 @@ class FantasyService(
     private val playerRepository: PlayerRepository,
     private val iplMatchRepository: IplMatchRepository,
     private val performanceRepository: PlayerMatchPerformanceRepository,
-    private val fantasyTotalRepository: PlayerFantasyTotalsRepository,
     private val fantasyPointsCalculator: FantasyPointsCalculator
 ) {
 
     // ── Leaderboard ───────────────────────────────────────────────────────────
 
-    fun getLeaderboard(auctionId: String): FantasyLeaderboardResponse {
+    fun getLeaderboard(auctionId: String, season: String = "2026"): FantasyLeaderboardResponse {
         val squads = squadRepository.findByAuction(auctionId)
         val allPlayerIds = squads.flatMap { squadRepository.getPlayers(it.id).map { p -> p.id } }
-        val totals = fantasyTotalRepository.findByPlayerIds(allPlayerIds).associateBy { it.playerId }
+        val seasonMatchIds = resolveSeasonMatchIds(season)
+        val seasonPerformancesByPlayer = performanceRepository.findByPlayerIds(allPlayerIds)
+            .filter { it.matchId in seasonMatchIds }
+            .groupBy { it.playerId }
 
         val squadPoints = squads.map { squad: Squad ->
             val players = squadRepository.getPlayers(squad.id)
             var points = 0
             var matches = 0
             for (player in players) {
-                val total = totals[player.id]
-                if (total != null) {
-                    points += total.totalPoints
-                    if (total.matchesPlayed > matches) matches = total.matchesPlayed
-                }
+                val playerPerfs = seasonPerformancesByPlayer[player.id].orEmpty()
+                points += playerPerfs.sumOf { fantasyPointsCalculator.calculate(it) }
+                if (playerPerfs.size > matches) matches = playerPerfs.size
             }
             Triple(squad, points, matches)
         }.sortedByDescending { it.second }
@@ -58,23 +58,26 @@ class FantasyService(
 
     // ── Squad breakdown ───────────────────────────────────────────────────────
 
-    fun getSquadFantasy(squadId: String): FantasySquadResponse? {
+    fun getSquadFantasy(squadId: String, season: String = "2026"): FantasySquadResponse? {
         val squad: Squad = squadRepository.findById(squadId) ?: return null
         val squadPlayerDetails = squadRepository.getSquadPlayersBySquadId(squadId)
         val playerIds = squadPlayerDetails.map { it.id }
-        val totals = fantasyTotalRepository.findByPlayerIds(playerIds).associateBy { it.playerId }
+        val seasonMatchIds = resolveSeasonMatchIds(season)
+        val seasonPerformancesByPlayer = performanceRepository.findByPlayerIds(playerIds)
+            .filter { it.matchId in seasonMatchIds }
+            .groupBy { it.playerId }
 
         val playerEntries = squadPlayerDetails.map { detail ->
             val player: Player? = playerRepository.findById(detail.id)
-            val total = totals[detail.id]
+            val playerPerfs = seasonPerformancesByPlayer[detail.id].orEmpty()
             FantasySquadPlayerEntry(
                 playerId      = detail.id,
                 playerName    = detail.name,
                 specialism    = player?.specialism ?: "UNKNOWN",
                 iplTeam       = player?.iplTeam ?: "",
                 soldPrice     = detail.soldPrice,
-                totalPoints   = total?.totalPoints ?: 0,
-                matchesPlayed = total?.matchesPlayed ?: 0
+                totalPoints   = playerPerfs.sumOf { fantasyPointsCalculator.calculate(it) },
+                matchesPlayed = playerPerfs.size
             )
         }.sortedByDescending { it.totalPoints }
 
@@ -274,6 +277,16 @@ class FantasyService(
                 if (rs.next()) rs.getString("name") else null
             } ?: participantId
         }
+    }
+
+    private fun resolveSeasonMatchIds(season: String): Set<String> {
+        val normalized = season.trim()
+        val matches = if (normalized == "2025") {
+            iplMatchRepository.findAll().filter { it.season == null || it.season == "2025" }
+        } else {
+            iplMatchRepository.findBySeason(normalized)
+        }
+        return matches.map { it.id }.toSet()
     }
 }
 

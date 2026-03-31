@@ -182,4 +182,14 @@ class WalletRepository {
             Wallets.deleteWhere { Wallets.id eq EntityID(id, Wallets) }
         }
     }
+
+    fun resetAllWalletsToStartingBalance(auctionId: String) {
+        val now = Instant.now().toEpochMilli()
+        transaction {
+            Wallets.update({ Wallets.auctionId eq auctionId }) {
+                it[balance] = STARTING_BALANCE
+                it[updatedAt] = now
+            }
+        }
+    }
 }

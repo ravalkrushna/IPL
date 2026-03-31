@@ -2,6 +2,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createFileRoute, useParams, useNavigate, Outlet, useChildMatches } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
+import { useState } from "react"
 import { auctionApi } from "@/lib/auctionApi"
 import { fantasyApi, FantasyLeaderboardEntry } from "@/lib/fantasyApi"
 
@@ -69,10 +70,10 @@ const SPEC_PILL: Record<string, { bg: string; color: string }> = {
 
 // ─── SQUAD DETAIL HOOK ────────────────────────────────────────────────────
 
-function useSquadPreview(squadId: string) {
+function useSquadPreview(squadId: string, season: string) {
   return useQuery({
-    queryKey: ["fantasySquad", squadId],
-    queryFn: () => fantasyApi.squad(squadId),
+    queryKey: ["fantasySquad", squadId, season],
+    queryFn: () => fantasyApi.squad(squadId, season),
     staleTime: 60000,
   })
 }
@@ -83,17 +84,19 @@ function SquadCard({
   entry,
   rank,
   pct,
+  season,
   onClick,
 }: {
   entry: FantasyLeaderboardEntry
   rank: number
   pct: number
+  season: string
   onClick: () => void
 }) {
   const c = RANK_COLORS[rank % RANK_COLORS.length]
   const rankEmoji = rank === 0 ? "🥇" : rank === 1 ? "🥈" : rank === 2 ? "🥉" : null
 
-  const { data: squad } = useSquadPreview(entry.squadId)
+  const { data: squad } = useSquadPreview(entry.squadId, season)
   const players = squad?.players ?? []
 
   const star = [...players].sort((a, b) => b.totalPoints - a.totalPoints)[0]
@@ -410,6 +413,7 @@ const css = `
 function FantasyPage() {
   const { auctionId } = useParams({ from: "/auction/$auctionId/fantasy" })
   const navigate = useNavigate()
+  const [season, setSeason] = useState<"2026" | "2025">("2026")
 
   const { data: auction } = useQuery({
     queryKey: ["auction", auctionId],
@@ -418,12 +422,11 @@ function FantasyPage() {
   })
 
   const { data: leaderboard, isLoading } = useQuery({
-    queryKey: ["fantasyLeaderboard", auctionId],
-    queryFn: () => fantasyApi.leaderboard(auctionId),
+    queryKey: ["fantasyLeaderboard", auctionId, season],
+    queryFn: () => fantasyApi.leaderboard(auctionId, season),
     refetchInterval: 60000,
     staleTime: 30000,
   })
-
   const maxPoints = Math.max(...(leaderboard?.entries.map(e => e.totalPoints) ?? [1]), 1)
 
   return (
@@ -438,11 +441,29 @@ function FantasyPage() {
               <div className="fp-title">Fantasy</div>
               <div className="fp-subtitle">{auction?.name ?? "Loading…"} · rankings & match points</div>
             </div>
-            <div className="fp-badge"><span className="fp-badge-dot" /> IPL 2026</div>
+            <div className="fp-badge"><span className="fp-badge-dot" /> IPL {season}</div>
           </div>
-          <button className="fp-back-btn" onClick={() => navigate({ to: "/auction/$auctionId", params: { auctionId } })}>
-            ← Auction room
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                className="fp-back-btn"
+                style={season === "2026" ? { background: "#059669", color: "#fff", borderColor: "#059669" } : {}}
+                onClick={() => setSeason("2026")}
+              >
+                IPL 2026
+              </button>
+              <button
+                className="fp-back-btn"
+                style={season === "2025" ? { background: "#334155", color: "#fff", borderColor: "#334155" } : {}}
+                onClick={() => setSeason("2025")}
+              >
+                IPL 2025
+              </button>
+            </div>
+            <button className="fp-back-btn" onClick={() => navigate({ to: "/auction/$auctionId", params: { auctionId } })}>
+              ← Auction room
+            </button>
+          </div>
         </header>
 
         <div className="fp-body">
@@ -487,11 +508,12 @@ function FantasyPage() {
                 key={entry.squadId}
                 entry={entry}
                 rank={i}
+                season={season}
                 pct={(entry.totalPoints / maxPoints) * 100}
                 onClick={() => navigate({
                   to: "/auction/$auctionId/fantasy/$squadId",
                   params: { auctionId, squadId: entry.squadId },
-                  search: { filter: "ALL", sort: "pts", expanded: "", playerId: "" },
+                  search: { filter: "ALL", sort: "pts", expanded: "", playerId: "", season },
                 })}
               />
             ))

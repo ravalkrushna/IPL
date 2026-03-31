@@ -11,6 +11,7 @@ import { hammerApi, participantApi } from "@/lib/hammerApi"
 import { squadApi } from "@/lib/squadApi"
 import { authApi } from "@/lib/auth"
 import { fantasyApi } from "@/lib/fantasyApi"
+import { tradeApi, TradeResponse } from "@/lib/tradeApi"
 import { useAuctionRoomStore } from "@/store/auctionRoomStore"
 import { Player } from "@/types/player"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -1452,6 +1453,7 @@ function ParticipantView({
 function AuctionRoomPage() {
   const { auctionId } = useParams({ from: "/auction/$auctionId/" })
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const setSoldInfo               = useAuctionRoomStore(s => s.setSoldInfo)
   const lastSeenResultTimestamp   = useAuctionRoomStore(s => s.lastSeenResultTimestamp)
@@ -1490,7 +1492,18 @@ function AuctionRoomPage() {
   }, [engineState?.lastResult?.timestamp])
 
   const isAdmin = me?.role === "ADMIN"
+  const auctionEnded = auction?.status === "COMPLETED"
   const [showRemainingPlayers, setShowRemainingPlayers] = useState(false)
+  const [showTradeCenter, setShowTradeCenter] = useState(false)
+  const [fromSquadId, setFromSquadId] = useState("")
+  const [toSquadId, setToSquadId] = useState("")
+  const [fromPlayerA, setFromPlayerA] = useState("")
+  const [fromPlayerB, setFromPlayerB] = useState("")
+  const [toPlayerA, setToPlayerA] = useState("")
+  const [toPlayerB, setToPlayerB] = useState("")
+  const [cashFromToTo, setCashFromToTo] = useState("")
+  const [cashToToFrom, setCashToToFrom] = useState("")
+  const [tradeMode, setTradeMode] = useState<"TRADE" | "SELL" | "LOAN">("TRADE")
   const [remainingPage, setRemainingPage] = useState(0)
   const { data: allPlayersForRemaining } = useQuery({
     queryKey: ["players", { getAll: true }, "remainingModal", auctionId],
@@ -1499,19 +1512,6 @@ function AuctionRoomPage() {
     staleTime: 0,
     placeholderData: (prev) => prev,
   })
-
-  if (!auction || !me) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-stone-100">
-        <div className="text-center space-y-3">
-          <div className="text-5xl animate-pulse">🏏</div>
-          <p className="text-stone-500 text-sm font-medium">Loading auction room…</p>
-        </div>
-      </div>
-    )
-  }
-
-  const auctionEnded = auction.status === "COMPLETED"
 
   const statusChip = (() => {
     if (auctionEnded) {
@@ -1541,6 +1541,134 @@ function AuctionRoomPage() {
   const remainingStartIdx = remainingClampedPage * remainingPageSize
   const remainingEndIdx = Math.min(remainingStartIdx + remainingPageSize, remainingPlayersForModal.length)
   const remainingPageItems = remainingPlayersForModal.slice(remainingStartIdx, remainingEndIdx)
+  const { data: allSquadsForTrades } = useQuery({
+    queryKey: ["allSquads", auctionId, "tradeCenter"],
+    queryFn: () => squadApi.allSquads(auctionId),
+    enabled: auctionEnded,
+    staleTime: 10000,
+  })
+  const { data: tradeRows } = useQuery({
+    queryKey: ["trades", auctionId],
+    queryFn: () => tradeApi.listByAuction(auctionId),
+    enabled: auctionEnded && showTradeCenter,
+    refetchInterval: 7000,
+    staleTime: 3000,
+  })
+  const { data: tradeWalletMap } = useWalletMap(
+    auctionId,
+    (allSquadsForTrades ?? []) as Array<{ participantId?: string }>
+  )
+  const startReauction = useMutation({
+    mutationFn: () => auctionApi.startReauction(auctionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["auction", auctionId] })
+      queryClient.invalidateQueries({ queryKey: ["allWallets", auctionId] })
+      window.alert("Re-auction started. All squad wallets reset to 100Cr.")
+    },
+    onError: (e: unknown) => {
+      const msg =
+        typeof e === "object" && e && "message" in e
+          ? String((e as { message?: unknown }).message ?? "Failed to start re-auction")
+          : "Failed to start re-auction"
+      window.alert(msg)
+    },
+  })
+  const createTrade = useMutation({
+    mutationFn: () => {
+      const fromIds = [fromPlayerA, fromPlayerB].filter(Boolean)
+      const toIds = tradeMode === "TRADE" ? [toPlayerA, toPlayerB].filter(Boolean) : []
+      return tradeApi.create({
+        auctionId,
+        fromSquadId,
+        toSquadId,
+        fromPlayerIds: [...new Set(fromIds)],
+        toPlayerIds: [...new Set(toIds)],
+        cashFromToTo: toRupeesFromCr(cashFromToToCr),
+        cashToToFrom: toRupeesFromCr(cashToToFromCr),
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trades", auctionId] })
+      setFromPlayerA(""); setFromPlayerB(""); setToPlayerA(""); setToPlayerB("")
+      setCashFromToTo(""); setCashToToFrom("")
+      setTradeMode("TRADE")
+    },
+    onError: (e: unknown) => {
+      const msg = typeof e === "object" && e && "message" in e ? String((e as { message?: unknown }).message ?? "Failed to create trade") : "Failed to create trade"
+      window.alert(msg)
+    },
+  })
+  const acceptTrade = useMutation({
+    mutationFn: (tradeId: string) => tradeApi.accept(tradeId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trades", auctionId] })
+      queryClient.invalidateQueries({ queryKey: ["allSquads", auctionId] })
+      queryClient.invalidateQueries({ queryKey: ["allWallets", auctionId] })
+    },
+  })
+  const rejectTrade = useMutation({
+    mutationFn: (tradeId: string) => tradeApi.reject(tradeId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["trades", auctionId] }),
+  })
+  const cancelTrade = useMutation({
+    mutationFn: (tradeId: string) => tradeApi.cancel(tradeId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["trades", auctionId] }),
+  })
+
+  const tradeSquads = (allSquadsForTrades ?? []) as Array<{ squadId: string; participantId?: string; name: string; players?: Array<{ id: string; name: string }> }>
+  const fromSquad = tradeSquads.find((s) => s.squadId === fromSquadId)
+  const toSquad = tradeSquads.find((s) => s.squadId === toSquadId)
+  const tradeSquadById = Object.fromEntries(tradeSquads.map((s) => [s.squadId, s])) as Record<string, (typeof tradeSquads)[number]>
+  const selectedFromPlayers = [...new Set([fromPlayerA, fromPlayerB].filter(Boolean))]
+  const selectedToPlayers = [...new Set([toPlayerA, toPlayerB].filter(Boolean))]
+  const validCashFromToTo = cashFromToTo.trim() === "" || (!Number.isNaN(Number(cashFromToTo)) && Number(cashFromToTo) >= 0)
+  const validCashToToFrom = cashToToFrom.trim() === "" || (!Number.isNaN(Number(cashToToFrom)) && Number(cashToToFrom) >= 0)
+  const cashFromToToCr = cashFromToTo.trim() ? Number(cashFromToTo) : 0
+  const cashToToFromCr = cashToToFrom.trim() ? Number(cashToToFrom) : 0
+  const toRupeesFromCr = (cr: number) => Math.round(cr * 10_000_000)
+  const fmtCr = (rupees: number) => `${(rupees / 10_000_000).toFixed(2)}Cr`
+  const tradeFromParticipantId = fromSquad?.participantId
+  const tradeToParticipantId = toSquad?.participantId
+  const fromWallet = tradeFromParticipantId ? tradeWalletMap?.[tradeFromParticipantId] ?? null : null
+  const toWallet = tradeToParticipantId ? tradeWalletMap?.[tradeToParticipantId] ?? null : null
+  const fromWalletCr = fromWallet != null ? fromWallet / 10_000_000 : null
+  const toWalletCr = toWallet != null ? toWallet / 10_000_000 : null
+  const fromCashWithinWallet = fromWallet == null || toRupeesFromCr(cashFromToToCr) <= fromWallet
+  const toCashWithinWallet = toWallet == null || toRupeesFromCr(cashToToFromCr) <= toWallet
+  const hasTradeLeg =
+    tradeMode === "TRADE"
+      ? (selectedFromPlayers.length > 0 || selectedToPlayers.length > 0)
+      : selectedFromPlayers.length > 0
+  const modeCashRule =
+    tradeMode === "SELL"
+      ? cashFromToToCr > 0 && cashToToFromCr === 0
+      : tradeMode === "LOAN"
+        ? false
+        : true
+  const canCreateTrade =
+    !!fromSquadId &&
+    !!toSquadId &&
+    fromSquadId !== toSquadId &&
+    hasTradeLeg &&
+    validCashFromToTo &&
+    validCashToToFrom &&
+    fromCashWithinWallet &&
+    toCashWithinWallet &&
+    modeCashRule &&
+    tradeMode !== "LOAN"
+  const playerNameById = (squadId: string, playerId: string) =>
+    tradeSquadById[squadId]?.players?.find((p) => p.id === playerId)?.name ?? playerId
+
+  if (!auction || !me) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-stone-100">
+        <div className="text-center space-y-3">
+          <div className="text-5xl animate-pulse">🏏</div>
+          <p className="text-stone-500 text-sm font-medium">Loading auction room…</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <>
@@ -1596,11 +1724,30 @@ function AuctionRoomPage() {
             {auctionEnded && (
               <button
                 type="button"
-                disabled
-                title="Re-auction will be available in a future update"
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border border-stone-200 bg-stone-100 text-stone-400 cursor-not-allowed opacity-80"
+                onClick={() => startReauction.mutate()}
+                disabled={startReauction.isPending || auction.reauctionStarted === true}
+                title={auction.reauctionStarted ? "Re-auction already started" : "Start re-auction"}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border border-stone-300 bg-white text-stone-700 hover:bg-stone-50 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                ↻ Re-auction
+                ↻ {auction.reauctionStarted ? "Re-auction started" : startReauction.isPending ? "Starting..." : "Re-auction"}
+              </button>
+            )}
+            {auctionEnded && (
+              <button
+                type="button"
+                onClick={() => navigate({ to: "/auction/$auctionId/trade", params: { auctionId } })}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+              >
+                ⇄ Trade Center
+              </button>
+            )}
+            {auctionEnded && (
+              <button
+                type="button"
+                onClick={() => navigate({ to: "/auction/$auctionId/ipl-matches", params: { auctionId } })}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100"
+              >
+                📅 IPL Matches
               </button>
             )}
             <button onClick={() => navigate({ to: "/auction" })}
@@ -1612,11 +1759,11 @@ function AuctionRoomPage() {
 
         {/* ── Mobile bar ── */}
         {auctionEnded && (
-          <div className="shrink-0 px-4 py-3 border-b border-emerald-200/90 bg-gradient-to-r from-emerald-50/95 to-amber-50/40 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="shrink-0 px-4 py-3 border-b border-emerald-200/90 bg-linear-to-r from-emerald-50/95 to-amber-50/40 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="min-w-0">
               <p className="text-sm font-black text-emerald-950 tracking-tight">This auction has ended</p>
               <p className="text-[11px] text-emerald-900/75 font-medium mt-0.5">
-                Fantasy is the home for squad rankings and per-match point breakdowns. Re-auction is reserved for a future release.
+                Fantasy is the home for squad rankings and per-match point breakdowns. You can start re-auction, open Trade Center, and view IPL Matches.
               </p>
             </div>
             <div className="flex flex-wrap gap-2 shrink-0">
@@ -1629,11 +1776,26 @@ function AuctionRoomPage() {
               </button>
               <button
                 type="button"
-                disabled
-                title="Re-auction will be available in a future update"
-                className="text-xs font-bold px-3 py-2 rounded-lg border border-stone-300 bg-white text-stone-400 cursor-not-allowed"
+                onClick={() => startReauction.mutate()}
+                disabled={startReauction.isPending || auction.reauctionStarted === true}
+                title={auction.reauctionStarted ? "Re-auction already started" : "Start re-auction"}
+                className="text-xs font-bold px-3 py-2 rounded-lg border border-stone-300 bg-white text-stone-700 disabled:text-stone-400 disabled:cursor-not-allowed"
               >
-                ↻ Re-auction
+                ↻ {auction.reauctionStarted ? "Re-auction started" : startReauction.isPending ? "Starting..." : "Re-auction"}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate({ to: "/auction/$auctionId/trade", params: { auctionId } })}
+                className="text-xs font-bold px-3 py-2 rounded-lg border border-indigo-300 bg-indigo-50 text-indigo-700"
+              >
+                ⇄ Trade Center
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate({ to: "/auction/$auctionId/ipl-matches", params: { auctionId } })}
+                className="text-xs font-bold px-3 py-2 rounded-lg border border-sky-300 bg-sky-50 text-sky-700"
+              >
+                📅 IPL Matches
               </button>
             </div>
           </div>
@@ -1666,6 +1828,198 @@ function AuctionRoomPage() {
             </button>
           </div>
         </div>
+
+        <Dialog open={showTradeCenter} onOpenChange={setShowTradeCenter}>
+          <DialogContent className="max-w-[92vw] w-[1200px] bg-white border-stone-200 text-stone-800 shadow-2xl overflow-y-auto max-h-[92vh]">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-black">Transfer Market</DialogTitle>
+            </DialogHeader>
+
+            <div className="mt-1 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3 text-xs text-indigo-900">
+              Build offers like a marketplace. Use `Trade` for swap deals, `Sell` for player + Cr only, and `Loan` is the next phase.
+              Wallet checks use each squad's live existing balance.
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-[1.35fr_1fr] gap-5 mt-3">
+              <div className="rounded-2xl border border-stone-200 p-5 space-y-4 bg-stone-50/60">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Create Offer</p>
+                  <button
+                    type="button"
+                    className="text-[11px] px-2 py-1 rounded border border-stone-300 bg-white hover:bg-stone-100"
+                    onClick={() => {
+                      const prevFrom = fromSquadId
+                      setFromSquadId(toSquadId)
+                      setToSquadId(prevFrom)
+                      setFromPlayerA(toPlayerA); setFromPlayerB(toPlayerB)
+                      setToPlayerA(fromPlayerA); setToPlayerB(fromPlayerB)
+                      const prevCash = cashFromToTo
+                      setCashFromToTo(cashToToFrom)
+                      setCashToToFrom(prevCash)
+                    }}
+                  >
+                    ⇄ Swap sides
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTradeMode("TRADE")}
+                    className={`rounded-xl border px-3 py-2 text-xs font-bold transition ${tradeMode === "TRADE" ? "border-indigo-500 bg-indigo-600 text-white" : "border-stone-300 bg-white text-stone-700 hover:bg-stone-100"}`}
+                  >
+                    Player Trade
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setTradeMode("SELL"); setToPlayerA(""); setToPlayerB(""); setCashToToFrom("") }}
+                    className={`rounded-xl border px-3 py-2 text-xs font-bold transition ${tradeMode === "SELL" ? "border-emerald-500 bg-emerald-600 text-white" : "border-stone-300 bg-white text-stone-700 hover:bg-stone-100"}`}
+                  >
+                    Sell Player
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTradeMode("LOAN")}
+                    className={`rounded-xl border px-3 py-2 text-xs font-bold transition ${tradeMode === "LOAN" ? "border-amber-500 bg-amber-500 text-white" : "border-stone-300 bg-white text-stone-700 hover:bg-stone-100"}`}
+                  >
+                    Loan (Soon)
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-[10px] font-semibold text-stone-500 mb-1">Seller / From squad</p>
+                    <select className="w-full border border-stone-200 rounded-lg px-2 py-2 text-sm bg-white" value={fromSquadId} onChange={(e) => { setFromSquadId(e.target.value); setFromPlayerA(""); setFromPlayerB("") }}>
+                      <option value="">Select squad</option>
+                      {tradeSquads.map((s) => <option key={s.squadId} value={s.squadId}>{s.name}</option>)}
+                    </select>
+                    <p className="text-[11px] mt-1 text-stone-500">
+                      Wallet: <span className="font-bold text-stone-700">{fromWalletCr == null ? "—" : `${fromWalletCr.toFixed(2)}Cr`}</span>
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold text-stone-500 mb-1">Buyer / To squad</p>
+                    <select className="w-full border border-stone-200 rounded-lg px-2 py-2 text-sm bg-white" value={toSquadId} onChange={(e) => { setToSquadId(e.target.value); setToPlayerA(""); setToPlayerB("") }}>
+                      <option value="">Select squad</option>
+                      {tradeSquads.filter((s) => s.squadId !== fromSquadId).map((s) => <option key={s.squadId} value={s.squadId}>{s.name}</option>)}
+                    </select>
+                    <p className="text-[11px] mt-1 text-stone-500">
+                      Wallet: <span className="font-bold text-stone-700">{toWalletCr == null ? "—" : `${toWalletCr.toFixed(2)}Cr`}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-[10px] font-semibold text-stone-500 mb-1">From side gives</p>
+                    <select className="w-full border border-stone-200 rounded-lg px-2 py-2 text-sm bg-white mb-2" value={fromPlayerA} onChange={(e) => setFromPlayerA(e.target.value)}>
+                      <option value="">Player 1</option>
+                      {(fromSquad?.players ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                    <select className="w-full border border-stone-200 rounded-lg px-2 py-2 text-sm bg-white" value={fromPlayerB} onChange={(e) => setFromPlayerB(e.target.value)}>
+                      <option value="">Player 2 (optional)</option>
+                      {(fromSquad?.players ?? []).filter((p) => p.id !== fromPlayerA).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  {tradeMode === "TRADE" ? (
+                    <div>
+                      <p className="text-[10px] font-semibold text-stone-500 mb-1">To side gives</p>
+                      <select className="w-full border border-stone-200 rounded-lg px-2 py-2 text-sm bg-white mb-2" value={toPlayerA} onChange={(e) => setToPlayerA(e.target.value)}>
+                        <option value="">Player 1</option>
+                        {(toSquad?.players ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                      <select className="w-full border border-stone-200 rounded-lg px-2 py-2 text-sm bg-white" value={toPlayerB} onChange={(e) => setToPlayerB(e.target.value)}>
+                        <option value="">Player 2 (optional)</option>
+                        {(toSquad?.players ?? []).filter((p) => p.id !== toPlayerA).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-stone-300 bg-white/70 p-3 text-xs text-stone-500">
+                      {tradeMode === "SELL"
+                        ? "Sell mode: buyer sends only cash. No player required from buyer side."
+                        : "Loan mode is coming in next update (duration, return date and fee)."}
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Input value={cashFromToTo} onChange={(e) => setCashFromToTo(e.target.value)} placeholder="Cash from → to (Cr)" />
+                    {!fromCashWithinWallet && <p className="text-[11px] text-rose-600 font-semibold">Exceeds from squad wallet.</p>}
+                  </div>
+                  <div className="space-y-1">
+                    <Input value={cashToToFrom} onChange={(e) => setCashToToFrom(e.target.value)} placeholder="Cash to → from (Cr)" />
+                    {!toCashWithinWallet && <p className="text-[11px] text-rose-600 font-semibold">Exceeds to squad wallet.</p>}
+                  </div>
+                </div>
+                {!validCashFromToTo || !validCashToToFrom ? (
+                  <p className="text-xs text-rose-600 font-semibold">Cash values must be valid positive numbers (or blank).</p>
+                ) : tradeMode === "SELL" && !(cashFromToToCr > 0 && cashToToFromCr === 0) ? (
+                  <p className="text-xs text-rose-600 font-semibold">In sell mode, only "Cash from → to" should be set and must be greater than 0.</p>
+                ) : tradeMode === "LOAN" ? (
+                  <p className="text-xs text-amber-700 font-semibold">Loan listing UI is enabled, but submit is intentionally disabled until loan backend rules are added.</p>
+                ) : (
+                  <p className="text-xs text-stone-600 rounded-lg border border-stone-200 bg-white px-3 py-2">
+                    {tradeMode === "SELL"
+                      ? <>Preview: <span className="font-semibold">{fromSquad?.name ?? "From"}</span> sells {selectedFromPlayers.length ? selectedFromPlayers.map((id) => playerNameById(fromSquadId, id)).join(", ") : "no players"} to <span className="font-semibold">{toSquad?.name ?? "To"}</span> for <span className="font-bold">{cashFromToToCr.toFixed(2)}Cr</span>.</>
+                      : <>Preview: <span className="font-semibold">{fromSquad?.name ?? "From"}</span> gives {selectedFromPlayers.length ? selectedFromPlayers.map((id) => playerNameById(fromSquadId, id)).join(", ") : "no players"}{cashFromToTo.trim() ? ` + ${cashFromToToCr.toFixed(2)}Cr` : ""} to <span className="font-semibold">{toSquad?.name ?? "To"}</span>{tradeMode === "TRADE" ? <> in return for {selectedToPlayers.length ? selectedToPlayers.map((id) => playerNameById(toSquadId, id)).join(", ") : "no players"}{cashToToFrom.trim() ? ` + ${cashToToFromCr.toFixed(2)}Cr` : ""}</> : null}.</>
+                    }
+                  </p>
+                )}
+                <Button
+                  onClick={() => createTrade.mutate()}
+                  disabled={!canCreateTrade || createTrade.isPending}
+                  className="w-full h-11 text-sm font-black bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {tradeMode === "LOAN"
+                    ? "Loan API Pending"
+                    : createTrade.isPending ? "Creating..." : tradeMode === "SELL" ? "List Sell Offer" : "Create Trade Offer"}
+                </Button>
+                <p className="text-[11px] text-stone-500">
+                  Allowed: player-for-player, player + cash, 1-for-2/2-for-1, and sell listing.
+                  All cash validations are against current live wallets only.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-stone-200 p-4 bg-white">
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Live Market Book</p>
+                  <p className="text-[11px] text-stone-400">Newest first</p>
+                </div>
+                <div className="space-y-2 max-h-[65vh] overflow-y-auto pr-1">
+                  {((tradeRows ?? []) as TradeResponse[]).length === 0 ? (
+                    <p className="text-sm text-stone-400 italic py-4 text-center">No trades yet.</p>
+                  ) : (
+                    ((tradeRows ?? []) as TradeResponse[]).map((t) => {
+                      const fromName = tradeSquads.find((s) => s.squadId === t.fromSquadId)?.name ?? t.fromSquadId
+                      const toName = tradeSquads.find((s) => s.squadId === t.toSquadId)?.name ?? t.toSquadId
+                      const isSellStyle = t.toPlayerIds.length === 0 && Number(t.cashFromToTo) > 0
+                      return (
+                        <div key={t.id} className="border border-stone-200 rounded-xl p-3 bg-stone-50">
+                          <p className="text-xs text-stone-500">#{t.id.slice(0, 8)} · {t.status} · {isSellStyle ? "SELL" : "TRADE"}</p>
+                          <p className="text-sm font-semibold mt-1">{fromName} ⇄ {toName}</p>
+                          <p className="text-xs text-stone-600 mt-1">
+                            From: {t.fromPlayerIds.length ? t.fromPlayerIds.map((id) => playerNameById(t.fromSquadId, id)).join(", ") : "—"} {t.cashFromToTo > 0 ? ` + ${fmtCr(Number(t.cashFromToTo))}` : ""}
+                          </p>
+                          <p className="text-xs text-stone-600">
+                            To: {t.toPlayerIds.length ? t.toPlayerIds.map((id) => playerNameById(t.toSquadId, id)).join(", ") : "—"} {t.cashToToFrom > 0 ? ` + ${fmtCr(Number(t.cashToToFrom))}` : ""}
+                          </p>
+                          {t.status === "PENDING" && (
+                            <div className="flex gap-2 mt-2">
+                              <button className="px-2 py-1 text-xs rounded bg-emerald-600 text-white disabled:opacity-50" disabled={acceptTrade.isPending || rejectTrade.isPending || cancelTrade.isPending} onClick={() => acceptTrade.mutate(t.id)}>Accept</button>
+                              <button className="px-2 py-1 text-xs rounded bg-rose-600 text-white disabled:opacity-50" disabled={acceptTrade.isPending || rejectTrade.isPending || cancelTrade.isPending} onClick={() => rejectTrade.mutate(t.id)}>Reject</button>
+                              <button className="px-2 py-1 text-xs rounded bg-stone-400 text-white disabled:opacity-50" disabled={acceptTrade.isPending || rejectTrade.isPending || cancelTrade.isPending} onClick={() => cancelTrade.mutate(t.id)}>Cancel</button>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={showRemainingPlayers} onOpenChange={setShowRemainingPlayers}>
           <DialogContent className="max-w-2xl bg-white border-stone-200 text-stone-800 shadow-2xl overflow-y-auto max-h-[90vh]">

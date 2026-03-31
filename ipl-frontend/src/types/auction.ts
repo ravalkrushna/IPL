@@ -6,6 +6,8 @@ export interface Auction {
   status: AuctionStatus
   analysisTimerSecs: number
   minBidIncrement: number
+  reauctionStarted?: boolean
+  reauctionStartedAt?: number | null
   createdAt: number
   updatedAt: number
 }

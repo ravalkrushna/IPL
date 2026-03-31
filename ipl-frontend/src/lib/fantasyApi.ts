@@ -149,13 +149,26 @@ export type IplCareerStats = {
   fantasyPoints: number
 }
 
+type AdminFantasyResponse = Record<string, unknown>
+type IplFeedMatchesResponse = {
+  count: number
+  matches: Array<{ id: string; [k: string]: unknown }>
+  diagnostics?: Record<string, unknown>
+  hint?: string
+}
+
+const adminBase = (() => {
+  const base = api.defaults.baseURL ?? "http://localhost:8080/api/v1"
+  return String(base).replace(/\/api\/v1\/?$/, "")
+})()
+
 export const fantasyApi = {
   // Auction-scoped leaderboard
-  leaderboard: (auctionId: string): Promise<FantasyLeaderboardResponse> =>
-    api.get(`/fantasy/leaderboard/${auctionId}`).then(r => r.data),
+  leaderboard: (auctionId: string, season = "2026"): Promise<FantasyLeaderboardResponse> =>
+    api.get(`/fantasy/leaderboard/${auctionId}`, { params: { season } }).then(r => r.data),
 
-  squad: (squadId: string): Promise<FantasySquadResponse> =>
-    api.get(`/fantasy/squad/${squadId}`).then(r => r.data),
+  squad: (squadId: string, season = "2026"): Promise<FantasySquadResponse> =>
+    api.get(`/fantasy/squad/${squadId}`, { params: { season } }).then(r => r.data),
 
   player: (playerId: string): Promise<FantasyPlayerResponse> =>
     api.get(`/fantasy/player/${playerId}`).then(r => r.data),
@@ -173,12 +186,24 @@ export const fantasyApi = {
   globalPlayers: (limit = 50): Promise<PlayerLeaderboardEntry[]> =>
     api.get(`/fantasy/leaderboard/players`, { params: { limit } }).then(r => r.data),
 
-  matches: (): Promise<MatchListEntry[]> =>
-    api.get(`/fantasy/matches`).then(r => r.data),
+  matches: (season = "2026"): Promise<MatchListEntry[]> =>
+    api.get(`/fantasy/matches`, { params: { season } }).then(r => r.data),
 
   playerBreakdown: (playerId: string): Promise<PlayerLeaderboardEntry> =>
     api.get(`/fantasy/player/${playerId}/breakdown`).then(r => r.data),
 
   syncNow: (): Promise<string> =>
     api.post(`/fantasy/sync`).then(r => r.data),
+
+  adminIplMatches: (): Promise<IplFeedMatchesResponse> =>
+    api.get(`${adminBase}/admin/fantasy/ipl-matches`).then((r) => r.data),
+
+  adminSyncNow: (matchId?: string): Promise<AdminFantasyResponse> =>
+    api.post(`${adminBase}/admin/fantasy/sync-now`, undefined, { params: matchId ? { matchId } : undefined }).then((r) => r.data),
+
+  adminSyncPointsSheet: (): Promise<AdminFantasyResponse> =>
+    api.post(`${adminBase}/admin/fantasy/sync-points-sheet`).then((r) => r.data),
+
+  adminRebuildAndSyncAll: (season = "2026"): Promise<AdminFantasyResponse> =>
+    api.post(`${adminBase}/admin/fantasy/rebuild-and-sync-all`, undefined, { params: { season } }).then((r) => r.data),
 }

@@ -172,6 +172,7 @@ class FantasyAdminController(
                 "performancesSaved"          to r.performancesSaved,
                 "performancesUpdated"        to r.performancesUpdated,
                 "playersSkippedNotInDb"      to r.playersSkippedNotInDb,
+                "playersSkippedNotInDbNames" to r.playersSkippedNotInDbNames,
                 "playersSkippedAlreadySaved" to r.playersSkippedAlreadySaved,
                 "matchId"                    to r.matchId,
                 "matchLabel"                 to r.matchLabel,
