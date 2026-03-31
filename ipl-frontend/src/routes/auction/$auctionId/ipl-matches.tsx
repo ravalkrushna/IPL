@@ -83,6 +83,23 @@ function IplMatchesPage() {
       .filter((x) => x.id.trim().length > 0)
       .sort((a, b) => Number(b.id) - Number(a.id))
   }, [feedMatches.data])
+  const feedIdByMatchNo = useMemo(() => {
+    const map: Record<number, string> = {}
+    feedMatchOptions.forEach((m) => {
+      const matchNoFromLabel = m.label.match(/match\s*(\d+)/i)
+      const no = matchNoFromLabel ? Number(matchNoFromLabel[1]) : NaN
+      if (!Number.isNaN(no) && !map[no]) map[no] = m.id
+    })
+    return map
+  }, [feedMatchOptions])
+  const parsedAdminResult = useMemo(() => {
+    if (!adminResult) return null
+    try {
+      return JSON.parse(adminResult) as Record<string, unknown>
+    } catch {
+      return null
+    }
+  }, [adminResult])
 
   const syncNowMutation = useMutation({
     mutationFn: () => fantasyApi.adminSyncNow(matchIdInput.trim() || undefined),
@@ -225,9 +242,51 @@ function IplMatchesPage() {
               </div>
             )}
             {adminResult && (
-              <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 11, border: "1px solid #e5dfd4", borderRadius: 10, padding: 10, background: "#f8fafc" }}>
-                {adminResult}
-              </pre>
+              parsedAdminResult ? (
+                <div className="rounded-xl border border-stone-200 bg-stone-50 p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-black text-stone-800">
+                      {String(parsedAdminResult.ok) === "true" ? "Action completed" : "Action response"}
+                    </p>
+                    {"ok" in parsedAdminResult && (
+                      <span className={`text-xs font-bold px-2 py-1 rounded-full ${String(parsedAdminResult.ok) === "true" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                        {String(parsedAdminResult.ok) === "true" ? "SUCCESS" : "INFO"}
+                      </span>
+                    )}
+                  </div>
+                  {"message" in parsedAdminResult && (
+                    <p className="text-xs text-stone-700">{String(parsedAdminResult.message)}</p>
+                  )}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {["performancesSaved", "performancesUpdated", "playersSkippedNotInDb", "playersSkippedAlreadySaved", "matchColumns", "playerRowsWritten", "performancesUsed"].map((k) => {
+                      const val = parsedAdminResult[k]
+                      if (val == null) return null
+                      return (
+                        <div key={k} className="rounded-md border border-stone-200 bg-white px-2 py-1.5">
+                          <p className="text-[10px] uppercase tracking-wider text-stone-500">{k}</p>
+                          <p className="text-sm font-black text-stone-800">{String(val)}</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {"playersSkippedNotInDbNames" in parsedAdminResult && Array.isArray(parsedAdminResult.playersSkippedNotInDbNames) && parsedAdminResult.playersSkippedNotInDbNames.length > 0 && (
+                    <div className="rounded-md border border-amber-200 bg-amber-50 px-2 py-2">
+                      <p className="text-[11px] font-semibold text-amber-800">Skipped player names</p>
+                      <p className="text-xs text-amber-700 mt-0.5">{(parsedAdminResult.playersSkippedNotInDbNames as unknown[]).map(String).join(", ")}</p>
+                    </div>
+                  )}
+                  {("matchId" in parsedAdminResult || "matchLabel" in parsedAdminResult) && (
+                    <div className="text-xs text-stone-600">
+                      {parsedAdminResult.matchId ? `Match ID: ${String(parsedAdminResult.matchId)} · ` : ""}
+                      {parsedAdminResult.matchLabel ? `Label: ${String(parsedAdminResult.matchLabel)}` : ""}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 11, border: "1px solid #e5dfd4", borderRadius: 10, padding: 10, background: "#f8fafc" }}>
+                  {adminResult}
+                </pre>
+              )
             )}
           </div>
         )}
@@ -244,6 +303,19 @@ function IplMatchesPage() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-xs text-stone-500">M{m.matchNo}</p>
+                    {feedIdByMatchNo[m.matchNo] ? (
+                      <span
+                        className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-1.5 py-0.5"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setMatchIdInput(feedIdByMatchNo[m.matchNo])
+                        }}
+                        title="Use FEED ID in matchId input"
+                      >
+                        FEED: {feedIdByMatchNo[m.matchNo]}
+                      </span>
+                    ) : null}
                     <span
                       className="text-[10px] font-semibold text-stone-600 bg-white border border-stone-300 rounded px-1.5 py-0.5"
                       onClick={(e) => {

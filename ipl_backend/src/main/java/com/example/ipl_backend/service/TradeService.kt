@@ -2,6 +2,7 @@ package com.example.ipl_backend.service
 
 import com.example.ipl_backend.dto.CreateTradeRequest
 import com.example.ipl_backend.dto.CreateSellListingRequest
+import com.example.ipl_backend.dto.CreateLoanRequest
 import com.example.ipl_backend.dto.TradeResponse
 import com.example.ipl_backend.exception.AuctionNotFoundException
 import com.example.ipl_backend.exception.InvalidAuctionStateException
@@ -26,11 +27,15 @@ class TradeService(
         // Marker pattern for open sell listing rows:
         // seller squad == placeholder buyer squad, no buyer players, one-way seller->buyer cash.
         private fun isOpenSellListing(t: TradeResponse): Boolean =
+            t.tradeType == TradeType.SELL &&
             t.fromSquadId == t.toSquadId &&
                 t.toPlayerIds.isEmpty() &&
                 t.cashFromToTo > BigDecimal.ZERO &&
                 t.cashToToFrom == BigDecimal.ZERO &&
                 t.fromPlayerIds.size == 1
+
+        private fun isLoan(t: TradeResponse): Boolean =
+            t.tradeType == TradeType.LOAN
     }
 
     fun createTrade(request: CreateTradeRequest): TradeResponse {
@@ -56,6 +61,40 @@ class TradeService(
                 it[toPlayerIdsCsv] = request.toPlayerIds.joinToString(",")
                 it[cashFromToTo] = request.cashFromToTo
                 it[cashToToFrom] = request.cashToToFrom
+                it[tradeType] = TradeType.TRADE
+                it[status] = TradeStatus.PENDING
+                it[createdAt] = now
+                it[updatedAt] = now
+            }
+        }
+        return getById(id)!!
+    }
+
+    fun createLoan(request: CreateLoanRequest): TradeResponse {
+        if (request.playerId.isBlank()) throw IllegalArgumentException("playerId is required")
+        if (request.loanFee < BigDecimal.ZERO) throw IllegalArgumentException("loanFee cannot be negative")
+
+        val auction = auctionRepository.findById(request.auctionId)
+            ?: throw AuctionNotFoundException("Auction not found")
+        ensureAuctionCompleted(auction)
+
+        val now = Instant.now().toEpochMilli()
+        val id = UUID.randomUUID().toString()
+
+        transaction {
+            ensureSquadInAuction(request.auctionId, request.fromSquadId)
+            ensureOwnership(request.fromSquadId, listOf(request.playerId))
+
+            Trades.insert {
+                it[Trades.id] = id
+                it[auctionId] = request.auctionId
+                it[fromSquadId] = request.fromSquadId
+                it[toSquadId] = request.fromSquadId // placeholder until borrower selection during approval
+                it[fromPlayerIdsCsv] = request.playerId
+                it[toPlayerIdsCsv] = ""
+                it[cashFromToTo] = BigDecimal.ZERO
+                it[cashToToFrom] = request.loanFee // borrower(to) -> lender(from)
+                it[tradeType] = TradeType.LOAN
                 it[status] = TradeStatus.PENDING
                 it[createdAt] = now
                 it[updatedAt] = now
@@ -88,6 +127,7 @@ class TradeService(
                 it[toPlayerIdsCsv] = ""
                 it[cashFromToTo] = request.askingPrice
                 it[cashToToFrom] = BigDecimal.ZERO
+                it[tradeType] = TradeType.SELL
                 it[status] = TradeStatus.PENDING
                 it[createdAt] = now
                 it[updatedAt] = now
@@ -100,6 +140,8 @@ class TradeService(
         transaction {
             val trade = loadTradeForUpdate(tradeId) ?: throw IllegalArgumentException("Trade not found")
             if (trade.status != TradeStatus.PENDING) throw IllegalStateException("Trade is not PENDING")
+            if (isLoan(trade)) throw IllegalStateException("Use loan approval endpoint for loan offers")
+            if (trade.tradeType == TradeType.SELL) throw IllegalStateException("Use sell acceptance endpoint for sell listings")
 
             val auction = auctionRepository.findById(trade.auctionId)
                 ?: throw AuctionNotFoundException("Auction not found")
@@ -114,6 +156,63 @@ class TradeService(
             val now = Instant.now().toEpochMilli()
             Trades.update({ Trades.id eq tradeId }) {
                 it[status] = TradeStatus.ACCEPTED
+                it[updatedAt] = now
+            }
+        }
+        return getById(tradeId)!!
+    }
+
+    fun approveLoan(tradeId: String, borrowerSquadId: String): TradeResponse {
+        if (borrowerSquadId.isBlank()) throw IllegalArgumentException("borrowerSquadId is required")
+        transaction {
+            val loan = loadTradeForUpdate(tradeId) ?: throw IllegalArgumentException("Trade not found")
+            if (loan.status != TradeStatus.PENDING) throw IllegalStateException("Loan is not PENDING")
+            if (!isLoan(loan)) throw IllegalArgumentException("Trade is not a LOAN offer")
+            if (loan.fromSquadId == borrowerSquadId) throw IllegalArgumentException("Lender squad cannot borrow its own loan offer")
+
+            val auction = auctionRepository.findById(loan.auctionId)
+                ?: throw AuctionNotFoundException("Auction not found")
+            ensureAuctionCompleted(auction)
+
+            ensureSquadsInAuction(loan.auctionId, loan.fromSquadId, borrowerSquadId)
+            ensureOwnership(loan.fromSquadId, loan.fromPlayerIds)
+
+            val resolved = loan.copy(toSquadId = borrowerSquadId)
+            applyWalletLegs(resolved)
+            applyPlayerTransfers(resolved)
+
+            val now = Instant.now().toEpochMilli()
+            Trades.update({ Trades.id eq tradeId }) {
+                it[toSquadId] = borrowerSquadId
+                it[status] = TradeStatus.ACCEPTED
+                it[updatedAt] = now
+            }
+        }
+        return getById(tradeId)!!
+    }
+
+    fun closeLoan(tradeId: String): TradeResponse {
+        transaction {
+            val loan = loadTradeForUpdate(tradeId) ?: throw IllegalArgumentException("Trade not found")
+            if (!isLoan(loan)) throw IllegalArgumentException("Trade is not a LOAN offer")
+            if (loan.status != TradeStatus.ACCEPTED) throw IllegalStateException("Only ACCEPTED loans can be closed")
+            val playerId = loan.fromPlayerIds.firstOrNull()
+                ?: throw IllegalStateException("Loan has no player")
+
+            // On close, move player back from borrower(to) to lender(from).
+            ensureOwnership(loan.toSquadId, listOf(playerId))
+            val price = squadPlayerPrice(loan.toSquadId, playerId) ?: BigDecimal.ZERO
+            SquadPlayers.deleteWhere { (SquadPlayers.squadId eq loan.toSquadId) and (SquadPlayers.playerId eq playerId) }
+            SquadPlayers.insert {
+                it[id] = UUID.randomUUID().toString()
+                it[squadId] = loan.fromSquadId
+                it[SquadPlayers.playerId] = playerId
+                it[purchasePrice] = price
+            }
+
+            val now = Instant.now().toEpochMilli()
+            Trades.update({ Trades.id eq tradeId }) {
+                it[status] = TradeStatus.CLOSED
                 it[updatedAt] = now
             }
         }
@@ -297,6 +396,7 @@ class TradeService(
             toPlayerIds = toCsv.split(",").map { it.trim() }.filter { it.isNotBlank() },
             cashFromToTo = this[Trades.cashFromToTo],
             cashToToFrom = this[Trades.cashToToFrom],
+            tradeType = this[Trades.tradeType],
             status = this[Trades.status],
             createdAt = this[Trades.createdAt],
             updatedAt = this[Trades.updatedAt]

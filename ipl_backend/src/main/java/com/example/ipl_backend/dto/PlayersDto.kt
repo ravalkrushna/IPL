@@ -38,3 +38,8 @@ data class ListPlayersRequest(
     val page: Int? = 1,
     val size: Int? = 20
 )
+
+data class RenamePlayerNameRequest(
+    val fromName: String,
+    val toName: String
+)

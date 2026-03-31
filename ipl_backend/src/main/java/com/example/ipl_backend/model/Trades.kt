@@ -15,6 +15,7 @@ object Trades : Table("trades") {
     // Money legs in both directions.
     val cashFromToTo = decimal("cash_from_to_to", 18, 2).default(java.math.BigDecimal.ZERO)
     val cashToToFrom = decimal("cash_to_to_from", 18, 2).default(java.math.BigDecimal.ZERO)
+    val tradeType = enumerationByName("trade_type", 24, TradeType::class).default(TradeType.TRADE)
 
     val status = enumerationByName("status", 32, TradeStatus::class)
     val createdAt = long("created_at")
@@ -26,7 +27,14 @@ object Trades : Table("trades") {
 enum class TradeStatus {
     PENDING,
     ACCEPTED,
+    CLOSED,
     REJECTED,
     CANCELLED
+}
+
+enum class TradeType {
+    TRADE,
+    SELL,
+    LOAN
 }
 

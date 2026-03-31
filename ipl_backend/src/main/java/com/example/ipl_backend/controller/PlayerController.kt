@@ -2,6 +2,7 @@ package com.example.ipl_backend.controller
 
 import com.example.ipl_backend.dto.CreatePlayerRequest
 import com.example.ipl_backend.dto.ListPlayersRequest
+import com.example.ipl_backend.dto.RenamePlayerNameRequest
 import com.example.ipl_backend.model.Player
 import com.example.ipl_backend.repository.PlayerRepository
 import com.example.ipl_backend.service.PlayerService
@@ -55,6 +56,36 @@ class PlayerController(
             "isAuctioned_true" to all.count { it.isAuctioned },
             "isSold_true" to all.count { it.isSold },
             "unsold_auctioned_not_sold" to all.count { it.isAuctioned && !it.isSold }
+        )
+    }
+
+    @PostMapping("/rename-name")
+    fun renamePlayerName(@RequestBody request: RenamePlayerNameRequest): ResponseEntity<Map<String, Any>> {
+        val from = request.fromName.trim()
+        val to = request.toName.trim()
+        if (from.isBlank() || to.isBlank()) {
+            return ResponseEntity.badRequest().body(mapOf("error" to "fromName and toName are required"))
+        }
+        if (from.equals(to, ignoreCase = true)) {
+            return ResponseEntity.badRequest().body(mapOf("error" to "fromName and toName are the same"))
+        }
+        if (playerRepository.existsByName(to)) {
+            return ResponseEntity.badRequest().body(mapOf("error" to "A player with name '$to' already exists"))
+        }
+
+        val player = playerRepository.findByName(from)
+            ?: return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(mapOf("error" to "Player not found with name: $from"))
+
+        playerRepository.update(player.copy(name = to))
+        return ResponseEntity.ok(
+            mapOf(
+                "ok" to true,
+                "message" to "Player renamed successfully",
+                "playerId" to player.id,
+                "fromName" to from,
+                "toName" to to
+            )
         )
     }
 }

@@ -1,6 +1,7 @@
 package com.example.ipl_backend.dto
 
 import com.example.ipl_backend.model.TradeStatus
+import com.example.ipl_backend.model.TradeType
 import java.math.BigDecimal
 
 data class CreateTradeRequest(
@@ -24,6 +25,17 @@ data class AcceptSellListingRequest(
     val buyerSquadId: String
 )
 
+data class CreateLoanRequest(
+    val auctionId: String,
+    val fromSquadId: String,
+    val playerId: String,
+    val loanFee: BigDecimal = BigDecimal.ZERO
+)
+
+data class ApproveLoanRequest(
+    val borrowerSquadId: String
+)
+
 data class TradeResponse(
     val id: String,
     val auctionId: String,
@@ -33,6 +45,7 @@ data class TradeResponse(
     val toPlayerIds: List<String>,
     val cashFromToTo: BigDecimal,
     val cashToToFrom: BigDecimal,
+    val tradeType: TradeType,
     val status: TradeStatus,
     val createdAt: Long,
     val updatedAt: Long
