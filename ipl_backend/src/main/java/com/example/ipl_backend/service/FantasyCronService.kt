@@ -1,10 +1,12 @@
 package com.example.ipl_backend.service
 
 import com.example.ipl_backend.model.IplMatch
+import com.example.ipl_backend.model.Player
 import com.example.ipl_backend.model.PlayerMatchPerformance
 import com.example.ipl_backend.repository.IplMatchRepository
 import com.example.ipl_backend.repository.PlayerFantasyTotalsRepository
 import com.example.ipl_backend.repository.PlayerMatchPerformanceRepository
+import com.example.ipl_backend.repository.PlayerNameAliasRepository
 import com.example.ipl_backend.repository.PlayerRepository
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
@@ -49,6 +51,7 @@ class FantasyCronService(
     private val scraper: IplScraperService,
     private val calculator: FantasyPointsCalculator,
     private val playerRepository: PlayerRepository,
+    private val playerNameAliasRepository: PlayerNameAliasRepository,
     private val performanceRepository: PlayerMatchPerformanceRepository,
     private val fantasyTotalsRepository: PlayerFantasyTotalsRepository,
     private val matchRepository: IplMatchRepository,
@@ -181,12 +184,10 @@ class FantasyCronService(
         var notInDb     = 0
         var alreadySaved = 0
         val skippedNotInDbNames = mutableListOf<String>()
+        val allPlayers = playerRepository.findAll()
 
         scrapedMatch.players.forEach { stats ->
-            val player = playerRepository.findByName(stats.playerName)
-                ?: playerRepository.findAll().firstOrNull {
-                    normalizeName(it.name) == normalizeName(stats.playerName)
-                }
+            val player = resolvePlayerFromFeedName(stats.playerName, allPlayers)
 
             if (player == null) {
                 log.warn("Player not found: ${stats.playerName}")
@@ -324,9 +325,78 @@ class FantasyCronService(
         return matchRepository.findOrCreate(newMatch)
     }
 
+    /**
+     * Map IPL feed / scorecard strings to [Player] rows — same idea as [Ipl2025SeederService.resolvePlayerId],
+     * extended for spaced initials ("K L Rahul" vs "KL Rahul") and single-letter + last name ("T Natarajan").
+     */
+    private fun resolvePlayerFromFeedName(feedName: String, allPlayers: List<Player>): Player? {
+        playerNameAliasRepository.findPlayerIdByName(feedName)?.let { id ->
+            return allPlayers.firstOrNull { it.id == id } ?: playerRepository.findById(id)
+        }
+
+        playerRepository.findByName(feedName)?.let { return it }
+
+        val normFeed = normalizeName(feedName)
+        val collapseFeed = collapseInitialsTokens(normFeed)
+
+        allPlayers.firstOrNull { normalizeName(it.name) == normFeed }?.let { return it }
+        allPlayers.firstOrNull { collapseInitialsTokens(normalizeName(it.name)) == collapseFeed }?.let { return it }
+
+        val parts = feedName.trim().split(Regex("\\s+"))
+        if (parts.size >= 2) {
+            val last = parts.last()
+            if (last.length > 3) {
+                playerRepository.findByLastName(last)?.let { return it }
+            }
+
+            val firstInitial = parts.first().first().uppercaseChar()
+            val candidates = playerRepository.findAllByLastName(last)
+            candidates.firstOrNull { player ->
+                val firstWord = player.name.split(Regex("\\s+")).firstOrNull().orEmpty()
+                firstWord.firstOrNull()?.uppercaseChar() == firstInitial
+            }?.let { return it }
+        }
+
+        val normalizedFeed = feedName.lowercase().replace(Regex("[^a-z ]"), "").trim()
+        return allPlayers.firstOrNull { player ->
+            val pNorm = player.name.lowercase().replace(Regex("[^a-z ]"), "")
+            pNorm.contains(normalizedFeed) || normalizedFeed.contains(pNorm) ||
+                pNorm.split(" ").lastOrNull() == normalizedFeed.split(" ").lastOrNull()
+        }
+    }
+
+    /** "k l rahul" → "kl rahul" so feed matches DB "KL Rahul". */
+    private fun collapseInitialsTokens(normalizedLowercase: String): String {
+        val parts = normalizedLowercase.split(" ").filter { it.isNotBlank() }
+        if (parts.size < 2) return normalizedLowercase
+        val out = mutableListOf<String>()
+        var i = 0
+        while (i < parts.size) {
+            if (parts[i].length == 1) {
+                val initials = StringBuilder(parts[i])
+                var j = i + 1
+                while (j < parts.size && parts[j].length == 1) {
+                    initials.append(parts[j])
+                    j++
+                }
+                if (j < parts.size && parts[j].length > 1) {
+                    out.add(initials.toString())
+                    i = j
+                    continue
+                }
+            }
+            out.add(parts[i])
+            i++
+        }
+        return out.joinToString(" ")
+    }
+
     private fun normalizeName(name: String) = name
         .lowercase()
-        .replace(Regex("^[a-z]\\.?\\s*"), "") // drop leading initials like "N. " or "N "
+        // Only strip initial + dot + space (e.g. "n. tilak"); do NOT strip the first letter of
+        // a full first name — the old ^[a-z].?\\s* pattern turned "tilak" into "ilak" and broke
+        // feed "Tilak Varma" vs DB "N. Tilak Varma".
+        .replace(Regex("^[a-z]\\.\\s+"), "")
         .replace(Regex("[^a-z ]"), "")       // keep only letters/spaces
         .replace(Regex("\\s+"), " ")
         .trim()
