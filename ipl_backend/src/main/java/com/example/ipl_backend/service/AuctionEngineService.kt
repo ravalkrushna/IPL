@@ -11,6 +11,8 @@ import com.example.ipl_backend.repository.AuctionPoolRepository
 import com.example.ipl_backend.repository.AuctionRepository
 import com.example.ipl_backend.repository.BidRepository
 import com.example.ipl_backend.repository.PlayerRepository
+import com.example.ipl_backend.repository.SquadRepository
+import com.example.ipl_backend.repository.WalletRepository
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 import java.util.concurrent.ConcurrentHashMap
@@ -23,16 +25,21 @@ class AuctionEngineService(
     private val auctionTimerService: AuctionTimerService,
     private val auctionPoolService: AuctionPoolService,
     private val bidRepository: BidRepository,
-    private val bidLogService: BidLogService
+    private val bidLogService: BidLogService,
+    private val squadRepository: SquadRepository,
+    private val walletRepository: WalletRepository
 ) {
 
-    private val currentPlayers = ConcurrentHashMap<String, Player>()
-    private val biddingOpen    = ConcurrentHashMap<String, Boolean>()
-    private val lastResults    = ConcurrentHashMap<String, LastResult>()
-    private val poolExhausted  = ConcurrentHashMap<String, Boolean>()
-    private val playerQueues   = ConcurrentHashMap<String, ArrayDeque<Player>>()
+    private val currentPlayers       = ConcurrentHashMap<String, Player>()
+    private val biddingOpen          = ConcurrentHashMap<String, Boolean>()
+    private val lastResults          = ConcurrentHashMap<String, LastResult>()
+    private val poolExhausted        = ConcurrentHashMap<String, Boolean>()
+    private val playerQueues         = ConcurrentHashMap<String, ArrayDeque<Player>>()
     /** 1 = main round; each unsold-only round increments (2, 3, …). */
-    private val auctionRound   = ConcurrentHashMap<String, Int>()
+    private val auctionRound         = ConcurrentHashMap<String, Int>()
+    private val reauctionMode        = ConcurrentHashMap<String, Boolean>()
+    private val reauctionPhase1Ids   = ConcurrentHashMap<String, Set<String>>()
+    private val phase1Exhausted      = ConcurrentHashMap<String, Boolean>()
 
     data class LastResult(
         val playerName: String,
@@ -48,6 +55,8 @@ class AuctionEngineService(
     fun isPoolExhausted(auctionId: String): Boolean  = poolExhausted[auctionId] == true
 
     fun getAuctionRound(auctionId: String): Int = auctionRound[auctionId] ?: 1
+    fun isReauctionMode(auctionId: String): Boolean = reauctionMode[auctionId] == true
+    fun isPhase1Exhausted(auctionId: String): Boolean = phase1Exhausted[auctionId] == true
 
     /** Unsold players eligible for the next unsold-only round (same rows the next round will queue). */
     fun getUnsoldCandidatesForAuction(auctionId: String): List<Player> {
@@ -132,7 +141,12 @@ class AuctionEngineService(
         }
 
         // Queue exhausted
-        println("🏁 Queue exhausted — auction complete")
+        if (reauctionMode[auctionId] == true && phase1Exhausted[auctionId] != true) {
+            println("🏁 Re-auction Phase 1 exhausted — all previously sold players auctioned")
+            phase1Exhausted[auctionId] = true
+        } else {
+            println("🏁 Queue exhausted — auction complete")
+        }
         poolExhausted[auctionId] = true
         currentPlayers.remove(auctionId)
         biddingOpen[auctionId] = false
@@ -188,6 +202,9 @@ class AuctionEngineService(
         poolExhausted.remove(auctionId)
         playerQueues.remove(auctionId)
         auctionRound.remove(auctionId)
+        reauctionMode.remove(auctionId)
+        reauctionPhase1Ids.remove(auctionId)
+        phase1Exhausted.remove(auctionId)
         println("🔄 Engine state reset for auction=$auctionId")
     }
 
@@ -247,6 +264,8 @@ class AuctionEngineService(
         )
     }
 
+    fun activatePoolForReauction(auctionId: String) = ensurePoolActiveForUnsoldRound(auctionId)
+
     private fun ensurePoolActiveForUnsoldRound(auctionId: String) {
         val allPool = auctionPoolRepository.findByAuctionAndType(auctionId, PoolType.ALL)
             ?: throw InvalidAuctionStateException("No ALL pool for auction $auctionId")
@@ -267,4 +286,88 @@ class AuctionEngineService(
         val queuedPlayers: Int,
         val playerPreviews: List<Player>
     )
+
+    // ─── RE-AUCTION ──────────────────────────────────────────────────────────
+
+    fun initReauctionMode(auctionId: String, phase1PlayerIds: List<String>) {
+        reauctionMode[auctionId] = true
+        reauctionPhase1Ids[auctionId] = phase1PlayerIds.toSet()
+        phase1Exhausted[auctionId] = false
+
+        val players = playerRepository.findByIds(phase1PlayerIds)
+        val queue: List<Player> = players
+            .groupBy { it.basePrice }
+            .entries
+            .sortedByDescending { it.key }
+            .flatMap { (_, ps) -> ps.shuffled() }
+        playerQueues[auctionId] = ArrayDeque(queue)
+        println("🔁 Re-auction mode initialized for auction=$auctionId — Phase 1: ${queue.size} previously sold players")
+    }
+
+    fun startRemainingPoolPhase(auctionId: String) {
+        if (reauctionMode[auctionId] != true) {
+            throw InvalidAuctionStateException("Not in re-auction mode")
+        }
+        if (phase1Exhausted[auctionId] != true) {
+            throw InvalidAuctionStateException("Phase 1 is not yet exhausted — finish auctioning all previously sold players first")
+        }
+
+        val excludedIds = reauctionPhase1Ids[auctionId] ?: emptySet()
+        val remainingPlayers = playerRepository.findAll()
+            .filter { !it.isAuctioned && it.id !in excludedIds }
+
+        if (remainingPlayers.isEmpty()) {
+            throw InvalidAuctionStateException("No remaining pool players to auction")
+        }
+
+        val queue: List<Player> = remainingPlayers
+            .groupBy { it.basePrice }
+            .entries
+            .sortedByDescending { it.key }
+            .flatMap { (_, ps) -> ps.shuffled() }
+        playerQueues[auctionId] = ArrayDeque(queue)
+
+        phase1Exhausted[auctionId] = false
+        poolExhausted[auctionId] = false
+        currentPlayers.remove(auctionId)
+        biddingOpen[auctionId] = false
+        auctionTimerService.cancelAllForAuction(auctionId)
+
+        ensurePoolActiveForUnsoldRound(auctionId)
+        println("🔁 Re-auction Phase 2 started for auction=$auctionId — ${queue.size} pool players queued")
+    }
+
+    data class ReauctionPhaseStatus(
+        val isReauctionMode: Boolean,
+        val phase1Exhausted: Boolean,
+        val squadsNeedingPlayers: Int,
+        val squadsWithBudget: Int,
+        val hasRemainingPoolPlayers: Boolean
+    )
+
+    fun getReauctionPhaseStatus(auctionId: String): ReauctionPhaseStatus {
+        val squads = squadRepository.findByAuction(auctionId)
+        val wallets = walletRepository.findAllByAuction(auctionId)
+        val walletByParticipant = wallets.associateBy { it.participantId }
+
+        val squadsNeedingPlayers = squads.count { squad ->
+            squadRepository.countPlayers(squad.id) < 20
+        }
+        val squadsWithBudget = squads.count { squad ->
+            val wallet = walletByParticipant[squad.participantId]
+            wallet != null && wallet.balance > BigDecimal.ZERO
+        }
+
+        val excludedIds = reauctionPhase1Ids[auctionId] ?: emptySet()
+        val hasRemainingPoolPlayers = playerRepository.findAll()
+            .any { !it.isAuctioned && it.id !in excludedIds }
+
+        return ReauctionPhaseStatus(
+            isReauctionMode         = reauctionMode[auctionId] == true,
+            phase1Exhausted         = phase1Exhausted[auctionId] == true,
+            squadsNeedingPlayers    = squadsNeedingPlayers,
+            squadsWithBudget        = squadsWithBudget,
+            hasRemainingPoolPlayers = hasRemainingPoolPlayers
+        )
+    }
 }

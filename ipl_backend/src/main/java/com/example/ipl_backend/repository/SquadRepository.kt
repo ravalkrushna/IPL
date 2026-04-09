@@ -1,6 +1,7 @@
 package com.example.ipl_backend.repository
 
 import com.example.ipl_backend.dto.SquadPlayerDetail
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
 import com.example.ipl_backend.model.*
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
@@ -225,4 +226,24 @@ class SquadRepository(
                         .map { it[Squads.auctionId] }
                         .distinct()
           }
+
+    fun getPlayerIdsForAuction(auctionId: String): List<String> =
+        transaction {
+            (SquadPlayers innerJoin Squads)
+                .select(SquadPlayers.playerId)
+                .where { Squads.auctionId eq auctionId }
+                .map { it[SquadPlayers.playerId] }
+                .distinct()
+        }
+
+    fun clearAllPlayersForAuction(auctionId: String) {
+        transaction {
+            val squadIds = Squads.selectAll()
+                .where { Squads.auctionId eq auctionId }
+                .map { it[Squads.id] }
+            if (squadIds.isNotEmpty()) {
+                SquadPlayers.deleteWhere { SquadPlayers.squadId inList squadIds }
+            }
+        }
+    }
 }

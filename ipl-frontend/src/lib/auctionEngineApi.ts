@@ -32,6 +32,16 @@ export interface EngineState {
   upcomingPlayers: Player[]
   auctionRound?: number
   unsoldCandidates?: Player[]
+  isReauctionMode?: boolean
+  phase1Exhausted?: boolean
+}
+
+export interface ReauctionPhaseStatus {
+  isReauctionMode: boolean
+  phase1Exhausted: boolean
+  squadsNeedingPlayers: number
+  squadsWithBudget: number
+  hasRemainingPoolPlayers: boolean
 }
 
 export const auctionEngineApi = {
@@ -54,6 +64,14 @@ export const auctionEngineApi = {
   /** Start unsold-only round (round 2+) after current queue exhausts */
   startUnsoldRound: (auctionId: string): Promise<{ message: string; auctionRound: number; queuedPlayers: number }> =>
     api.post(`/auctions/${auctionId}/engine/start-unsold-round`).then(r => r.data),
+
+  /** Get re-auction phase status (whether Phase 1 is exhausted, squads needing players, etc.) */
+  getReauctionPhaseStatus: (auctionId: string): Promise<ReauctionPhaseStatus> =>
+    api.get(`/auctions/${auctionId}/engine/reauction-phase-status`).then(r => r.data),
+
+  /** Admin: start Phase 2 of re-auction (bring in remaining pool players) */
+  startRemainingPool: (auctionId: string): Promise<{ message: string }> =>
+    api.post(`/auctions/${auctionId}/engine/start-remaining-pool`).then(r => r.data),
 }
 
 export const auctionPoolApi = {

@@ -1558,12 +1558,17 @@ function AuctionRoomPage() {
     auctionId,
     (allSquadsForTrades ?? []) as Array<{ participantId?: string }>
   )
+  const [showPhase2Dialog, setShowPhase2Dialog] = useState(false)
+  const [phase2Status, setPhase2Status] = useState<{ squadsNeedingPlayers: number; squadsWithBudget: number } | null>(null)
+  const [showReauctionConfirm, setShowReauctionConfirm] = useState(false)
+
   const startReauction = useMutation({
     mutationFn: () => auctionApi.startReauction(auctionId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["auction", auctionId] })
       queryClient.invalidateQueries({ queryKey: ["allWallets", auctionId] })
-      window.alert("Re-auction started. All squad wallets reset to 100Cr.")
+      queryClient.invalidateQueries({ queryKey: ["allSquads", auctionId] })
+      queryClient.invalidateQueries({ queryKey: ["engineState", auctionId] })
     },
     onError: (e: unknown) => {
       const msg =
@@ -1573,6 +1578,50 @@ function AuctionRoomPage() {
       window.alert(msg)
     },
   })
+
+  const startRemainingPool = useMutation({
+    mutationFn: () => auctionEngineApi.startRemainingPool(auctionId),
+    onSuccess: () => {
+      setShowPhase2Dialog(false)
+      setPhase2Status(null)
+      queryClient.invalidateQueries({ queryKey: ["engineState", auctionId] })
+    },
+    onError: (e: unknown) => {
+      const msg =
+        typeof e === "object" && e && "message" in e
+          ? String((e as { message?: unknown }).message ?? "Failed to start pool phase")
+          : "Failed to start pool phase"
+      window.alert(msg)
+    },
+  })
+
+  // Detect when re-auction Phase 1 exhausts and prompt admin for Phase 2
+  useEffect(() => {
+    if (
+      engineState?.isReauctionMode &&
+      engineState?.phase1Exhausted &&
+      engineState?.poolExhausted &&
+      !engineState?.currentPlayer &&
+      me?.role === "ADMIN" &&
+      !showPhase2Dialog
+    ) {
+      auctionEngineApi.getReauctionPhaseStatus(auctionId).then((status) => {
+        if (status.squadsNeedingPlayers > 0 && status.squadsWithBudget > 0 && status.hasRemainingPoolPlayers) {
+          setPhase2Status({ squadsNeedingPlayers: status.squadsNeedingPlayers, squadsWithBudget: status.squadsWithBudget })
+          setShowPhase2Dialog(true)
+        }
+      }).catch(() => { /* ignore */ })
+    }
+  }, [engineState?.isReauctionMode, engineState?.phase1Exhausted, engineState?.poolExhausted, engineState?.currentPlayer, me?.role])
+
+  const endAuctionFromPage = useMutation({
+    mutationFn: () => auctionApi.end(auctionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["auction", auctionId] })
+      navigate({ to: "/auction/$auctionId/fantasy", params: { auctionId } })
+    },
+  })
+
   const createTrade = useMutation({
     mutationFn: () => {
       const fromIds = [fromPlayerA, fromPlayerB].filter(Boolean)
@@ -1724,7 +1773,7 @@ function AuctionRoomPage() {
             {auctionEnded && (
               <button
                 type="button"
-                onClick={() => startReauction.mutate()}
+                onClick={() => setShowReauctionConfirm(true)}
                 disabled={startReauction.isPending || auction.reauctionStarted === true}
                 title={auction.reauctionStarted ? "Re-auction already started" : "Start re-auction"}
                 className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border border-stone-300 bg-white text-stone-700 hover:bg-stone-50 disabled:opacity-60 disabled:cursor-not-allowed"
@@ -1776,7 +1825,7 @@ function AuctionRoomPage() {
               </button>
               <button
                 type="button"
-                onClick={() => startReauction.mutate()}
+                onClick={() => setShowReauctionConfirm(true)}
                 disabled={startReauction.isPending || auction.reauctionStarted === true}
                 title={auction.reauctionStarted ? "Re-auction already started" : "Start re-auction"}
                 className="text-xs font-bold px-3 py-2 rounded-lg border border-stone-300 bg-white text-stone-700 disabled:text-stone-400 disabled:cursor-not-allowed"
@@ -2113,6 +2162,84 @@ function AuctionRoomPage() {
           <ParticipantView auctionId={auctionId} me={me} />
         )}
       </div>
+
+      {/* Re-auction Confirmation Dialog */}
+      <Dialog open={showReauctionConfirm} onOpenChange={setShowReauctionConfirm}>
+        <DialogContent className="max-w-md bg-white border-stone-200 text-stone-800 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-black">↻ Start Re-auction?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-stone-600">
+              Are you sure you want to enter into re-auction mode? Players along with points of this season will be shuffled.
+            </p>
+            <div className="flex gap-3 pt-2">
+              <Button
+                className="flex-1 bg-stone-800 hover:bg-stone-900 text-white"
+                disabled={startReauction.isPending}
+                onClick={() => {
+                  setShowReauctionConfirm(false)
+                  startReauction.mutate()
+                }}
+              >
+                {startReauction.isPending ? "Starting..." : "Yes, Start Re-auction"}
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                disabled={startReauction.isPending}
+                onClick={() => setShowReauctionConfirm(false)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Re-auction Phase 2 Dialog — admin only */}
+      <Dialog open={showPhase2Dialog} onOpenChange={() => {}}>
+        <DialogContent className="max-w-md bg-white border-stone-200 text-stone-800 shadow-2xl" onPointerDownOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle className="text-lg font-black">🏁 Phase 1 Complete</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-stone-600">
+              All previously sold players have been re-auctioned.
+            </p>
+            {phase2Status && (
+              <p className="text-sm text-stone-700 font-medium">
+                {phase2Status.squadsNeedingPlayers} squad{phase2Status.squadsNeedingPlayers !== 1 ? "s" : ""} still
+                {" "}have room for more players and {phase2Status.squadsWithBudget} still{" "}
+                {phase2Status.squadsWithBudget !== 1 ? "have" : "has"} remaining budget.
+              </p>
+            )}
+            <p className="text-sm text-stone-600">
+              Do you want to bring in the remaining unsold players from the original pool?
+            </p>
+            <div className="flex gap-3 pt-2">
+              <Button
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
+                disabled={startRemainingPool.isPending}
+                onClick={() => startRemainingPool.mutate()}
+              >
+                {startRemainingPool.isPending ? "Starting..." : "Yes, Start Pool Auction"}
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                disabled={startRemainingPool.isPending}
+                onClick={() => {
+                  setShowPhase2Dialog(false)
+                  endAuctionFromPage.mutate()
+                }}
+              >
+                No, End Auction
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

@@ -9,6 +9,7 @@ import com.example.ipl_backend.model.AuctionStatus
 import com.example.ipl_backend.repository.AuctionRepository
 import com.example.ipl_backend.repository.ParticipantRepository
 import com.example.ipl_backend.repository.PlayerRepository
+import com.example.ipl_backend.repository.SquadRepository
 import com.example.ipl_backend.repository.WalletRepository
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
@@ -23,6 +24,7 @@ class AuctionService(
     private val participantRepository: ParticipantRepository,
     private val walletRepository: WalletRepository,
     private val playerRepository: PlayerRepository,
+    private val squadRepository: SquadRepository,
     private val auctionEngineService: AuctionEngineService
 ) {
 
@@ -116,9 +118,45 @@ class AuctionService(
         }
         if (auction.reauctionStarted) return auction
 
+        // 1. Record which players were in squads — these are Phase 1 of re-auction
+        val soldPlayerIds = squadRepository.getPlayerIdsForAuction(id)
+        println("🔁 Re-auction: ${soldPlayerIds.size} previously sold players found for auction=$id")
+
+        // 2. Clear all squad rosters for this auction
+        squadRepository.clearAllPlayersForAuction(id)
+        println("🔁 Re-auction: all squad rosters cleared for auction=$id")
+
+        // If no players were sold (auction ended with 0 sales), bring ALL players into re-auction
+        val phase1PlayerIds: List<String>
+        if (soldPlayerIds.isEmpty()) {
+            println("🔁 Re-auction: no players were sold — resetting ALL players for full re-auction")
+            playerRepository.resetAllPlayers()
+            phase1PlayerIds = playerRepository.findAll().map { it.id }
+            println("🔁 Re-auction: ${phase1PlayerIds.size} total players will be Phase 1")
+        } else {
+            // 3. Reset only those players (not ALL players — isSold/isAuctioned are global flags)
+            playerRepository.resetPlayersByIds(soldPlayerIds)
+            phase1PlayerIds = soldPlayerIds
+            println("🔁 Re-auction: player flags reset for ${phase1PlayerIds.size} players")
+        }
+
+        // 4. Reset wallets to starting balance
         walletRepository.resetAllWalletsToStartingBalance(id)
+        println("🔁 Re-auction: all wallets reset to 100Cr for auction=$id")
+
+        // 5. Set auction status back to LIVE directly (bypass updateStatus() which would call resetAllPlayers())
+        auctionRepository.updateStatus(id, AuctionStatus.LIVE)
+
+        // 6. Reset and initialize the engine in re-auction mode
+        auctionEngineService.resetForNewAuction(id)
+        auctionEngineService.initReauctionMode(id, phase1PlayerIds)
+
+        // 7. Ensure the pool is active so the admin can call Next Player immediately
+        auctionEngineService.activatePoolForReauction(id)
+
+        // 8. Mark re-auction started in DB
         auctionRepository.markReauctionStarted(id, Instant.now().toEpochMilli())
-        println("🔁 Re-auction started for auction=$id; all wallets reset to 100Cr")
+        println("🔁 Re-auction fully started for auction=$id")
         return auctionRepository.findById(id)!!
     }
 

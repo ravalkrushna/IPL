@@ -79,7 +79,9 @@ class AuctionEngineController(
             "poolExhausted"      to poolExhausted,
             "upcomingPlayers"    to upcomingPlayers,
             "auctionRound"       to auctionRound,
-            "unsoldCandidates"   to unsoldCandidates
+            "unsoldCandidates"   to unsoldCandidates,
+            "isReauctionMode"    to auctionEngineService.isReauctionMode(auctionId),
+            "phase1Exhausted"    to auctionEngineService.isPhase1Exhausted(auctionId)
         )
         return ResponseEntity.ok(response)
     }
@@ -112,6 +114,32 @@ class AuctionEngineController(
             )
         } catch (e: Exception) {
             ResponseEntity.badRequest().body(mapOf("error" to (e.message ?: "Cannot start unsold round")))
+        }
+    }
+
+    @GetMapping("/reauction-phase-status")
+    fun getReauctionPhaseStatus(@PathVariable auctionId: String): ResponseEntity<Map<String, Any?>> {
+        return try {
+            val status = auctionEngineService.getReauctionPhaseStatus(auctionId)
+            ResponseEntity.ok(mapOf(
+                "isReauctionMode"         to status.isReauctionMode,
+                "phase1Exhausted"         to status.phase1Exhausted,
+                "squadsNeedingPlayers"    to status.squadsNeedingPlayers,
+                "squadsWithBudget"        to status.squadsWithBudget,
+                "hasRemainingPoolPlayers" to status.hasRemainingPoolPlayers
+            ))
+        } catch (e: Exception) {
+            ResponseEntity.badRequest().body(mapOf("error" to (e.message ?: "Cannot get re-auction phase status")))
+        }
+    }
+
+    @PostMapping("/start-remaining-pool")
+    fun startRemainingPool(@PathVariable auctionId: String): ResponseEntity<Map<String, Any?>> {
+        return try {
+            auctionEngineService.startRemainingPoolPhase(auctionId)
+            ResponseEntity.ok(mapOf("message" to "Remaining pool phase started") as Map<String, Any?>)
+        } catch (e: Exception) {
+            ResponseEntity.badRequest().body(mapOf("error" to (e.message ?: "Cannot start remaining pool phase")))
         }
     }
 }

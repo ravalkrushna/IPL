@@ -337,6 +337,18 @@ class PlayerRepository {
         }
     }
 
+    fun resetPlayersByIds(ids: List<String>) {
+        if (ids.isEmpty()) return
+        transaction {
+            val now = Instant.now().toEpochMilli()
+            Players.update({ Players.id inList ids }) {
+                it[isSold]      = false
+                it[isAuctioned] = false
+                it[updatedAt]   = now
+            }
+        }
+    }
+
     fun delete(id: String) {
         transaction { Players.deleteWhere { Players.id eq id } }
     }

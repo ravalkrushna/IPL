@@ -239,6 +239,8 @@ function TradeCenterPage() {
       queryClient.invalidateQueries({ queryKey: ["trades", auctionId, "tradePage"] })
       queryClient.invalidateQueries({ queryKey: ["allSquads", auctionId] })
       queryClient.invalidateQueries({ queryKey: ["allWallets", auctionId] })
+      queryClient.invalidateQueries({ queryKey: ["fantasyLeaderboard", auctionId] })
+      queryClient.invalidateQueries({ queryKey: ["fantasySquad"] })
     },
   })
   const rejectTrade = useMutation({
@@ -257,6 +259,8 @@ function TradeCenterPage() {
       queryClient.invalidateQueries({ queryKey: ["trades", auctionId, "tradePage"] })
       queryClient.invalidateQueries({ queryKey: ["allSquads", auctionId] })
       queryClient.invalidateQueries({ queryKey: ["allWallets", auctionId] })
+      queryClient.invalidateQueries({ queryKey: ["fantasyLeaderboard", auctionId] })
+      queryClient.invalidateQueries({ queryKey: ["fantasySquad"] })
     },
   })
   const approveLoan = useMutation({
@@ -266,6 +270,8 @@ function TradeCenterPage() {
       queryClient.invalidateQueries({ queryKey: ["trades", auctionId, "tradePage"] })
       queryClient.invalidateQueries({ queryKey: ["allSquads", auctionId] })
       queryClient.invalidateQueries({ queryKey: ["allWallets", auctionId] })
+      queryClient.invalidateQueries({ queryKey: ["fantasyLeaderboard", auctionId] })
+      queryClient.invalidateQueries({ queryKey: ["fantasySquad"] })
     },
   })
   const closeLoan = useMutation({
@@ -274,6 +280,8 @@ function TradeCenterPage() {
       queryClient.invalidateQueries({ queryKey: ["trades", auctionId, "tradePage"] })
       queryClient.invalidateQueries({ queryKey: ["allSquads", auctionId] })
       queryClient.invalidateQueries({ queryKey: ["allWallets", auctionId] })
+      queryClient.invalidateQueries({ queryKey: ["fantasyLeaderboard", auctionId] })
+      queryClient.invalidateQueries({ queryKey: ["fantasySquad"] })
     },
   })
 
