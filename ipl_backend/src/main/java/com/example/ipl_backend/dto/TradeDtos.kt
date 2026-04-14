@@ -46,6 +46,7 @@ data class TradeResponse(
     val cashFromToTo: BigDecimal,
     val cashToToFrom: BigDecimal,
     val tradeType: TradeType,
+    val isUnsoldPoolTrade: Boolean = false,
     val status: TradeStatus,
     val createdAt: Long,
     val updatedAt: Long

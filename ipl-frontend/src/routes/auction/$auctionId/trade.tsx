@@ -38,6 +38,8 @@ function useWalletMap(auctionId: string, squads: Array<{ participantId?: string 
   })
 }
 
+const UNSOLD_POOL = "__UNSOLD_POOL__"
+
 const modeConfig = {
   TRADE: {
     label: "Player Trade",
@@ -134,6 +136,11 @@ function TradeCenterPage() {
     queryFn: () => import("@/lib/playerApi").then((m) => m.playerApi.list({ getAll: true })),
     staleTime: 120000,
   })
+  const { data: unsoldPlayersList } = useQuery({
+    queryKey: ["players", "unsold", "tradePage"],
+    queryFn: () => import("@/lib/playerApi").then((m) => m.playerApi.unsold()),
+    staleTime: 30000,
+  })
 
   const tradeSquads = (allSquadsForTrades ?? []) as Array<{
     squadId: string
@@ -144,7 +151,9 @@ function TradeCenterPage() {
   const { data: tradeWalletMap } = useWalletMap(auctionId, tradeSquads)
 
   const fromSquad = tradeSquads.find((s) => s.squadId === fromSquadId)
-  const toSquad = tradeSquads.find((s) => s.squadId === toSquadId)
+  const toSquad = toSquadId === UNSOLD_POOL ? null : tradeSquads.find((s) => s.squadId === toSquadId)
+  const isUnsoldPoolTrade = tradeMode === "TRADE" && toSquadId === UNSOLD_POOL
+  const unsoldPlayers = (unsoldPlayersList ?? []) as Player[]
   const tradeSquadById = Object.fromEntries(tradeSquads.map((s) => [s.squadId, s])) as Record<string, (typeof tradeSquads)[number]>
   const globalPlayerNameById = Object.fromEntries(
     ((allPlayers ?? []) as Player[]).map((p) => [p.id, p.name])
@@ -166,7 +175,7 @@ function TradeCenterPage() {
   const fromWalletCr = fromWallet != null ? fromWallet / 10_000_000 : null
   const toWalletCr = toWallet != null ? toWallet / 10_000_000 : null
   const fromCashWithinWallet = fromWallet == null || toRupeesFromCr(cashFromToToCr) <= fromWallet
-  const toCashWithinWallet = toWallet == null || toRupeesFromCr(cashToToFromCr) <= toWallet
+  const toCashWithinWallet = isUnsoldPoolTrade || toWallet == null || toRupeesFromCr(cashToToFromCr) <= toWallet
 
   const hasTradeLeg =
     tradeMode === "TRADE"
@@ -177,7 +186,9 @@ function TradeCenterPage() {
       ? cashFromToToCr > 0 && cashToToFromCr === 0
       : tradeMode === "LOAN"
         ? cashFromToToCr === 0 && cashToToFromCr >= 0
-        : true
+        : isUnsoldPoolTrade
+          ? cashFromToToCr === 0 && cashToToFromCr === 0
+          : true
   const modeSquadRule = tradeMode === "TRADE" ? !!toSquadId && fromSquadId !== toSquadId : true
   const modeWalletRule = tradeMode === "TRADE"
     ? fromCashWithinWallet && toCashWithinWallet
@@ -318,6 +329,11 @@ function TradeCenterPage() {
       return `${fromSquad?.name ?? "Squad"} loans ${playerNameById(fromSquadId, fromPlayerA)} to ${toSquad?.name ?? "?"} for ${cashToToFromCr > 0 ? cashToToFromCr.toFixed(2) + "Cr" : "0Cr"}`
     }
     if (tradeMode === "TRADE") {
+      if (isUnsoldPoolTrade) {
+        const releasing = selectedFromPlayers.map((id) => playerNameById(fromSquadId, id)).join(", ") || "—"
+        const signing = selectedToPlayers.map((id) => globalPlayerNameById[id] ?? id).join(", ") || "—"
+        return `${fromSquad?.name ?? "Squad"} releases [${releasing}] → Unsold Pool; signs [${signing}] from Unsold Pool`
+      }
       const from = selectedFromPlayers.map((id) => playerNameById(fromSquadId, id)).join(", ") || "—"
       const to = selectedToPlayers.map((id) => playerNameById(toSquadId, id)).join(", ") || "—"
       return `${fromSquad?.name ?? "Squad A"} [${from}${cashFromToToCr > 0 ? ` +${cashFromToToCr.toFixed(2)}Cr` : ""}] ⇄ ${toSquad?.name ?? "Squad B"} [${to}${cashToToFromCr > 0 ? ` +${cashToToFromCr.toFixed(2)}Cr` : ""}]`
@@ -451,10 +467,15 @@ function TradeCenterPage() {
                     >
                       <option value="">Select squad…</option>
                       {tradeSquads.filter((s) => s.squadId !== fromSquadId).map((s) => <option key={s.squadId} value={s.squadId}>{s.name}</option>)}
+                      <option value={UNSOLD_POOL}>🏟️ Unsold Pool</option>
                     </select>
-                    {toWalletCr != null && (
+                    {isUnsoldPoolTrade ? (
+                      <div className="flex items-center gap-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 px-2.5 py-1.5">
+                        <span className="text-[10px] text-violet-400 font-semibold">Sign/release players from the unsold pool · no cash legs</span>
+                      </div>
+                    ) : toWalletCr != null ? (
                       <WalletChip label="Wallet" value={`${toWalletCr.toFixed(2)}Cr`} />
-                    )}
+                    ) : null}
                   </div>
                 ) : (
                   <div className="rounded-xl border border-dashed border-emerald-500/20 bg-emerald-500/5 p-3.5 flex items-center gap-2.5">
@@ -496,23 +517,52 @@ function TradeCenterPage() {
 
                 {tradeMode === "TRADE" ? (
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">To Side Gives</label>
-                    <select
-                      className="w-full rounded-xl border border-white/10 bg-slate-800 text-sm text-slate-200 px-3 py-2.5 focus:outline-none focus:border-indigo-500/60 transition-all appearance-none cursor-pointer"
-                      value={toPlayerA}
-                      onChange={(e) => setToPlayerA(e.target.value)}
-                    >
-                      <option value="">Player 1…</option>
-                      {(toSquad?.players ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                    <select
-                      className="w-full rounded-xl border border-white/10 bg-slate-800 text-sm text-slate-200 px-3 py-2.5 focus:outline-none focus:border-indigo-500/60 transition-all appearance-none cursor-pointer"
-                      value={toPlayerB}
-                      onChange={(e) => setToPlayerB(e.target.value)}
-                    >
-                      <option value="">Player 2 (optional)…</option>
-                      {(toSquad?.players ?? []).filter((p) => p.id !== toPlayerA).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                      {isUnsoldPoolTrade ? "Sign from Unsold Pool" : "To Side Gives"}
+                    </label>
+                    {isUnsoldPoolTrade ? (
+                      <>
+                        <select
+                          className="w-full rounded-xl border border-violet-500/30 bg-slate-800 text-sm text-slate-200 px-3 py-2.5 focus:outline-none focus:border-violet-500/60 transition-all appearance-none cursor-pointer"
+                          value={toPlayerA}
+                          onChange={(e) => setToPlayerA(e.target.value)}
+                        >
+                          <option value="">Unsold player 1…</option>
+                          {unsoldPlayers.map((p) => (
+                            <option key={p.id} value={p.id}>{p.name}{p.specialism ? ` (${p.specialism})` : ""}</option>
+                          ))}
+                        </select>
+                        <select
+                          className="w-full rounded-xl border border-violet-500/30 bg-slate-800 text-sm text-slate-200 px-3 py-2.5 focus:outline-none focus:border-violet-500/60 transition-all appearance-none cursor-pointer"
+                          value={toPlayerB}
+                          onChange={(e) => setToPlayerB(e.target.value)}
+                        >
+                          <option value="">Unsold player 2 (optional)…</option>
+                          {unsoldPlayers.filter((p) => p.id !== toPlayerA).map((p) => (
+                            <option key={p.id} value={p.id}>{p.name}{p.specialism ? ` (${p.specialism})` : ""}</option>
+                          ))}
+                        </select>
+                      </>
+                    ) : (
+                      <>
+                        <select
+                          className="w-full rounded-xl border border-white/10 bg-slate-800 text-sm text-slate-200 px-3 py-2.5 focus:outline-none focus:border-indigo-500/60 transition-all appearance-none cursor-pointer"
+                          value={toPlayerA}
+                          onChange={(e) => setToPlayerA(e.target.value)}
+                        >
+                          <option value="">Player 1…</option>
+                          {(toSquad?.players ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                        <select
+                          className="w-full rounded-xl border border-white/10 bg-slate-800 text-sm text-slate-200 px-3 py-2.5 focus:outline-none focus:border-indigo-500/60 transition-all appearance-none cursor-pointer"
+                          value={toPlayerB}
+                          onChange={(e) => setToPlayerB(e.target.value)}
+                        >
+                          <option value="">Player 2 (optional)…</option>
+                          {(toSquad?.players ?? []).filter((p) => p.id !== toPlayerA).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <div className="rounded-xl border border-dashed border-white/10 bg-slate-800/40 p-3.5 flex items-center gap-2.5">
@@ -525,7 +575,7 @@ function TradeCenterPage() {
               </div>
 
               {/* Cash inputs */}
-              {tradeMode === "TRADE" && (
+              {tradeMode === "TRADE" && !isUnsoldPoolTrade && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Cash From→To (Cr)</label>
@@ -645,7 +695,10 @@ function TradeCenterPage() {
               ) : (
                 marketBookList.map((t) => {
                   const fromName = tradeSquads.find((s) => s.squadId === t.fromSquadId)?.name ?? t.fromSquadId
-                  const toName = tradeSquads.find((s) => s.squadId === t.toSquadId)?.name ?? t.toSquadId
+                  const toName = t.isUnsoldPoolTrade
+                    ? "🏟️ Unsold Pool"
+                    : tradeSquads.find((s) => s.squadId === t.toSquadId)?.name ?? t.toSquadId
+                  const isUnsoldPoolCard = t.isUnsoldPoolTrade
                   const isSellStyle = t.tradeType === "SELL"
                   const isLoanStyle = t.tradeType === "LOAN"
                   const selectedBuyer = sellBuyerByTradeId[t.id] ?? ""
@@ -679,21 +732,40 @@ function TradeCenterPage() {
                             )}
                           </div>
                           <div className="space-y-0.5">
-                            <p className="text-[11px] text-slate-400">
-                              <span className="text-slate-500 font-semibold">From:</span>{" "}
-                              {t.fromPlayerIds.length
-                                ? t.fromPlayerIds.map((id) => playerNameById(t.fromSquadId, id)).join(", ")
-                                : <span className="text-slate-600 italic">no players</span>}
-                              {t.cashFromToTo > 0 && <span className="text-emerald-400 font-bold"> +{fmtCr(Number(t.cashFromToTo))}</span>}
-                            </p>
-                            {t.tradeType !== "SELL" && (
-                              <p className="text-[11px] text-slate-400">
-                                <span className="text-slate-500 font-semibold">To:</span>{" "}
-                                {t.toPlayerIds.length
-                                  ? t.toPlayerIds.map((id) => playerNameById(t.toSquadId, id)).join(", ")
-                                  : <span className="text-slate-600 italic">no players</span>}
-                                {t.cashToToFrom > 0 && <span className="text-emerald-400 font-bold"> +{fmtCr(Number(t.cashToToFrom))}</span>}
-                              </p>
+                            {isUnsoldPoolCard ? (
+                              <>
+                                <p className="text-[11px] text-slate-400">
+                                  <span className="text-slate-500 font-semibold">Releases:</span>{" "}
+                                  {t.fromPlayerIds.length
+                                    ? t.fromPlayerIds.map((id) => playerNameById(t.fromSquadId, id)).join(", ")
+                                    : <span className="text-slate-600 italic">none</span>}
+                                </p>
+                                <p className="text-[11px] text-slate-400">
+                                  <span className="text-violet-400 font-semibold">Signs from pool:</span>{" "}
+                                  {t.toPlayerIds.length
+                                    ? t.toPlayerIds.map((id) => globalPlayerNameById[id] ?? id).join(", ")
+                                    : <span className="text-slate-600 italic">none</span>}
+                                </p>
+                              </>
+                            ) : (
+                              <>
+                                <p className="text-[11px] text-slate-400">
+                                  <span className="text-slate-500 font-semibold">From:</span>{" "}
+                                  {t.fromPlayerIds.length
+                                    ? t.fromPlayerIds.map((id) => playerNameById(t.fromSquadId, id)).join(", ")
+                                    : <span className="text-slate-600 italic">no players</span>}
+                                  {t.cashFromToTo > 0 && <span className="text-emerald-400 font-bold"> +{fmtCr(Number(t.cashFromToTo))}</span>}
+                                </p>
+                                {t.tradeType !== "SELL" && (
+                                  <p className="text-[11px] text-slate-400">
+                                    <span className="text-slate-500 font-semibold">To:</span>{" "}
+                                    {t.toPlayerIds.length
+                                      ? t.toPlayerIds.map((id) => playerNameById(t.toSquadId, id)).join(", ")
+                                      : <span className="text-slate-600 italic">no players</span>}
+                                    {t.cashToToFrom > 0 && <span className="text-emerald-400 font-bold"> +{fmtCr(Number(t.cashToToFrom))}</span>}
+                                  </p>
+                                )}
+                              </>
                             )}
                           </div>
                         </div>

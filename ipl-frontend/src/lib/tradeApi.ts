@@ -13,6 +13,7 @@ export type TradeResponse = {
   cashFromToTo: number
   cashToToFrom: number
   tradeType: TradeType
+  isUnsoldPoolTrade: boolean
   status: TradeStatus
   createdAt: number
   updatedAt: number

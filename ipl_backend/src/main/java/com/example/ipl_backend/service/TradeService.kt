@@ -24,6 +24,9 @@ class TradeService(
 ) {
 
     companion object {
+        // Special sentinel value for the unsold player pool (not a real squad).
+        const val UNSOLD_POOL = "__UNSOLD_POOL__"
+
         // Marker pattern for open sell listing rows:
         // seller squad == placeholder buyer squad, no buyer players, one-way seller->buyer cash.
         private fun isOpenSellListing(t: TradeResponse): Boolean =
@@ -36,6 +39,9 @@ class TradeService(
 
         private fun isLoan(t: TradeResponse): Boolean =
             t.tradeType == TradeType.LOAN
+
+        fun isUnsoldPoolTrade(t: TradeResponse): Boolean =
+            t.isUnsoldPoolTrade
     }
 
     fun createTrade(request: CreateTradeRequest): TradeResponse {
@@ -48,20 +54,29 @@ class TradeService(
         val id = UUID.randomUUID().toString()
 
         transaction {
-            ensureSquadsInAuction(request.auctionId, request.fromSquadId, request.toSquadId)
-            ensureOwnership(request.fromSquadId, request.fromPlayerIds)
-            ensureOwnership(request.toSquadId, request.toPlayerIds)
+            if (request.toSquadId == UNSOLD_POOL) {
+                ensureSquadInAuction(request.auctionId, request.fromSquadId)
+                ensureOwnership(request.fromSquadId, request.fromPlayerIds)
+                ensurePlayersAreUnsold(request.toPlayerIds)
+            } else {
+                ensureSquadsInAuction(request.auctionId, request.fromSquadId, request.toSquadId)
+                ensureOwnership(request.fromSquadId, request.fromPlayerIds)
+                ensureOwnership(request.toSquadId, request.toPlayerIds)
+            }
 
+            val isUnsoldPool = request.toSquadId == UNSOLD_POOL
             Trades.insert {
                 it[Trades.id] = id
                 it[auctionId] = request.auctionId
                 it[fromSquadId] = request.fromSquadId
-                it[toSquadId] = request.toSquadId
+                // Use fromSquadId as FK-safe placeholder when trading with the unsold pool.
+                it[toSquadId] = if (isUnsoldPool) request.fromSquadId else request.toSquadId
                 it[fromPlayerIdsCsv] = request.fromPlayerIds.joinToString(",")
                 it[toPlayerIdsCsv] = request.toPlayerIds.joinToString(",")
                 it[cashFromToTo] = request.cashFromToTo
                 it[cashToToFrom] = request.cashToToFrom
                 it[tradeType] = TradeType.TRADE
+                it[Trades.isUnsoldPoolTrade] = isUnsoldPool
                 it[status] = TradeStatus.PENDING
                 it[createdAt] = now
                 it[updatedAt] = now
@@ -147,11 +162,18 @@ class TradeService(
                 ?: throw AuctionNotFoundException("Auction not found")
             ensureAuctionCompleted(auction)
 
-            ensureSquadsInAuction(trade.auctionId, trade.fromSquadId, trade.toSquadId)
-            ensureOwnership(trade.fromSquadId, trade.fromPlayerIds)
-            ensureOwnership(trade.toSquadId, trade.toPlayerIds)
-            applyWalletLegs(trade)
-            applyPlayerTransfers(trade)
+            if (isUnsoldPoolTrade(trade)) {
+                ensureSquadInAuction(trade.auctionId, trade.fromSquadId)
+                ensureOwnership(trade.fromSquadId, trade.fromPlayerIds)
+                ensurePlayersAreUnsold(trade.toPlayerIds)
+                applyPlayerTransfersUnsoldPool(trade)
+            } else {
+                ensureSquadsInAuction(trade.auctionId, trade.fromSquadId, trade.toSquadId)
+                ensureOwnership(trade.fromSquadId, trade.fromPlayerIds)
+                ensureOwnership(trade.toSquadId, trade.toPlayerIds)
+                applyWalletLegs(trade)
+                applyPlayerTransfers(trade)
+            }
 
             val now = Instant.now().toEpochMilli()
             Trades.update({ Trades.id eq tradeId }) {
@@ -359,6 +381,43 @@ class TradeService(
         }
     }
 
+    private fun ensurePlayersAreUnsold(playerIds: List<String>) {
+        if (playerIds.isEmpty()) return
+        val soldCount = SquadPlayers.selectAll()
+            .where { SquadPlayers.playerId inList playerIds }
+            .count()
+        if (soldCount > 0) {
+            throw IllegalArgumentException("One or more players are already owned by a squad and cannot be picked from the unsold pool")
+        }
+    }
+
+    private fun applyPlayerTransfersUnsoldPool(t: TradeResponse) {
+        // fromPlayerIds: release from squad back to the unsold pool
+        t.fromPlayerIds.forEach { playerId ->
+            SquadPlayers.deleteWhere { (SquadPlayers.squadId eq t.fromSquadId) and (SquadPlayers.playerId eq playerId) }
+            Players.update({ Players.id eq playerId }) {
+                it[Players.isSold] = false
+                it[Players.updatedAt] = Instant.now().toEpochMilli()
+            }
+        }
+        // toPlayerIds: unsold pool players being signed to fromSquad
+        t.toPlayerIds.forEach { playerId ->
+            val basePrice = Players.selectAll()
+                .where { Players.id eq playerId }
+                .firstOrNull()?.get(Players.basePrice) ?: BigDecimal.ZERO
+            SquadPlayers.insert {
+                it[id] = UUID.randomUUID().toString()
+                it[squadId] = t.fromSquadId
+                it[SquadPlayers.playerId] = playerId
+                it[purchasePrice] = basePrice
+            }
+            Players.update({ Players.id eq playerId }) {
+                it[Players.isSold] = true
+                it[Players.updatedAt] = Instant.now().toEpochMilli()
+            }
+        }
+    }
+
     private fun validateTradeRequest(r: CreateTradeRequest) {
         if (r.fromPlayerIds.isEmpty() && r.toPlayerIds.isEmpty()) {
             throw IllegalArgumentException("Trade must include at least one player on either side")
@@ -368,6 +427,9 @@ class TradeService(
         }
         if (r.fromPlayerIds.any { it.isBlank() } || r.toPlayerIds.any { it.isBlank() }) {
             throw IllegalArgumentException("Player IDs cannot be blank")
+        }
+        if (r.toSquadId == UNSOLD_POOL && r.toPlayerIds.isEmpty() && r.fromPlayerIds.isEmpty()) {
+            throw IllegalArgumentException("Unsold pool trade must involve at least one player")
         }
     }
 
@@ -387,16 +449,19 @@ class TradeService(
     private fun ResultRow.toTradeResponse(): TradeResponse {
         val fromCsv = this[Trades.fromPlayerIdsCsv]
         val toCsv = this[Trades.toPlayerIdsCsv]
+        val unsoldPool = this[Trades.isUnsoldPoolTrade]
         return TradeResponse(
             id = this[Trades.id],
             auctionId = this[Trades.auctionId],
             fromSquadId = this[Trades.fromSquadId],
-            toSquadId = this[Trades.toSquadId],
+            // Expose UNSOLD_POOL sentinel to clients instead of the placeholder squad ID.
+            toSquadId = if (unsoldPool) UNSOLD_POOL else this[Trades.toSquadId],
             fromPlayerIds = fromCsv.split(",").map { it.trim() }.filter { it.isNotBlank() },
             toPlayerIds = toCsv.split(",").map { it.trim() }.filter { it.isNotBlank() },
             cashFromToTo = this[Trades.cashFromToTo],
             cashToToFrom = this[Trades.cashToToFrom],
             tradeType = this[Trades.tradeType],
+            isUnsoldPoolTrade = unsoldPool,
             status = this[Trades.status],
             createdAt = this[Trades.createdAt],
             updatedAt = this[Trades.updatedAt]

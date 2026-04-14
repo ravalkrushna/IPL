@@ -17,6 +17,9 @@ object Trades : Table("trades") {
     val cashToToFrom = decimal("cash_to_to_from", 18, 2).default(java.math.BigDecimal.ZERO)
     val tradeType = enumerationByName("trade_type", 24, TradeType::class).default(TradeType.TRADE)
 
+    // True when the counterparty is the unsold player pool, not a real squad.
+    val isUnsoldPoolTrade = bool("is_unsold_pool_trade").default(false)
+
     val status = enumerationByName("status", 32, TradeStatus::class)
     val createdAt = long("created_at")
     val updatedAt = long("updated_at")
