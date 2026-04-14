@@ -27,7 +27,11 @@ data class FantasySquadPlayerEntry(
     val iplTeam: String,
     val soldPrice: BigDecimal,
     val totalPoints: Int,
-    val matchesPlayed: Int
+    val matchesPlayed: Int,
+    // Epoch-millis of when this player joined the squad via trade.
+    // 0 = original auction buy (points counted from season start).
+    // >0 = mid-season trade arrival; only points from matches on/after this date count.
+    val joinedAt: Long = 0L
 )
 
 data class FantasySquadResponse(

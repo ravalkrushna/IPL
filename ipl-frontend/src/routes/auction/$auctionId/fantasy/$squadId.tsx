@@ -255,6 +255,12 @@ const css = `
   .sd-player-pts { font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 800; line-height: 1; letter-spacing: -0.04em; }
   .sd-player-pts-lbl { font-size: 10px; font-weight: 700; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.06em; }
   .sd-player-price { font-size: 12px; color: #78716c; font-weight: 600; }
+  .sd-trade-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #fef3c7; color: #92400e; border: 1px solid #fde68a;
+    border-radius: 6px; padding: 3px 7px; font-size: 10px; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap;
+  }
   .sd-chevron-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding-right: 4px; flex-shrink: 0; color: #a8a29e; }
   .sd-chevron-hint { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; max-width: 44px; text-align: center; line-height: 1.15; }
   .sd-chevron { font-size: 14px; transition: transform 0.2s; display: inline-block; }
@@ -439,6 +445,11 @@ function PlayerCard({
     }
   }, [isActive])
 
+  const isTradedIn = (p.joinedAt ?? 0) > 0
+  const tradedDate = isTradedIn
+    ? new Date(p.joinedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+    : null
+
   return (
     <div ref={cardRef} className={`sd-player ${isActive ? "active" : ""}`} onClick={onToggle}>
       <div className="sd-player-bar" style={{ background: color }} />
@@ -451,9 +462,14 @@ function PlayerCard({
           <div className="sd-player-info">
             <div className="sd-player-name">{p.playerName}</div>
             <div className="sd-player-team">{p.iplTeam || "IPL team —"}</div>
+            {isTradedIn && (
+              <span className="sd-trade-badge" title={`Traded in on ${tradedDate} · only points from this date onwards count`}>
+                ⇄ Traded · since {tradedDate}
+              </span>
+            )}
           </div>
           <div className="sd-player-right">
-            <span className="sd-player-pts-lbl">Fantasy pts</span>
+            <span className="sd-player-pts-lbl">{isTradedIn ? "Pts since trade" : "Fantasy pts"}</span>
             <div className="sd-player-pts" style={{ color }}>{p.totalPoints.toLocaleString()}</div>
             <div className="sd-player-price">{p.soldPrice ? fmt(Number(p.soldPrice)) : "Auction —"}</div>
           </div>

@@ -14,6 +14,11 @@ object SquadPlayers : Table("squad_players") {
 
     val purchasePrice = decimal("purchase_price", 18, 2)
 
+    // Epoch-millis timestamp of when this player joined this squad.
+    // 0 = bought at auction (counts from season start).
+    // > 0 = arrived via trade; only points from matches on/after this date count.
+    val joinedAt = long("joined_at").default(0L)
+
     override val primaryKey = PrimaryKey(id)
 
     init {

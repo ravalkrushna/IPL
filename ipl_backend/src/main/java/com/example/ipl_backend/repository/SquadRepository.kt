@@ -87,7 +87,7 @@ class SquadRepository(
 
     fun findAllByAuction(auctionId: String): List<Squad> = findByAuction(auctionId)
 
-    fun addPlayer(squadId: String, playerId: String, price: BigDecimal) {
+    fun addPlayer(squadId: String, playerId: String, price: BigDecimal, joinedAt: Long = 0L) {
         transaction {
             val alreadyExists = SquadPlayers.selectAll()
                 .where {
@@ -106,6 +106,7 @@ class SquadRepository(
                 it[SquadPlayers.squadId]  = squadId
                 it[SquadPlayers.playerId] = playerId
                 it[purchasePrice]         = price
+                it[SquadPlayers.joinedAt] = joinedAt
             }
         }
     }
@@ -157,7 +158,8 @@ class SquadRepository(
                         odiCaps      = row[Players.odiCaps],
                         t20Caps      = row[Players.t20Caps],
                         basePrice    = row[Players.basePrice],
-                        soldPrice    = row[SquadPlayers.purchasePrice]
+                        soldPrice    = row[SquadPlayers.purchasePrice],
+                        joinedAt     = row[SquadPlayers.joinedAt]
                     )
                 }
         }

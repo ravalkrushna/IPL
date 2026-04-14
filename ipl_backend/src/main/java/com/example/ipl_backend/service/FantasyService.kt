@@ -21,17 +21,22 @@ class FantasyService(
     fun getLeaderboard(auctionId: String, season: String = "2026"): FantasyLeaderboardResponse {
         val squads = squadRepository.findByAuction(auctionId)
         val allPlayerIds = squads.flatMap { squadRepository.getPlayers(it.id).map { p -> p.id } }
-        val seasonMatchIds = resolveSeasonMatchIds(season)
+        val seasonMatches = resolveSeasonMatches(season)
+        val seasonMatchIds = seasonMatches.map { it.id }.toSet()
+        // matchId → matchDate (epoch ms) used to apply the trade-cutoff filter below.
+        val matchDateById = seasonMatches.associate { it.id to it.matchDate }
         val seasonPerformancesByPlayer = performanceRepository.findByPlayerIds(allPlayerIds)
             .filter { it.matchId in seasonMatchIds }
             .groupBy { it.playerId }
 
         val squadPoints = squads.map { squad: Squad ->
-            val players = squadRepository.getPlayers(squad.id)
+            // getSquadPlayersBySquadId includes joinedAt so we can apply the cutoff.
+            val playerDetails = squadRepository.getSquadPlayersBySquadId(squad.id)
             var points = 0
             var matches = 0
-            for (player in players) {
-                val playerPerfs = seasonPerformancesByPlayer[player.id].orEmpty()
+            for (detail in playerDetails) {
+                val playerPerfs = seasonPerformancesByPlayer[detail.id].orEmpty()
+                    .filter { (matchDateById[it.matchId] ?: 0L) >= detail.joinedAt }
                 points += playerPerfs.sumOf { fantasyPointsCalculator.calculate(it) }
                 if (playerPerfs.size > matches) matches = playerPerfs.size
             }
@@ -60,16 +65,22 @@ class FantasyService(
 
     fun getSquadFantasy(squadId: String, season: String = "2026"): FantasySquadResponse? {
         val squad: Squad = squadRepository.findById(squadId) ?: return null
+        // getSquadPlayersBySquadId includes joinedAt per player.
         val squadPlayerDetails = squadRepository.getSquadPlayersBySquadId(squadId)
         val playerIds = squadPlayerDetails.map { it.id }
-        val seasonMatchIds = resolveSeasonMatchIds(season)
+        val seasonMatches = resolveSeasonMatches(season)
+        val seasonMatchIds = seasonMatches.map { it.id }.toSet()
+        // matchId → matchDate used to apply trade-cutoff per player.
+        val matchDateById = seasonMatches.associate { it.id to it.matchDate }
         val seasonPerformancesByPlayer = performanceRepository.findByPlayerIds(playerIds)
             .filter { it.matchId in seasonMatchIds }
             .groupBy { it.playerId }
 
         val playerEntries = squadPlayerDetails.map { detail ->
             val player: Player? = playerRepository.findById(detail.id)
+            // Only count performances from matches played on/after the player's joinedAt.
             val playerPerfs = seasonPerformancesByPlayer[detail.id].orEmpty()
+                .filter { (matchDateById[it.matchId] ?: 0L) >= detail.joinedAt }
             FantasySquadPlayerEntry(
                 playerId      = detail.id,
                 playerName    = detail.name,
@@ -77,7 +88,8 @@ class FantasyService(
                 iplTeam       = player?.iplTeam ?: "",
                 soldPrice     = detail.soldPrice,
                 totalPoints   = playerPerfs.sumOf { fantasyPointsCalculator.calculate(it) },
-                matchesPlayed = playerPerfs.size
+                matchesPlayed = playerPerfs.size,
+                joinedAt      = detail.joinedAt
             )
         }.sortedByDescending { it.totalPoints }
 
@@ -279,15 +291,17 @@ class FantasyService(
         }
     }
 
-    private fun resolveSeasonMatchIds(season: String): Set<String> {
+    private fun resolveSeasonMatches(season: String): List<com.example.ipl_backend.model.IplMatch> {
         val normalized = season.trim()
-        val matches = if (normalized == "2025") {
+        return if (normalized == "2025") {
             iplMatchRepository.findAll().filter { it.season == null || it.season == "2025" }
         } else {
             iplMatchRepository.findBySeason(normalized)
         }
-        return matches.map { it.id }.toSet()
     }
+
+    private fun resolveSeasonMatchIds(season: String): Set<String> =
+        resolveSeasonMatches(season).map { it.id }.toSet()
 }
 
 // Returned by GET /api/v1/fantasy/player/{id}/ipl-career

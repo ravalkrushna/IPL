@@ -49,6 +49,10 @@ export type FantasySquadPlayerEntry = {
   soldPrice: number | null
   totalPoints: number
   matchesPlayed: number
+  // Epoch-millis of when the player joined this squad via a mid-season trade.
+  // 0 means original auction buy — all season points count.
+  // >0 means traded in; only points from matches on/after this date count.
+  joinedAt: number
 }
 
 export type FantasySquadResponse = {

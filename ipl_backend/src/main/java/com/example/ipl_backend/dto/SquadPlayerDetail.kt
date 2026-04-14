@@ -13,5 +13,9 @@ data class SquadPlayerDetail(
     val odiCaps: Int,
     val t20Caps: Int,
     val basePrice: BigDecimal,
-    val soldPrice: BigDecimal
+    val soldPrice: BigDecimal,
+    // Epoch-millis of when this player joined the squad.
+    // 0 = original auction buy (all season points count).
+    // >0 = mid-season trade (only points from matches on/after this timestamp count).
+    val joinedAt: Long = 0L
 )

@@ -321,6 +321,7 @@ class TradeService(
     }
 
     private fun applyPlayerTransfers(t: TradeResponse) {
+        val tradeTimestamp = Instant.now().toEpochMilli()
         // Keep the same purchase price row value when moving ownership.
         t.fromPlayerIds.forEach { playerId ->
             val price = squadPlayerPrice(t.fromSquadId, playerId) ?: BigDecimal.ZERO
@@ -330,6 +331,7 @@ class TradeService(
                 it[squadId] = t.toSquadId
                 it[SquadPlayers.playerId] = playerId
                 it[purchasePrice] = price
+                it[SquadPlayers.joinedAt] = tradeTimestamp
             }
         }
         t.toPlayerIds.forEach { playerId ->
@@ -340,6 +342,7 @@ class TradeService(
                 it[squadId] = t.fromSquadId
                 it[SquadPlayers.playerId] = playerId
                 it[purchasePrice] = price
+                it[SquadPlayers.joinedAt] = tradeTimestamp
             }
         }
     }
@@ -392,12 +395,13 @@ class TradeService(
     }
 
     private fun applyPlayerTransfersUnsoldPool(t: TradeResponse) {
+        val tradeTimestamp = Instant.now().toEpochMilli()
         // fromPlayerIds: release from squad back to the unsold pool
         t.fromPlayerIds.forEach { playerId ->
             SquadPlayers.deleteWhere { (SquadPlayers.squadId eq t.fromSquadId) and (SquadPlayers.playerId eq playerId) }
             Players.update({ Players.id eq playerId }) {
                 it[Players.isSold] = false
-                it[Players.updatedAt] = Instant.now().toEpochMilli()
+                it[Players.updatedAt] = tradeTimestamp
             }
         }
         // toPlayerIds: unsold pool players being signed to fromSquad
@@ -410,10 +414,11 @@ class TradeService(
                 it[squadId] = t.fromSquadId
                 it[SquadPlayers.playerId] = playerId
                 it[purchasePrice] = basePrice
+                it[SquadPlayers.joinedAt] = tradeTimestamp
             }
             Players.update({ Players.id eq playerId }) {
                 it[Players.isSold] = true
-                it[Players.updatedAt] = Instant.now().toEpochMilli()
+                it[Players.updatedAt] = tradeTimestamp
             }
         }
     }
