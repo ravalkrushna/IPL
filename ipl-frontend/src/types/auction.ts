@@ -1,5 +1,7 @@
 export type AuctionStatus = "PRE_AUCTION" | "LIVE" | "PAUSED" | "COMPLETED"
 
+export type MidSeasonPhase = "NOT_STARTED" | "RETENTION_ENTRY" | "LIVE" | "COMPLETED"
+
 export interface Auction {
   id: string
   name: string
@@ -8,6 +10,8 @@ export interface Auction {
   minBidIncrement: number
   reauctionStarted?: boolean
   reauctionStartedAt?: number | null
+  midSeasonPhase?: MidSeasonPhase
+  pointsLockedAt?: number | null
   createdAt: number
   updatedAt: number
 }

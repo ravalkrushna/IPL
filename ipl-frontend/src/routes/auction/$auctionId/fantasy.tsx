@@ -158,6 +158,13 @@ function SquadCard({
           <div style={{ textAlign: "right", flexShrink: 0 }}>
             <div style={{ fontSize: 11, fontWeight: 800, color: "#78716c", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Pts</div>
             <div style={{ fontSize: 30, fontWeight: 800, lineHeight: 1, color: c.main, fontFamily: "'JetBrains Mono', ui-monospace, monospace", letterSpacing: "-0.03em" }}>{entry.totalPoints.toLocaleString()}</div>
+            {(entry.lockedPoints ?? 0) > 0 && (
+              <div style={{ fontSize: 10, color: "#78716c", marginTop: 2 }}>
+                <span style={{ color: "#7C3AED" }}>{entry.lockedPoints} locked</span>
+                {" + "}
+                <span style={{ color: "#16A34A" }}>{entry.newPoints} new</span>
+              </div>
+            )}
           </div>
         </div>
 

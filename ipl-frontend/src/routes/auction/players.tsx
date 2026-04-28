@@ -2,8 +2,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { z } from "zod"
-import { useRef } from "react"
+import { useRef, useState } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { playerApi } from "@/lib/playerApi"
 import {
   Table,
   TableBody,
@@ -391,6 +392,111 @@ const styles = `
   .pp-mobile-sub       { display: none; }
   .pp-mobile-role-dot  { display: none; }
   .pp-mobile-sold-chip { display: none; }
+
+  /* ── Add player button ── */
+  .btn-add {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 0 16px; height: 36px; border-radius: 9px;
+    font-size: 12px; font-weight: 700; font-family: 'DM Sans', sans-serif;
+    background: white; color: var(--green); border: 1px solid var(--green-border);
+    cursor: pointer; transition: all 0.15s; white-space: nowrap;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    flex-shrink: 0;
+  }
+  .btn-add:hover:not(:disabled) {
+    background: var(--green-light); border-color: var(--green);
+    transform: translateY(-1px);
+  }
+  .btn-add:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ── Modal ── */
+  .pp-modal-overlay {
+    position: fixed; inset: 0; z-index: 220;
+    background: rgba(26,20,16,0.45);
+    backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    animation: pp-fade-in 0.15s ease;
+    padding: 20px;
+  }
+  .pp-modal {
+    background: white; border-radius: 16px;
+    width: 100%; max-width: 560px;
+    max-height: 90vh; overflow-y: auto;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.25);
+    animation: pp-slide-in 0.25s cubic-bezier(0.16,1,0.3,1);
+  }
+  .pp-modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 24px; border-bottom: 1px solid var(--border);
+  }
+  .pp-modal-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px; font-weight: 900; color: var(--ink);
+    letter-spacing: -0.3px;
+  }
+  .pp-modal-body {
+    padding: 20px 24px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+  }
+  .pp-modal-body .pp-field-full { grid-column: 1 / -1; }
+  .pp-field-label {
+    display: block;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.4px;
+    text-transform: uppercase; color: var(--ink-faint);
+    margin-bottom: 6px;
+  }
+  .pp-field-input, .pp-field-select {
+    width: 100%; height: 38px;
+    padding: 0 12px; border-radius: 8px;
+    background: var(--parchment);
+    border: 1px solid var(--border);
+    color: var(--ink);
+    font-size: 13px; font-family: 'DM Sans', sans-serif;
+    box-sizing: border-box;
+    transition: all 0.15s;
+  }
+  .pp-field-input:focus, .pp-field-select:focus {
+    outline: none;
+    border-color: var(--green);
+    background: white;
+    box-shadow: 0 0 0 3px rgba(45,122,79,0.1);
+  }
+  .pp-modal-footer {
+    display: flex; justify-content: flex-end; gap: 10px;
+    padding: 16px 24px; border-top: 1px solid var(--border);
+    background: var(--parchment);
+    border-radius: 0 0 16px 16px;
+  }
+  .pp-modal-error {
+    grid-column: 1 / -1;
+    background: var(--rose-light); border: 1px solid var(--rose-border);
+    border-radius: 8px; padding: 10px 12px;
+    font-size: 12px; font-weight: 600; color: var(--rose);
+  }
+  .btn-secondary {
+    height: 36px; padding: 0 16px; border-radius: 9px;
+    font-size: 12px; font-weight: 700; font-family: 'DM Sans', sans-serif;
+    background: white; color: var(--ink-muted);
+    border: 1px solid var(--border);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .btn-secondary:hover:not(:disabled) { border-color: var(--border-dark); color: var(--ink); }
+  .btn-primary {
+    height: 36px; padding: 0 18px; border-radius: 9px;
+    font-size: 12px; font-weight: 700; font-family: 'DM Sans', sans-serif;
+    background: var(--green); color: white; border: none;
+    cursor: pointer; transition: all 0.15s;
+    box-shadow: 0 2px 8px rgba(45,122,79,0.25);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: #256b43; transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(45,122,79,0.35);
+  }
+  .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+  @media (max-width: 600px) {
+    .pp-modal-body { grid-template-columns: 1fr !important; }
+    .btn-add span.btn-add-label { display: none !important; }
+  }
 `
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -424,6 +530,53 @@ function PlayersPoolPage() {
   const queryClient      = useQueryClient()
   const fileInputRef     = useRef<HTMLInputElement>(null)
   const size = 10
+
+  const [showAddModal, setShowAddModal] = useState(false)
+  const emptyForm = {
+    name: "",
+    country: "",
+    age: "",
+    specialism: "",
+    battingStyle: "",
+    bowlingStyle: "",
+    iplTeam: "",
+    basePrice: "50",
+  }
+  const [form, setForm] = useState(emptyForm)
+
+  const createMutation = useMutation({
+    mutationFn: (payload: any) => playerApi.create(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["players"] })
+      setShowAddModal(false)
+      setForm(emptyForm)
+    },
+  })
+
+  function openAddModal() {
+    createMutation.reset()
+    setForm(emptyForm)
+    setShowAddModal(true)
+  }
+
+  function submitNewPlayer() {
+    if (!form.name.trim()) return
+    const basePriceLakhs = Number(form.basePrice)
+    if (!Number.isFinite(basePriceLakhs) || basePriceLakhs <= 0) return
+    createMutation.mutate({
+      name: form.name.trim(),
+      country: form.country.trim() || null,
+      age: form.age ? Number(form.age) : null,
+      specialism: form.specialism || null,
+      battingStyle: form.battingStyle.trim() || null,
+      bowlingStyle: form.bowlingStyle.trim() || null,
+      iplTeam: form.iplTeam.trim() || null,
+      testCaps: 0,
+      odiCaps: 0,
+      t20Caps: 0,
+      basePrice: basePriceLakhs * 100_000,
+    })
+  }
 
   const uploadMutation = useMutation({
     mutationFn: (file: File) => {
@@ -573,6 +726,14 @@ function PlayersPoolPage() {
           />
 
           <button
+            className="btn-add"
+            onClick={openAddModal}
+          >
+            <span style={{ fontSize: 14 }}>➕</span>
+            <span className="btn-add-label">Add Player</span>
+          </button>
+
+          <button
             className="btn-upload"
             disabled={uploadMutation.isPending}
             onClick={() => fileInputRef.current?.click()}
@@ -682,6 +843,130 @@ function PlayersPoolPage() {
         </div>
 
       </div>
+
+      {showAddModal && (
+        <div className="pp-modal-overlay" onClick={() => !createMutation.isPending && setShowAddModal(false)}>
+          <div className="pp-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="pp-modal-header">
+              <div className="pp-modal-title">Add Player</div>
+              <button
+                className="pp-upload-dismiss"
+                disabled={createMutation.isPending}
+                onClick={() => setShowAddModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="pp-modal-body">
+              <div className="pp-field-full">
+                <label className="pp-field-label">Name *</label>
+                <input
+                  className="pp-field-input"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  placeholder="e.g. Virat Kohli"
+                />
+              </div>
+              <div>
+                <label className="pp-field-label">Country</label>
+                <input
+                  className="pp-field-input"
+                  value={form.country}
+                  onChange={(e) => setForm({ ...form, country: e.target.value })}
+                  placeholder="India"
+                />
+              </div>
+              <div>
+                <label className="pp-field-label">Age</label>
+                <input
+                  className="pp-field-input"
+                  type="number"
+                  value={form.age}
+                  onChange={(e) => setForm({ ...form, age: e.target.value })}
+                  placeholder="28"
+                />
+              </div>
+              <div>
+                <label className="pp-field-label">Role</label>
+                <select
+                  className="pp-field-select"
+                  value={form.specialism}
+                  onChange={(e) => setForm({ ...form, specialism: e.target.value })}
+                >
+                  <option value="">—</option>
+                  <option value="BATSMAN">Batsman</option>
+                  <option value="BOWLER">Bowler</option>
+                  <option value="ALLROUNDER">All-rounder</option>
+                  <option value="WICKETKEEPER">Wicketkeeper</option>
+                </select>
+              </div>
+              <div>
+                <label className="pp-field-label">IPL Team</label>
+                <input
+                  className="pp-field-input"
+                  value={form.iplTeam}
+                  onChange={(e) => setForm({ ...form, iplTeam: e.target.value })}
+                  placeholder="Mumbai Indians"
+                />
+              </div>
+              <div>
+                <label className="pp-field-label">Batting Style</label>
+                <input
+                  className="pp-field-input"
+                  value={form.battingStyle}
+                  onChange={(e) => setForm({ ...form, battingStyle: e.target.value })}
+                  placeholder="Right-hand"
+                />
+              </div>
+              <div>
+                <label className="pp-field-label">Bowling Style</label>
+                <input
+                  className="pp-field-input"
+                  value={form.bowlingStyle}
+                  onChange={(e) => setForm({ ...form, bowlingStyle: e.target.value })}
+                  placeholder="Right-arm fast"
+                />
+              </div>
+              <div className="pp-field-full">
+                <label className="pp-field-label">Base Price (in Lakhs ₹) *</label>
+                <input
+                  className="pp-field-input"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={form.basePrice}
+                  onChange={(e) => setForm({ ...form, basePrice: e.target.value })}
+                  placeholder="50"
+                />
+              </div>
+              {createMutation.isError && (
+                <div className="pp-modal-error">
+                  {(createMutation.error as any)?.response?.data?.message
+                    ?? (createMutation.error as any)?.response?.data?.error
+                    ?? (createMutation.error as any)?.message
+                    ?? "Failed to create player"}
+                </div>
+              )}
+            </div>
+            <div className="pp-modal-footer">
+              <button
+                className="btn-secondary"
+                disabled={createMutation.isPending}
+                onClick={() => setShowAddModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                disabled={createMutation.isPending || !form.name.trim() || !form.basePrice}
+                onClick={submitNewPlayer}
+              >
+                {createMutation.isPending ? "Adding…" : "Add Player"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

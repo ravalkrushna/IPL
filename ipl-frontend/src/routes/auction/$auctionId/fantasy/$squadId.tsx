@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createFileRoute, useParams, useNavigate } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
-import { useRef, useEffect, useSyncExternalStore } from "react"
+import { useRef, useEffect, useSyncExternalStore, useState } from "react"
 import { fantasyApi, FantasySquadPlayerEntry, FantasyPlayerMatchEntry, FantasyPointBreakdown } from "@/lib/fantasyApi"
 
 export const Route = createFileRoute("/auction/$auctionId/fantasy/$squadId")({
@@ -311,6 +311,46 @@ const css = `
   @keyframes sdSpin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
   .sd-loading-text { font-size: 14px; color: #78716c; font-weight: 600; }
 
+  /* ── Squad view tabs ── */
+  .sd-view-tabs {
+    flex-shrink: 0;
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px clamp(1rem, 3vw, 2.5rem);
+    background: #faf8f5; border-bottom: 1px solid #e8e0d0;
+  }
+  .sd-view-tab {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border-radius: 99px;
+    border: 1.5px solid #d6cfc4; background: #ffffff;
+    font-size: 13px; font-weight: 700; cursor: pointer;
+    color: #57534e; font-family: 'DM Sans', sans-serif;
+    transition: all 0.15s;
+  }
+  .sd-view-tab:hover { border-color: #a8a29e; color: #1c1917; }
+  .sd-view-tab.active-current {
+    background: #059669; color: #fff; border-color: #059669;
+  }
+  .sd-view-tab.active-previous {
+    background: #7c3aed; color: #fff; border-color: #7c3aed;
+  }
+  .sd-view-tab-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: currentColor; opacity: 0.7; flex-shrink: 0;
+  }
+  .sd-locked-banner {
+    flex-shrink: 0;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px clamp(1rem, 3vw, 2.5rem);
+    background: linear-gradient(90deg, #f5f3ff 0%, #faf8f5 100%);
+    border-bottom: 1px solid #ddd6fe;
+    font-size: 13px; font-weight: 600; color: #4c1d95;
+  }
+  .sd-locked-banner-icon { font-size: 16px; }
+  .sd-locked-banner-pts {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 800; font-size: 14px;
+  }
+
   /* Mobile */
   @media (max-width: 640px) {
     .sd-root { height: auto; min-height: 100vh; overflow-y: auto; }
@@ -493,18 +533,34 @@ function FantasySquadPage() {
   const { activePlayerId, season: seasonParam } = Route.useSearch() as { activePlayerId?: string; season?: string }
   const season: "2026" | "2025" = seasonParam === "2025" ? "2025" : "2026"
 
+  // "current" = post-reauction squad, "previous" = pre-reauction snapshot
+  const [squadView, setSquadView] = useState<"current" | "previous">("current")
+
   const { data, isLoading } = useQuery({
     queryKey: ["fantasySquad", squadId, season],
     queryFn: () => fantasyApi.squad(squadId, season),
     staleTime: 30000,
   })
 
-  const players: FantasySquadPlayerEntry[] = [...(data?.players ?? [])].sort(
+  const { data: prevData, isLoading: prevLoading } = useQuery({
+    queryKey: ["fantasyPreviousSquad", squadId],
+    queryFn: () => fantasyApi.previousSquad(squadId),
+    staleTime: 60000,
+    enabled: (data?.lockedPoints ?? 0) > 0,
+  })
+
+  const hasMidSeason = (data?.lockedPoints ?? 0) > 0
+
+  const currentPlayers: FantasySquadPlayerEntry[] = [...(data?.players ?? [])].sort(
+    (a, b) => b.totalPoints - a.totalPoints
+  )
+  const previousPlayers: FantasySquadPlayerEntry[] = [...(prevData?.players ?? [])].sort(
     (a, b) => b.totalPoints - a.totalPoints
   )
 
+  const players = squadView === "previous" ? previousPlayers : currentPlayers
   const totalSpent = players.reduce((acc, p) => acc + Number(p.soldPrice ?? 0), 0)
-  const squadColor = TEAM_COLORS[0] // consistent accent for this squad
+  const squadColor = squadView === "previous" ? "#7c3aed" : TEAM_COLORS[0]
 
   const wideSplit = useWideSplitLayout()
   const useSidePanel = wideSplit && players.length > 0
@@ -521,6 +577,10 @@ function FantasySquadPage() {
     })
   }
 
+  const displayTotal = data?.totalPoints ?? 0
+  const lockedPts = data?.lockedPoints ?? 0
+  const newPts = data?.newPoints ?? 0
+
   return (
     <>
       <style>{css}</style>
@@ -533,36 +593,44 @@ function FantasySquadPage() {
               className="sd-icon"
               style={{ background: `linear-gradient(135deg, ${squadColor}33, ${squadColor}66)`, fontSize: 18 }}
             >
-              🏏
+              {squadView === "previous" ? "🔒" : "🏏"}
             </div>
             <div style={{ minWidth: 0 }}>
               <div className="sd-title">{data?.squadName ?? "Loading…"}</div>
-              <div className="sd-subtitle">Fantasy · squad detail · IPL {season}</div>
+              <div className="sd-subtitle">
+                {squadView === "previous"
+                  ? "Fantasy · pre-reauction squad · locked"
+                  : `Fantasy · squad detail · IPL ${season}`}
+              </div>
             </div>
             {data && (
               <div
                 className="sd-pts-chip"
                 style={{ background: `${squadColor}15`, borderColor: `${squadColor}40`, color: squadColor }}
               >
-                {data.totalPoints} PTS
+                {displayTotal} PTS
               </div>
             )}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button
-              className="sd-back-btn"
-              style={season === "2026" ? { background: "#059669", color: "#fff", borderColor: "#059669" } : {}}
-              onClick={() => navigate({ to: "/auction/$auctionId/fantasy/$squadId", params: { auctionId, squadId }, search: { activePlayerId: "", season: "2026" }, replace: true })}
-            >
-              IPL 2026
-            </button>
-            <button
-              className="sd-back-btn"
-              style={season === "2025" ? { background: "#334155", color: "#fff", borderColor: "#334155" } : {}}
-              onClick={() => navigate({ to: "/auction/$auctionId/fantasy/$squadId", params: { auctionId, squadId }, search: { activePlayerId: "", season: "2025" }, replace: true })}
-            >
-              IPL 2025
-            </button>
+            {squadView === "current" && (
+              <>
+                <button
+                  className="sd-back-btn"
+                  style={season === "2026" ? { background: "#059669", color: "#fff", borderColor: "#059669" } : {}}
+                  onClick={() => navigate({ to: "/auction/$auctionId/fantasy/$squadId", params: { auctionId, squadId }, search: { activePlayerId: "", season: "2026" }, replace: true })}
+                >
+                  IPL 2026
+                </button>
+                <button
+                  className="sd-back-btn"
+                  style={season === "2025" ? { background: "#334155", color: "#fff", borderColor: "#334155" } : {}}
+                  onClick={() => navigate({ to: "/auction/$auctionId/fantasy/$squadId", params: { auctionId, squadId }, search: { activePlayerId: "", season: "2025" }, replace: true })}
+                >
+                  IPL 2025
+                </button>
+              </>
+            )}
             <button
               className="sd-back-btn"
               onClick={() => navigate({ to: "/auction/$auctionId/fantasy", params: { auctionId } })}
@@ -572,25 +640,86 @@ function FantasySquadPage() {
           </div>
         </header>
 
+        {/* Squad view tabs — only shown when mid-season auction happened */}
+        {hasMidSeason && (
+          <div className="sd-view-tabs">
+            <button
+              className={`sd-view-tab${squadView === "current" ? " active-current" : ""}`}
+              onClick={() => setSquadView("current")}
+            >
+              <span className="sd-view-tab-dot" />
+              Current Squad
+            </button>
+            <button
+              className={`sd-view-tab${squadView === "previous" ? " active-previous" : ""}`}
+              onClick={() => setSquadView("previous")}
+            >
+              <span className="sd-view-tab-dot" />
+              Previous Squad
+            </button>
+            {squadView === "current" && (
+              <span style={{ marginLeft: "auto", fontSize: 12, color: "#78716c", fontWeight: 600 }}>
+                {lockedPts > 0 && `🔒 ${lockedPts} locked  +  ✨ ${newPts} new  =  ${displayTotal} total`}
+              </span>
+            )}
+            {squadView === "previous" && (
+              <span style={{ marginLeft: "auto", fontSize: 12, color: "#7c3aed", fontWeight: 600 }}>
+                Points locked at mid-season auction start
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Stats strip */}
         {!isLoading && data && (
           <div className="sd-stats">
-            {[
-              { val: players.length,                              lbl: "Players",  color: squadColor },
-              { val: totalSpent > 0 ? fmt(totalSpent) : "—",     lbl: "Budget spent",    color: squadColor },
-              { val: data.totalPoints.toLocaleString(),                            lbl: "Squad total",color: squadColor },
-            ].map(({ val, lbl, color }) => (
-              <div key={lbl} className="sd-stat">
-                <div className="sd-stat-val" style={{ color }}>{val}</div>
-                <div className="sd-stat-lbl">{lbl}</div>
-              </div>
-            ))}
+            {squadView === "current" && hasMidSeason ? (
+              <>
+                {[
+                  { val: currentPlayers.length.toString(),           lbl: "Players",     color: squadColor },
+                  { val: lockedPts.toLocaleString(),                  lbl: "Locked pts",  color: "#7c3aed" },
+                  { val: newPts.toLocaleString(),                     lbl: "New pts",     color: "#059669" },
+                  { val: displayTotal.toLocaleString(),               lbl: "Total",       color: squadColor },
+                ].map(({ val, lbl, color }) => (
+                  <div key={lbl} className="sd-stat">
+                    <div className="sd-stat-val" style={{ color }}>{val}</div>
+                    <div className="sd-stat-lbl">{lbl}</div>
+                  </div>
+                ))}
+              </>
+            ) : squadView === "previous" ? (
+              <>
+                {[
+                  { val: previousPlayers.length.toString(),          lbl: "Players",     color: "#7c3aed" },
+                  { val: totalSpent > 0 ? fmt(totalSpent) : "—",     lbl: "Budget spent", color: "#7c3aed" },
+                  { val: (prevData?.lockedPoints ?? 0).toLocaleString(), lbl: "Locked pts", color: "#7c3aed" },
+                ].map(({ val, lbl, color }) => (
+                  <div key={lbl} className="sd-stat">
+                    <div className="sd-stat-val" style={{ color }}>{val}</div>
+                    <div className="sd-stat-lbl">{lbl}</div>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <>
+                {[
+                  { val: players.length.toString(),                   lbl: "Players",     color: squadColor },
+                  { val: totalSpent > 0 ? fmt(totalSpent) : "—",     lbl: "Budget spent", color: squadColor },
+                  { val: displayTotal.toLocaleString(),               lbl: "Squad total", color: squadColor },
+                ].map(({ val, lbl, color }) => (
+                  <div key={lbl} className="sd-stat">
+                    <div className="sd-stat-val" style={{ color }}>{val}</div>
+                    <div className="sd-stat-lbl">{lbl}</div>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         )}
 
         <div className={`sd-body-wrap${useSidePanel ? " sd-split" : ""}`}>
           <div className={`sd-body${useSidePanel ? " sd-split-col-list" : ""}`}>
-            {isLoading ? (
+            {(isLoading || (squadView === "previous" && prevLoading)) ? (
               <div className="sd-loading">
                 <div className="sd-loading-spin">⚡</div>
                 <div className="sd-loading-text">Loading squad…</div>
@@ -598,17 +727,22 @@ function FantasySquadPage() {
             ) : players.length === 0 ? (
               <div className="sd-loading" style={{ opacity: 0.5 }}>
                 <div style={{ fontSize: 36 }}>🏏</div>
-                <div className="sd-loading-text">No players in this squad yet</div>
+                <div className="sd-loading-text">
+                  {squadView === "previous"
+                    ? "No previous squad snapshot available"
+                    : "No players in this squad yet"}
+                </div>
               </div>
             ) : (
               <>
                 <div className="sd-section-head">
-                  <div className="sd-section-label">Your squad</div>
+                  <div className="sd-section-label">
+                    {squadView === "previous" ? "Pre-reauction squad" : "Your squad"}
+                  </div>
                   <div className="sd-section-hint">
-                    {players.length} players · highest points first.
-                    {useSidePanel
-                      ? " Select a player to see match breakdown on the right."
-                      : " Tap a player for match-by-match fantasy points and batting / bowling / fielding split."}
+                    {squadView === "previous"
+                      ? `${players.length} players · points locked when mid-season auction phase started.`
+                      : `${players.length} players · highest points first.${useSidePanel ? " Select a player to see match breakdown on the right." : " Tap a player for match-by-match fantasy points and batting / bowling / fielding split."}`}
                   </div>
                 </div>
                 {players.map((p, i) => (
@@ -616,17 +750,17 @@ function FantasySquadPage() {
                     key={p.playerId}
                     p={p}
                     rank={i}
-                    isActive={activePlayerId === p.playerId}
-                    onToggle={() => setActivePlayer(p.playerId)}
+                    isActive={squadView === "current" && activePlayerId === p.playerId}
+                    onToggle={() => squadView === "current" ? setActivePlayer(p.playerId) : undefined}
                     season={season}
-                    embedBreakdown={!useSidePanel}
+                    embedBreakdown={!useSidePanel && squadView === "current"}
                   />
                 ))}
               </>
             )}
           </div>
 
-          {useSidePanel && (
+          {useSidePanel && squadView === "current" && (
             <aside className="sd-split-col-detail" aria-label="Match breakdown">
               {activePlayerId && activePlayer ? (
                 <div className="sd-detail-sticky">

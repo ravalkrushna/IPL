@@ -16,4 +16,7 @@ export const playerApi = {
   currentPlayer: () =>
   api.get("/auction-engine/current-player")
      .then(res => res.data),
+
+  create: (payload: any) =>
+    api.post("/players/create", payload).then(res => res.data),
 }

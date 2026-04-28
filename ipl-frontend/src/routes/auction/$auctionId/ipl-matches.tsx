@@ -63,6 +63,16 @@ function IplMatchesPage() {
     staleTime: 15000,
   })
 
+  // Squad attribution at match time — uses pre-mid-season snapshot for matches
+  // earlier than the auction's lock, so points are credited to whichever squad
+  // actually owned the player when the match was played.
+  const matchSquadMapping = useQuery({
+    queryKey: ["matchSquadMapping", selectedMatchId, auctionId],
+    queryFn: () => fantasyApi.matchSquadMapping(selectedMatchId, auctionId),
+    enabled: !!selectedMatchId && !!auctionId,
+    staleTime: 15000,
+  })
+
   const feedMatches = useQuery({
     queryKey: ["adminFantasyIplMatches", "iplMatchesPage"],
     queryFn: fantasyApi.adminIplMatches,
@@ -144,6 +154,10 @@ function IplMatchesPage() {
   }, [selectedMatch, teamA, teamB])
 
   const playerToSquad = useMemo(() => {
+    // Prefer the time-aware mapping from the backend (handles pre/post mid-season
+    // auction). Fall back to the current squad composition while it loads or
+    // when no match is selected.
+    if (matchSquadMapping.data) return matchSquadMapping.data
     const rows = (allSquads ?? []) as Array<{ name: string; players?: Array<{ id: string }> }>
     const map: Record<string, string> = {}
     rows.forEach((s) => {
@@ -152,7 +166,7 @@ function IplMatchesPage() {
       })
     })
     return map
-  }, [allSquads])
+  }, [allSquads, matchSquadMapping.data])
 
   const squadPointsRows = useMemo(() => {
     const perf = selectedMatch?.performances ?? []

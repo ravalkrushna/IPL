@@ -34,6 +34,8 @@ export type FantasyLeaderboardEntry = {
   participantName: string
   totalPoints: number
   matchesPlayed: number
+  lockedPoints?: number
+  newPoints?: number
 }
 
 export type FantasyLeaderboardResponse = {
@@ -60,6 +62,16 @@ export type FantasySquadResponse = {
   squadName: string
   auctionId: string
   totalPoints: number
+  lockedPoints?: number
+  newPoints?: number
+  players: FantasySquadPlayerEntry[]
+}
+
+export type FantasySquadPreviousSquadResponse = {
+  squadId: string
+  squadName: string
+  auctionId: string
+  lockedPoints: number
   players: FantasySquadPlayerEntry[]
 }
 
@@ -174,11 +186,17 @@ export const fantasyApi = {
   squad: (squadId: string, season = "2026"): Promise<FantasySquadResponse> =>
     api.get(`/fantasy/squad/${squadId}`, { params: { season } }).then(r => r.data),
 
+  previousSquad: (squadId: string): Promise<FantasySquadPreviousSquadResponse> =>
+    api.get(`/fantasy/squad/${squadId}/previous-squad`).then(r => r.data),
+
   player: (playerId: string): Promise<FantasyPlayerResponse> =>
     api.get(`/fantasy/player/${playerId}`).then(r => r.data),
 
   match: (matchId: string): Promise<FantasyMatchResponse> =>
     api.get(`/fantasy/match/${matchId}`).then(r => r.data),
+
+  matchSquadMapping: (matchId: string, auctionId: string): Promise<Record<string, string>> =>
+    api.get(`/fantasy/match/${matchId}/squad-mapping/${auctionId}`).then(r => r.data),
 
   career: (playerId: string): Promise<IplCareerStats> =>
     api.get(`/fantasy/player/${playerId}/ipl-career`).then(r => r.data),

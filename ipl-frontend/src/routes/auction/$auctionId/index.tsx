@@ -1487,7 +1487,7 @@ function AuctionRoomPage() {
       unsold:     result.unsold != null ? Boolean(result.unsold) : undefined,
       timestamp: ts,
     })
-    const t = setTimeout(() => setSoldInfo(null), result.unsold ? 2500 : 3500)
+    const t = setTimeout(() => setSoldInfo(null), result.unsold ? 1200 : 1800)
     return () => clearTimeout(t)
   }, [engineState?.lastResult?.timestamp])
 
@@ -1799,6 +1799,15 @@ function AuctionRoomPage() {
                 📅 IPL Matches
               </button>
             )}
+            {auctionEnded && (
+              <button
+                type="button"
+                onClick={() => navigate({ to: "/auction/$auctionId/mid-season", params: { auctionId } })}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100"
+              >
+                ⚡ Mid-Season
+              </button>
+            )}
             <button onClick={() => navigate({ to: "/auction" })}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold border border-stone-200 bg-white text-stone-500 hover:bg-stone-50 hover:text-stone-700 transition-all">
               ← Back to Lobby
@@ -1845,6 +1854,13 @@ function AuctionRoomPage() {
                 className="text-xs font-bold px-3 py-2 rounded-lg border border-sky-300 bg-sky-50 text-sky-700"
               >
                 📅 IPL Matches
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate({ to: "/auction/$auctionId/mid-season", params: { auctionId } })}
+                className="text-xs font-bold px-3 py-2 rounded-lg border border-amber-400 bg-amber-50 text-amber-800"
+              >
+                ⚡ Mid-Season
               </button>
             </div>
           </div>

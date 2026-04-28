@@ -21,6 +21,8 @@ import { Route as AuctionAuctionIdIndexRouteImport } from './routes/auction/$auc
 import { Route as AuctionAuctionIdTradeRouteImport } from './routes/auction/$auctionId/trade'
 import { Route as AuctionAuctionIdIplMatchesRouteImport } from './routes/auction/$auctionId/ipl-matches'
 import { Route as AuctionAuctionIdFantasyRouteImport } from './routes/auction/$auctionId/fantasy'
+import { Route as AuctionAuctionIdMidSeasonIndexRouteImport } from './routes/auction/$auctionId/mid-season/index'
+import { Route as AuctionAuctionIdMidSeasonAdminRouteImport } from './routes/auction/$auctionId/mid-season/admin'
 import { Route as AuctionAuctionIdFantasySquadIdRouteImport } from './routes/auction/$auctionId/fantasy/$squadId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -84,6 +86,18 @@ const AuctionAuctionIdFantasyRoute = AuctionAuctionIdFantasyRouteImport.update({
   path: '/auction/$auctionId/fantasy',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuctionAuctionIdMidSeasonIndexRoute =
+  AuctionAuctionIdMidSeasonIndexRouteImport.update({
+    id: '/auction/$auctionId/mid-season/',
+    path: '/auction/$auctionId/mid-season/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AuctionAuctionIdMidSeasonAdminRoute =
+  AuctionAuctionIdMidSeasonAdminRouteImport.update({
+    id: '/auction/$auctionId/mid-season/admin',
+    path: '/auction/$auctionId/mid-season/admin',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuctionAuctionIdFantasySquadIdRoute =
   AuctionAuctionIdFantasySquadIdRouteImport.update({
     id: '/$squadId',
@@ -105,6 +119,8 @@ export interface FileRoutesByFullPath {
   '/auction/$auctionId/trade': typeof AuctionAuctionIdTradeRoute
   '/auction/$auctionId/': typeof AuctionAuctionIdIndexRoute
   '/auction/$auctionId/fantasy/$squadId': typeof AuctionAuctionIdFantasySquadIdRoute
+  '/auction/$auctionId/mid-season/admin': typeof AuctionAuctionIdMidSeasonAdminRoute
+  '/auction/$auctionId/mid-season/': typeof AuctionAuctionIdMidSeasonIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -120,6 +136,8 @@ export interface FileRoutesByTo {
   '/auction/$auctionId/trade': typeof AuctionAuctionIdTradeRoute
   '/auction/$auctionId': typeof AuctionAuctionIdIndexRoute
   '/auction/$auctionId/fantasy/$squadId': typeof AuctionAuctionIdFantasySquadIdRoute
+  '/auction/$auctionId/mid-season/admin': typeof AuctionAuctionIdMidSeasonAdminRoute
+  '/auction/$auctionId/mid-season': typeof AuctionAuctionIdMidSeasonIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -136,6 +154,8 @@ export interface FileRoutesById {
   '/auction/$auctionId/trade': typeof AuctionAuctionIdTradeRoute
   '/auction/$auctionId/': typeof AuctionAuctionIdIndexRoute
   '/auction/$auctionId/fantasy/$squadId': typeof AuctionAuctionIdFantasySquadIdRoute
+  '/auction/$auctionId/mid-season/admin': typeof AuctionAuctionIdMidSeasonAdminRoute
+  '/auction/$auctionId/mid-season/': typeof AuctionAuctionIdMidSeasonIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -153,6 +173,8 @@ export interface FileRouteTypes {
     | '/auction/$auctionId/trade'
     | '/auction/$auctionId/'
     | '/auction/$auctionId/fantasy/$squadId'
+    | '/auction/$auctionId/mid-season/admin'
+    | '/auction/$auctionId/mid-season/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -168,6 +190,8 @@ export interface FileRouteTypes {
     | '/auction/$auctionId/trade'
     | '/auction/$auctionId'
     | '/auction/$auctionId/fantasy/$squadId'
+    | '/auction/$auctionId/mid-season/admin'
+    | '/auction/$auctionId/mid-season'
   id:
     | '__root__'
     | '/'
@@ -183,6 +207,8 @@ export interface FileRouteTypes {
     | '/auction/$auctionId/trade'
     | '/auction/$auctionId/'
     | '/auction/$auctionId/fantasy/$squadId'
+    | '/auction/$auctionId/mid-season/admin'
+    | '/auction/$auctionId/mid-season/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -198,6 +224,8 @@ export interface RootRouteChildren {
   AuctionAuctionIdIplMatchesRoute: typeof AuctionAuctionIdIplMatchesRoute
   AuctionAuctionIdTradeRoute: typeof AuctionAuctionIdTradeRoute
   AuctionAuctionIdIndexRoute: typeof AuctionAuctionIdIndexRoute
+  AuctionAuctionIdMidSeasonAdminRoute: typeof AuctionAuctionIdMidSeasonAdminRoute
+  AuctionAuctionIdMidSeasonIndexRoute: typeof AuctionAuctionIdMidSeasonIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -286,6 +314,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuctionAuctionIdFantasyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auction/$auctionId/mid-season/': {
+      id: '/auction/$auctionId/mid-season/'
+      path: '/auction/$auctionId/mid-season'
+      fullPath: '/auction/$auctionId/mid-season/'
+      preLoaderRoute: typeof AuctionAuctionIdMidSeasonIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auction/$auctionId/mid-season/admin': {
+      id: '/auction/$auctionId/mid-season/admin'
+      path: '/auction/$auctionId/mid-season/admin'
+      fullPath: '/auction/$auctionId/mid-season/admin'
+      preLoaderRoute: typeof AuctionAuctionIdMidSeasonAdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auction/$auctionId/fantasy/$squadId': {
       id: '/auction/$auctionId/fantasy/$squadId'
       path: '/$squadId'
@@ -323,6 +365,8 @@ const rootRouteChildren: RootRouteChildren = {
   AuctionAuctionIdIplMatchesRoute: AuctionAuctionIdIplMatchesRoute,
   AuctionAuctionIdTradeRoute: AuctionAuctionIdTradeRoute,
   AuctionAuctionIdIndexRoute: AuctionAuctionIdIndexRoute,
+  AuctionAuctionIdMidSeasonAdminRoute: AuctionAuctionIdMidSeasonAdminRoute,
+  AuctionAuctionIdMidSeasonIndexRoute: AuctionAuctionIdMidSeasonIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
