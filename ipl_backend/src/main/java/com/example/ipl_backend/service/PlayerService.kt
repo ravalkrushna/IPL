@@ -33,6 +33,7 @@ class PlayerService(
             odiCaps = request.odiCaps ?: 0,
             t20Caps = request.t20Caps ?: 0,
             basePrice = request.basePrice,
+            iplTeam = request.iplTeam?.takeIf { it.isNotBlank() },
             isSold = false,
             createdAt = now,
             updatedAt = now

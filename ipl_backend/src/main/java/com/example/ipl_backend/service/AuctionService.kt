@@ -16,6 +16,8 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.util.UUID
 
+private const val MIN_SQUAD_SIZE = 15
+
 @Service
 class AuctionService(
     private val auctionRepository: AuctionRepository,
@@ -104,6 +106,16 @@ class AuctionService(
 
     fun end(id: String): Auction {
         auctionRepository.findById(id) ?: throw AuctionNotFoundException("Auction not found")
+
+        val squads = squadRepository.findByAuction(id)
+        val underMin = squads.filter { squadRepository.countPlayers(it.id) < MIN_SQUAD_SIZE }
+        if (underMin.isNotEmpty()) {
+            val names = underMin.joinToString(", ") { it.name }
+            throw InvalidAuctionStateException(
+                "Cannot end auction — squads below minimum $MIN_SQUAD_SIZE players: $names"
+            )
+        }
+
         auctionTimerService.cancelAllForAuction(id)
         auctionRepository.updateStatus(id, AuctionStatus.COMPLETED)
         println("🏁 Auction $id ended")

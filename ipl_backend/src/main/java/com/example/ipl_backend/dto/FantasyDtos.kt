@@ -10,7 +10,9 @@ data class FantasyLeaderboardEntry(
     val squadName: String,
     val participantName: String,
     val totalPoints: Int,
-    val matchesPlayed: Int
+    val matchesPlayed: Int,
+    val lockedPoints: Int = 0,
+    val newPoints: Int = 0
 )
 
 data class FantasyLeaderboardResponse(
@@ -39,6 +41,16 @@ data class FantasySquadResponse(
     val squadName: String,
     val auctionId: String,
     val totalPoints: Int,
+    val lockedPoints: Int = 0,
+    val newPoints: Int = 0,
+    val players: List<FantasySquadPlayerEntry>
+)
+
+data class FantasySquadPreviousSquadResponse(
+    val squadId: String,
+    val squadName: String,
+    val auctionId: String,
+    val lockedPoints: Int,
     val players: List<FantasySquadPlayerEntry>
 )
 

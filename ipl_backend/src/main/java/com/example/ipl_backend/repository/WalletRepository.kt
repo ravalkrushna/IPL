@@ -106,14 +106,16 @@ class WalletRepository {
 
     fun decrementBalance(participantId: UUID, auctionId: String, amount: BigDecimal) {
         val now = Instant.now().toEpochMilli()
-        Wallets.update(
-            where = {
-                (Wallets.participantId eq EntityID(participantId, Participants)) and
-                        (Wallets.auctionId eq auctionId)
+        transaction {
+            Wallets.update(
+                where = {
+                    (Wallets.participantId eq EntityID(participantId, Participants)) and
+                            (Wallets.auctionId eq auctionId)
+                }
+            ) {
+                it[balance]   = balance - amount
+                it[updatedAt] = now
             }
-        ) {
-            it[balance]   = balance - amount
-            it[updatedAt] = now
         }
     }
 

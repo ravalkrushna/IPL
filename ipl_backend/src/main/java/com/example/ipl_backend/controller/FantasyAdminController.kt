@@ -188,6 +188,7 @@ class FantasyAdminController(
     fun syncPointsSheet(): ResponseEntity<Any> {
         val summary = sheetsSyncService.syncToSheet()
         sheetsSyncService.syncAuctionTabs()
+        sheetsSyncService.syncMidSeasonAuctionTabs()
         return ResponseEntity.ok(
             mapOf(
                 "message" to "Fantasy Points sheet synced successfully",

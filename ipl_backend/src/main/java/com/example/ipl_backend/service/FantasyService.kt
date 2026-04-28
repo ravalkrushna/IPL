@@ -13,7 +13,9 @@ class FantasyService(
     private val playerRepository: PlayerRepository,
     private val iplMatchRepository: IplMatchRepository,
     private val performanceRepository: PlayerMatchPerformanceRepository,
-    private val fantasyPointsCalculator: FantasyPointsCalculator
+    private val fantasyPointsCalculator: FantasyPointsCalculator,
+    private val midSeasonRepository: com.example.ipl_backend.repository.MidSeasonRepository,
+    private val auctionRepository: com.example.ipl_backend.repository.AuctionRepository
 ) {
 
     // ── Leaderboard ───────────────────────────────────────────────────────────
@@ -29,18 +31,28 @@ class FantasyService(
             .filter { it.matchId in seasonMatchIds }
             .groupBy { it.playerId }
 
+        val snapshots = midSeasonRepository.findAllSnapshots(auctionId).associateBy { it.squadId }
+
         val squadPoints = squads.map { squad: Squad ->
             // getSquadPlayersBySquadId includes joinedAt so we can apply the cutoff.
             val playerDetails = squadRepository.getSquadPlayersBySquadId(squad.id)
+            // If the squad has a mid-season snapshot, anything before lockedAt is
+            // already counted in lockedPoints — never double-count it as "new",
+            // even if a player's joinedAt predates the snapshot (e.g. legacy data
+            // where re-auctioned players were inserted with joinedAt = 0).
+            val snapshotLockedAt = snapshots[squad.id]?.lockedAt
             var points = 0
             var matches = 0
             for (detail in playerDetails) {
+                val cutoff = maxOf(detail.joinedAt, snapshotLockedAt ?: 0L)
                 val playerPerfs = seasonPerformancesByPlayer[detail.id].orEmpty()
-                    .filter { (matchDateById[it.matchId] ?: 0L) >= detail.joinedAt }
+                    .filter { (matchDateById[it.matchId] ?: 0L) >= cutoff }
                 points += playerPerfs.sumOf { fantasyPointsCalculator.calculate(it) }
                 if (playerPerfs.size > matches) matches = playerPerfs.size
             }
-            Triple(squad, points, matches)
+            // Add locked pre-reauction points if mid-season auction happened
+            val lockedPoints = snapshots[squad.id]?.lockedPoints ?: 0
+            Triple(squad, points + lockedPoints, matches)
         }.sortedByDescending { it.second }
 
         val entries = squadPoints.mapIndexed { index, triple ->
@@ -48,13 +60,16 @@ class FantasyService(
             val points: Int  = triple.second
             val matches: Int = triple.third
             val participantName = getParticipantName(squad.participantId.toString())
+            val locked = snapshots[squad.id]?.lockedPoints ?: 0
             FantasyLeaderboardEntry(
                 rank            = index + 1,
                 squadId         = squad.id,
                 squadName       = squad.name,
                 participantName = participantName,
                 totalPoints     = points,
-                matchesPlayed   = matches
+                matchesPlayed   = matches,
+                lockedPoints    = locked,
+                newPoints       = points - locked
             )
         }
 
@@ -65,6 +80,9 @@ class FantasyService(
 
     fun getSquadFantasy(squadId: String, season: String = "2026"): FantasySquadResponse? {
         val squad: Squad = squadRepository.findById(squadId) ?: return null
+        val snapshot = midSeasonRepository.findSnapshot(squad.auctionId, squadId)
+        val lockedPoints = snapshot?.lockedPoints ?: 0
+        val snapshotLockedAt = snapshot?.lockedAt
         // getSquadPlayersBySquadId includes joinedAt per player.
         val squadPlayerDetails = squadRepository.getSquadPlayersBySquadId(squadId)
         val playerIds = squadPlayerDetails.map { it.id }
@@ -78,9 +96,12 @@ class FantasyService(
 
         val playerEntries = squadPlayerDetails.map { detail ->
             val player: Player? = playerRepository.findById(detail.id)
-            // Only count performances from matches played on/after the player's joinedAt.
+            // Only count performances from matches played on/after the player's
+            // joinedAt — and never before the squad's mid-season lock timestamp,
+            // since those points are already in lockedPoints.
+            val cutoff = maxOf(detail.joinedAt, snapshotLockedAt ?: 0L)
             val playerPerfs = seasonPerformancesByPlayer[detail.id].orEmpty()
-                .filter { (matchDateById[it.matchId] ?: 0L) >= detail.joinedAt }
+                .filter { (matchDateById[it.matchId] ?: 0L) >= cutoff }
             FantasySquadPlayerEntry(
                 playerId      = detail.id,
                 playerName    = detail.name,
@@ -93,11 +114,14 @@ class FantasyService(
             )
         }.sortedByDescending { it.totalPoints }
 
+        val newPoints = playerEntries.sumOf { it.totalPoints }
         return FantasySquadResponse(
             squadId     = squadId,
             squadName   = squad.name,
             auctionId   = squad.auctionId,
-            totalPoints = playerEntries.sumOf { it.totalPoints },
+            totalPoints = lockedPoints + newPoints,
+            lockedPoints = lockedPoints,
+            newPoints   = newPoints,
             players     = playerEntries
         )
     }
@@ -161,6 +185,74 @@ class FantasyService(
             matches2025   = matches2025,
             matches2026   = matches2026
         )
+    }
+
+    // ── Previous squad (pre-reauction snapshot) ───────────────────────────────
+
+    fun getSquadPreviousSquad(squadId: String): FantasySquadPreviousSquadResponse? {
+        val squad = squadRepository.findById(squadId) ?: return null
+        val snapshot = midSeasonRepository.findSnapshot(squad.auctionId, squadId) ?: return null
+        val snapshotPlayers = midSeasonRepository.findSnapshotPlayers(squad.auctionId, squadId)
+        val playerEntries = snapshotPlayers.map { sp ->
+            FantasySquadPlayerEntry(
+                playerId      = sp.playerId,
+                playerName    = sp.playerName,
+                specialism    = sp.specialism ?: "UNKNOWN",
+                iplTeam       = sp.iplTeam ?: "",
+                soldPrice     = sp.soldPrice ?: java.math.BigDecimal.ZERO,
+                totalPoints   = sp.points,
+                matchesPlayed = 0,
+                joinedAt      = sp.joinedAt
+            )
+        }
+        return FantasySquadPreviousSquadResponse(
+            squadId      = squadId,
+            squadName    = squad.name,
+            auctionId    = squad.auctionId,
+            lockedPoints = snapshot.lockedPoints,
+            players      = playerEntries
+        )
+    }
+
+    // ── Per-match squad attribution ──────────────────────────────────────────
+    //
+    // Returns playerId → squadName for the given (auctionId, matchId), based on
+    // who actually owned the player when the match was played. If the match
+    // pre-dates the auction's mid-season lock, the snapshot composition is
+    // used; otherwise the current squad is used (with each player's joinedAt
+    // honoured so brand-new acquisitions don't get retroactively credited).
+    fun getMatchSquadMapping(auctionId: String, matchId: String): Map<String, String>? {
+        val auction = auctionRepository.findById(auctionId) ?: return null
+        val match = iplMatchRepository.findById(matchId) ?: return null
+        val matchDate = match.matchDate
+        val lockedAt = auction.pointsLockedAt
+        val squads = squadRepository.findByAuction(auctionId)
+
+        val usePreLock = lockedAt != null && matchDate < lockedAt
+        val mapping = mutableMapOf<String, String>()
+
+        if (usePreLock) {
+            // Pre-mid-season: use snapshot players for each squad.
+            for (squad in squads) {
+                val snapshotPlayers = midSeasonRepository.findSnapshotPlayers(auctionId, squad.id)
+                for (sp in snapshotPlayers) {
+                    if (sp.joinedAt <= matchDate) {
+                        mapping[sp.playerId] = squad.name
+                    }
+                }
+            }
+        } else {
+            // Post-lock (or no mid-season): use current squad composition.
+            for (squad in squads) {
+                val playerDetails = squadRepository.getSquadPlayersBySquadId(squad.id)
+                for (detail in playerDetails) {
+                    if (detail.joinedAt <= matchDate) {
+                        mapping[detail.id] = squad.name
+                    }
+                }
+            }
+        }
+        return mapping
     }
 
     // ── Match performances ────────────────────────────────────────────────────

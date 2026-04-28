@@ -2,10 +2,13 @@ package com.example.ipl_backend.service
 
 import com.example.ipl_backend.model.AuctionStatus
 import com.example.ipl_backend.model.Auctions
+import com.example.ipl_backend.model.MidSeasonPhase
 import com.example.ipl_backend.model.Players
 import com.example.ipl_backend.repository.IplMatchRepository
+import com.example.ipl_backend.repository.MidSeasonRepository
 import com.example.ipl_backend.repository.PlayerMatchPerformanceRepository
 import com.example.ipl_backend.repository.PlayerRepository
+import com.example.ipl_backend.repository.SquadRepository
 import com.example.ipl_backend.repository.UpcomingMatchRepository
 import com.example.ipl_backend.model.SquadPlayers
 import com.example.ipl_backend.model.Squads
@@ -25,7 +28,9 @@ class GoogleSheetsSyncService(
     private val performanceRepository: PlayerMatchPerformanceRepository,
     private val matchRepository: IplMatchRepository,
     private val upcomingMatchRepository: UpcomingMatchRepository,
-    private val sheetsService: GoogleSheetsService
+    private val sheetsService: GoogleSheetsService,
+    private val midSeasonRepository: MidSeasonRepository,
+    private val squadRepository: SquadRepository
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -68,14 +73,14 @@ class GoogleSheetsSyncService(
         val teamNameByPlayerId = fetchTeamNameByPlayerId()
         val perfsByPlayerId    = allPerfs.groupBy { it.playerId }
 
-        // Team Total is based on your auction squads (Squads.name), not on IPL team code (MI/CSK/etc.).
-        // We use the same mapping that powers "Auction Team" in the auction tabs.
-        val totalsBySquad = mutableMapOf<String, Int>()
-        for ((playerId, squadName) in teamNameByPlayerId) {
-            if (squadName.isBlank()) continue
-            val pts = totalsByPlayerId[playerId] ?: 0
-            totalsBySquad[squadName] = (totalsBySquad[squadName] ?: 0) + pts
-        }
+        // Team Total = (lockedPoints from mid-season snapshot, if any) + sum over
+        // current squad players of fantasy points earned on/after their cutoff
+        // (cutoff = max(player.joinedAt, snapshot.lockedAt)). This avoids
+        // double-counting pre-lock perfs of retained players (already in
+        // lockedPoints) and stops crediting newly-bought players for perfs
+        // earned for their previous squad.
+        val matchDateById = matchesInDb.associate { it.id to it.matchDate }
+        val totalsBySquad = computeSquadTotals(matchDateById, perfsByPlayerId)
 
         val matchLabels = allPerfs
             .map { it.matchId }
@@ -163,6 +168,126 @@ class GoogleSheetsSyncService(
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    // ── Mid-season auction tab ────────────────────────────────────────────────
+    //
+    // For every auction whose mid-season auction has run (snapshot exists), write
+    // a separate tab named "$auctionName - Mid Season" that shows the post-auction
+    // squad composition with only post-lock match columns and the points each
+    // player has earned since the lock. The original auction tab keeps its
+    // pre-mid-season state untouched.
+    fun syncMidSeasonAuctionTabs() {
+        val auctions = transaction {
+            Auctions.selectAll()
+                .where { Auctions.midSeasonPhase neq MidSeasonPhase.NOT_STARTED }
+                .map { Triple(it[Auctions.id], it[Auctions.name], it[Auctions.pointsLockedAt]) }
+        }
+        if (auctions.isEmpty()) return
+
+        val seasonMatches = matchRepository.findBySeason(FANTASY_SEASON)
+        val matchDateById = seasonMatches.associate { it.id to it.matchDate }
+        val allPerfs = performanceRepository.findAllPerformancesForSeason(FANTASY_SEASON)
+        val perfsByPlayerId = allPerfs.groupBy { it.playerId }
+
+        for ((auctionId, auctionName, _) in auctions) {
+            val snapshots = midSeasonRepository.findAllSnapshots(auctionId)
+            if (snapshots.isEmpty()) continue
+            val lockedAtBySquad = snapshots.associate { it.squadId to it.lockedAt }
+            val squads = squadRepository.findByAuction(auctionId)
+            if (squads.isEmpty()) continue
+
+            // Per-player rows for the new squad, with per-player cutoff applied.
+            data class Row(
+                val playerId: String,
+                val playerName: String,
+                val iplTeam: String,
+                val squadName: String,
+                val cutoff: Long,
+                val total: Int,
+                val perfsByMatch: Map<String, Int>
+            )
+
+            val rows = mutableListOf<Row>()
+            val matchIdsTouched = mutableSetOf<String>()
+            for (squad in squads) {
+                val lockedAt = lockedAtBySquad[squad.id] ?: continue
+                val playerDetails = squadRepository.getSquadPlayersBySquadId(squad.id)
+                for (detail in playerDetails) {
+                    val cutoff = maxOf(detail.joinedAt, lockedAt)
+                    val perfs = perfsByPlayerId[detail.id].orEmpty()
+                        .filter { (matchDateById[it.matchId] ?: 0L) >= cutoff }
+                    val total = perfs.sumOf { it.fantasyPoints }
+                    val perfsByMatch = perfs.associate { it.matchId to it.fantasyPoints }
+                    matchIdsTouched += perfsByMatch.keys
+                    val player = playerRepository.findById(detail.id)
+                    rows += Row(
+                        playerId    = detail.id,
+                        playerName  = detail.name,
+                        iplTeam     = player?.iplTeam ?: "",
+                        squadName   = squad.name,
+                        cutoff      = cutoff,
+                        total       = total,
+                        perfsByMatch = perfsByMatch
+                    )
+                }
+            }
+
+            val matchLabels = matchIdsTouched
+                .sortedWith(compareBy { extractMatchNumber(it) })
+
+            val header = mutableListOf<Any>("Player", "IPL Team", "Auction Team", "Mid-Season Points")
+            header.addAll(matchLabels.map { labelFor(it) })
+
+            val dataRows = rows
+                .sortedByDescending { it.total }
+                .map { r ->
+                    val row = mutableListOf<Any>()
+                    row.add(r.playerName)
+                    row.add(r.iplTeam)
+                    row.add(r.squadName)
+                    row.add(r.total)
+                    matchLabels.forEach { id -> row.add(r.perfsByMatch[id] ?: "") }
+                    row as List<Any>
+                }
+
+            val tabName = "$auctionName - Mid Season"
+            sheetsService.writeToTab(tabName, listOf(header) + dataRows)
+            log.info("Mid-season tab '$tabName' synced — ${dataRows.size} players, ${matchLabels.size} matches")
+        }
+    }
+
+    // Computes squad totals for the Team Total tab, applying mid-season snapshot
+    // cutoffs when present. Squad totals = lockedPoints + post-cutoff perfs of
+    // current squad members. Squads with no snapshot fall back to "all perfs of
+    // current squad members", preserving pre-mid-season behavior.
+    private fun computeSquadTotals(
+        matchDateById: Map<String, Long>,
+        perfsByPlayerId: Map<String, List<com.example.ipl_backend.model.PlayerMatchPerformance>>
+    ): Map<String, Int> {
+        val totals = mutableMapOf<String, Int>()
+        val auctionIds = transaction {
+            Auctions.selectAll().map { it[Auctions.id] }
+        }
+        for (auctionId in auctionIds) {
+            val snapshotsBySquad = midSeasonRepository.findAllSnapshots(auctionId).associateBy { it.squadId }
+            val squads = squadRepository.findByAuction(auctionId)
+            for (squad in squads) {
+                val snapshot = snapshotsBySquad[squad.id]
+                val locked = snapshot?.lockedPoints ?: 0
+                val lockedAt = snapshot?.lockedAt ?: 0L
+                val playerDetails = squadRepository.getSquadPlayersBySquadId(squad.id)
+                var earned = 0
+                for (detail in playerDetails) {
+                    val cutoff = maxOf(detail.joinedAt, lockedAt)
+                    earned += perfsByPlayerId[detail.id].orEmpty()
+                        .filter { (matchDateById[it.matchId] ?: 0L) >= cutoff }
+                        .sumOf { it.fantasyPoints }
+                }
+                totals[squad.name] = (totals[squad.name] ?: 0) + locked + earned
+            }
+        }
+        return totals
+    }
 
     private fun fetchTeamNameByPlayerId(): Map<String, String> =
         transaction {

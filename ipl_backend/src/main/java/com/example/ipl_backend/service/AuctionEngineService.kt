@@ -187,6 +187,12 @@ class AuctionEngineService(
         biddingOpen[auctionId] = false
     }
 
+    fun markAllSquadsFull(auctionId: String) {
+        currentPlayers.remove(auctionId)
+        biddingOpen[auctionId] = false
+        poolExhausted[auctionId] = true
+    }
+
     fun setLastResult(auctionId: String, result: LastResult) {
         lastResults[auctionId] = result
     }

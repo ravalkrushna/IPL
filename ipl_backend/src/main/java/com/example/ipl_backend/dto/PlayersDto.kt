@@ -13,7 +13,8 @@ data class CreatePlayerRequest(
     val testCaps: Int? = 0,
     val odiCaps: Int? = 0,
     val t20Caps: Int? = 0,
-    val basePrice: BigDecimal
+    val basePrice: BigDecimal,
+    val iplTeam: String? = null
 )
 
 data class UpdatePlayerRequest(

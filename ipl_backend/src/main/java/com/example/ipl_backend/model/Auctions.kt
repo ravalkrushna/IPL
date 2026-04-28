@@ -26,6 +26,11 @@ object Auctions : Table("auctions") {
     val reauctionStarted = bool("reauction_started").default(false)
     val reauctionStartedAt = long("reauction_started_at").nullable()
 
+    // Mid-season auction phase tracking
+    val midSeasonPhase = enumerationByName("mid_season_phase", 50, MidSeasonPhase::class)
+        .default(MidSeasonPhase.NOT_STARTED)
+    val pointsLockedAt = long("points_locked_at").nullable()
+
     val createdAt = long("created_at")
     val updatedAt = long("updated_at")
 
@@ -40,6 +45,8 @@ data class Auction(
     val minBidIncrement: java.math.BigDecimal,
     val reauctionStarted: Boolean = false,
     val reauctionStartedAt: Long? = null,
+    val midSeasonPhase: MidSeasonPhase = MidSeasonPhase.NOT_STARTED,
+    val pointsLockedAt: Long? = null,
     val createdAt: Long,
     val updatedAt: Long
 )
@@ -48,5 +55,12 @@ enum class AuctionStatus {
     PRE_AUCTION,
     LIVE,
     PAUSED,
+    COMPLETED
+}
+
+enum class MidSeasonPhase {
+    NOT_STARTED,
+    RETENTION_ENTRY,
+    LIVE,
     COMPLETED
 }

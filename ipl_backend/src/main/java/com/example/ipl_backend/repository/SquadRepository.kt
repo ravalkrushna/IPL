@@ -248,4 +248,29 @@ class SquadRepository(
             }
         }
     }
+
+    fun updateRetainedPlayer(squadId: String, playerId: String, joinedAt: Long) {
+        transaction {
+            SquadPlayers.update({
+                (SquadPlayers.squadId eq squadId) and (SquadPlayers.playerId eq playerId)
+            }) {
+                it[SquadPlayers.joinedAt] = joinedAt
+                it[SquadPlayers.isRetained] = true
+            }
+        }
+    }
+
+    fun removeNonRetainedPlayers(squadId: String, retainedPlayerIds: Set<String>): List<String> =
+        transaction {
+            val allPlayerIds = SquadPlayers.selectAll()
+                .where { SquadPlayers.squadId eq squadId }
+                .map { it[SquadPlayers.playerId] }
+            val toRemove = allPlayerIds.filter { it !in retainedPlayerIds }
+            if (toRemove.isNotEmpty()) {
+                SquadPlayers.deleteWhere {
+                    (SquadPlayers.squadId eq squadId) and (SquadPlayers.playerId inList toRemove)
+                }
+            }
+            toRemove
+        }
 }

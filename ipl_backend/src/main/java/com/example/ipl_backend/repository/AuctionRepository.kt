@@ -21,6 +21,8 @@ class AuctionRepository {
             minBidIncrement   = this[Auctions.minBidIncrement],
             reauctionStarted  = this[Auctions.reauctionStarted],
             reauctionStartedAt = this[Auctions.reauctionStartedAt],
+            midSeasonPhase    = this[Auctions.midSeasonPhase],
+            pointsLockedAt    = this[Auctions.pointsLockedAt],
             createdAt         = this[Auctions.createdAt],
             updatedAt         = this[Auctions.updatedAt]
         )
@@ -35,6 +37,8 @@ class AuctionRepository {
                 it[minBidIncrement]   = auction.minBidIncrement
                 it[reauctionStarted]  = auction.reauctionStarted
                 it[reauctionStartedAt]= auction.reauctionStartedAt
+                it[midSeasonPhase]    = auction.midSeasonPhase
+                it[pointsLockedAt]    = auction.pointsLockedAt
                 it[createdAt]         = auction.createdAt
                 it[updatedAt]         = auction.updatedAt
             }
@@ -104,6 +108,16 @@ class AuctionRepository {
                 it[reauctionStarted] = true
                 it[reauctionStartedAt] = startedAt
                 it[updatedAt] = startedAt
+            }
+        }
+    }
+
+    fun updateMidSeasonPhase(id: String, phase: com.example.ipl_backend.model.MidSeasonPhase, pointsLockedAt: Long? = null) {
+        transaction {
+            Auctions.update({ Auctions.id eq id }) {
+                it[midSeasonPhase] = phase
+                if (pointsLockedAt != null) it[Auctions.pointsLockedAt] = pointsLockedAt
+                it[updatedAt] = Instant.now().toEpochMilli()
             }
         }
     }

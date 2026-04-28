@@ -27,6 +27,7 @@ class HammerService(
 
     companion object {
         const val MAX_SQUAD_SIZE = 20
+        const val MIN_SQUAD_SIZE = 15
     }
 
     // Idempotency guard — prevents double hammer
@@ -230,11 +231,23 @@ class HammerService(
         // Deduct wallet
         walletRepository.decrementBalance(participantId, auctionId, finalAmount)
 
-        // Add to squad
-        squadRepository.addPlayer(squad.id, playerId, finalAmount)
+        // Add to squad. joinedAt = now so any matches played before this purchase
+        // are excluded from the player's contribution to this squad's points
+        // (critical after a mid-season re-auction, where pre-auction performances
+        // are already captured in the squad's locked snapshot).
+        squadRepository.addPlayer(squad.id, playerId, finalAmount, System.currentTimeMillis())
 
         // Mark player sold
         playerRepository.markAsSold(playerId)
+
+        // Auto-stop if all squads are now full
+        val allSquads = squadRepository.findByAuction(auctionId)
+        val allFull = allSquads.all { squadRepository.countPlayers(it.id) >= MAX_SQUAD_SIZE }
+        if (allFull) {
+            println("🏁 All squads full ($MAX_SQUAD_SIZE players each) — auto-stopping auction=$auctionId")
+            auctionEngineService.markAllSquadsFull(auctionId)
+            return
+        }
 
         // Clear engine state
         auctionEngineService.clearCurrentPlayer(auctionId)

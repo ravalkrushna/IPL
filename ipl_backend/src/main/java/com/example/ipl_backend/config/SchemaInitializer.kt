@@ -32,7 +32,12 @@ class SchemaInitializer {
                 PlayerFantasyTotals,
                 PlayerNameAliases,
                 UpcomingMatches,
-                Trades
+                Trades,
+
+                // ── Mid-season auction ─────────────────────────────────────
+                MidSeasonRetentions,
+                SquadScoreSnapshots,
+                SquadSnapshotPlayers
             )
         }
     }

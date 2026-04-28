@@ -117,6 +117,7 @@ class FantasyCronService(
         try {
             sheetsSyncService.syncToSheet()
             sheetsSyncService.syncAuctionTabs()
+            sheetsSyncService.syncMidSeasonAuctionTabs()
             sheetsSyncService.syncFixturesToSheet()
         } catch (e: Exception) {
             sheetOk = false
@@ -253,6 +254,7 @@ class FantasyCronService(
         try {
             val sheetResult = sheetsSyncService.syncToSheet()
             sheetsSyncService.syncAuctionTabs()
+            sheetsSyncService.syncMidSeasonAuctionTabs()
             log.info(
                 "Fantasy Points sheet — perfRows={}, matchCols={}, playerRows={}",
                 sheetResult.performancesUsed,
