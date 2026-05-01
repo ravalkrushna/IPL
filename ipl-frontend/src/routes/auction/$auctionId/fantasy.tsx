@@ -157,12 +157,22 @@ function SquadCard({
 
           <div style={{ textAlign: "right", flexShrink: 0 }}>
             <div style={{ fontSize: 11, fontWeight: 800, color: "#78716c", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Pts</div>
-            <div style={{ fontSize: 30, fontWeight: 800, lineHeight: 1, color: c.main, fontFamily: "'JetBrains Mono', ui-monospace, monospace", letterSpacing: "-0.03em" }}>{entry.totalPoints.toLocaleString()}</div>
+            {(entry.lockedPoints ?? 0) > 0 ? (
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "flex-end", gap: 6, fontFamily: "'JetBrains Mono', ui-monospace, monospace", letterSpacing: "-0.03em", lineHeight: 1 }}>
+                <span style={{ fontSize: 22, fontWeight: 700, color: "#7C3AED" }}>{(entry.lockedPoints ?? 0).toLocaleString()}</span>
+                <span style={{ fontSize: 18, fontWeight: 600, color: "#78716c" }}>+</span>
+                <span style={{ fontSize: 22, fontWeight: 700, color: "#16A34A" }}>{(entry.newPoints ?? 0).toLocaleString()}</span>
+                <span style={{ fontSize: 18, fontWeight: 600, color: "#78716c" }}>=</span>
+                <span style={{ fontSize: 30, fontWeight: 800, color: c.main }}>{entry.totalPoints.toLocaleString()}</span>
+              </div>
+            ) : (
+              <div style={{ fontSize: 30, fontWeight: 800, lineHeight: 1, color: c.main, fontFamily: "'JetBrains Mono', ui-monospace, monospace", letterSpacing: "-0.03em" }}>{entry.totalPoints.toLocaleString()}</div>
+            )}
             {(entry.lockedPoints ?? 0) > 0 && (
-              <div style={{ fontSize: 10, color: "#78716c", marginTop: 2 }}>
-                <span style={{ color: "#7C3AED" }}>{entry.lockedPoints} locked</span>
-                {" + "}
-                <span style={{ color: "#16A34A" }}>{entry.newPoints} new</span>
+              <div style={{ fontSize: 10, color: "#78716c", marginTop: 4, display: "flex", justifyContent: "flex-end", gap: 10, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>
+                <span style={{ color: "#7C3AED" }}>Previous</span>
+                <span style={{ color: "#16A34A" }}>New</span>
+                <span style={{ color: c.main }}>Total</span>
               </div>
             )}
           </div>
